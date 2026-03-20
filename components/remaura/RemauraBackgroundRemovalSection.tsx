@@ -74,6 +74,11 @@ const METAL_TONES: Record<
   },
 };
 
+const LIGHTING_PRESETS = {
+  studio: { label: "Studyo Isigi", contrast: 112, brightness: 118, tone: 2, soften: 0.4, shine: 28 },
+  showcase: { label: "Vitrin Isigi", contrast: 126, brightness: 110, tone: -4, soften: 0.2, shine: 44 },
+} as const;
+
 type T = {
   removeBackground: string;
   removingBackground: string;
@@ -90,8 +95,10 @@ export function RemauraBackgroundRemovalSection({ t }: { t: T }) {
   const [brightness, setBrightness] = useState(100);
   const [soften, setSoften] = useState(0);
   const [tone, setTone] = useState(0);
+  const [shine, setShine] = useState(0);
   const [metalTone, setMetalTone] = useState<MetalToneKey>("none");
   const [metalStrength, setMetalStrength] = useState(70);
+  const [lightingPreset, setLightingPreset] = useState<keyof typeof LIGHTING_PRESETS | "custom">("custom");
   const controlsDisabled = !imageSrc;
 
   const applyMetalTone = useCallback((nextTone: MetalToneKey) => {
@@ -101,6 +108,7 @@ export function RemauraBackgroundRemovalSection({ t }: { t: T }) {
       setBrightness(100);
       setTone(0);
       setSoften(0);
+      setShine(0);
       setMetalStrength(70);
       return;
     }
@@ -109,8 +117,22 @@ export function RemauraBackgroundRemovalSection({ t }: { t: T }) {
     setBrightness(preset.presetBrightness);
     setTone(preset.presetTone);
     setSoften(preset.presetSoften);
+    setShine(20);
     setMetalStrength(100);
   }, []);
+
+  const applyLightingPreset = useCallback(
+    (key: keyof typeof LIGHTING_PRESETS) => {
+      const preset = LIGHTING_PRESETS[key];
+      setLightingPreset(key);
+      setContrast(preset.contrast);
+      setBrightness(preset.brightness);
+      setTone(preset.tone);
+      setSoften(preset.soften);
+      setShine(preset.shine);
+    },
+    []
+  );
 
   const onFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -132,11 +154,13 @@ export function RemauraBackgroundRemovalSection({ t }: { t: T }) {
     setBrightness(100);
     setSoften(0);
     setTone(0);
+    setShine(0);
     setMetalTone("none");
     setMetalStrength(70);
+    setLightingPreset("custom");
   }, []);
 
-  const handleDownload = useCallback(async () => {
+  const handleDownload = useCallback(async (format: "png" | "jpg") => {
     if (!imageSrc) return;
     const img = new window.Image();
     img.src = imageSrc;
@@ -151,6 +175,11 @@ export function RemauraBackgroundRemovalSection({ t }: { t: T }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    if (format === "jpg") {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
     ctx.filter = filterString;
     ctx.drawImage(img, 0, 0);
     if (metalTone !== "none") {
@@ -161,21 +190,28 @@ export function RemauraBackgroundRemovalSection({ t }: { t: T }) {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.restore();
     }
+    if (shine > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.globalAlpha = Math.min(0.55, shine / 100);
+      ctx.drawImage(img, 0, 0);
+      ctx.restore();
+    }
 
     const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob((b) => resolve(b), "image/png");
+      canvas.toBlob((b) => resolve(b), format === "png" ? "image/png" : "image/jpeg", 0.92);
     });
     if (!blob) return;
 
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "remaura-background-removed.png";
+    link.download = format === "png" ? "remaura-background-removed.png" : "remaura-background-removed.jpg";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  }, [filterString, imageSrc, metalStrength, metalTone]);
+  }, [filterString, imageSrc, metalStrength, metalTone, shine]);
 
   return (
     <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -198,13 +234,32 @@ export function RemauraBackgroundRemovalSection({ t }: { t: T }) {
                 className="h-full w-full object-contain"
                 style={{ filter: filterString }}
               />
+              {shine > 0 && (
+                <Image
+                  src={imageSrc}
+                  alt=""
+                  width={800}
+                  height={800}
+                  unoptimized
+                  className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+                  style={{ mixBlendMode: "screen", opacity: Math.min(0.55, shine / 100) }}
+                />
+              )}
               {metalTone !== "none" && (
                 <div
                   className="pointer-events-none absolute inset-0"
                   style={{
                     backgroundColor: METAL_TONES[metalTone].hex,
-                    mixBlendMode: "color",
                     opacity: metalStrength / 100,
+                    mixBlendMode: "color",
+                    WebkitMaskImage: `url(${imageSrc})`,
+                    maskImage: `url(${imageSrc})`,
+                    WebkitMaskRepeat: "no-repeat",
+                    maskRepeat: "no-repeat",
+                    WebkitMaskPosition: "center",
+                    maskPosition: "center",
+                    WebkitMaskSize: "contain",
+                    maskSize: "contain",
                   }}
                 />
               )}
@@ -219,13 +274,6 @@ export function RemauraBackgroundRemovalSection({ t }: { t: T }) {
                 removeBackgroundHint: t.removeBackgroundHint,
               }}
             />
-            <button
-              type="button"
-              onClick={handleDownload}
-              className="w-full rounded-lg border border-white/15 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-[#b76e79]/40 hover:bg-[#b76e79]/10"
-            >
-              {t.downloadImage}
-            </button>
             {bgError && <p className="text-center text-xs text-destructive">{bgError}</p>}
           </div>
         ) : (
@@ -290,7 +338,10 @@ export function RemauraBackgroundRemovalSection({ t }: { t: T }) {
               max={180}
               value={contrast}
               disabled={controlsDisabled}
-              onChange={(e) => setContrast(Number(e.target.value))}
+              onChange={(e) => {
+                setLightingPreset("custom");
+                setContrast(Number(e.target.value));
+              }}
               className="mt-1 w-full"
             />
           </label>
@@ -302,7 +353,25 @@ export function RemauraBackgroundRemovalSection({ t }: { t: T }) {
               max={160}
               value={brightness}
               disabled={controlsDisabled}
-              onChange={(e) => setBrightness(Number(e.target.value))}
+              onChange={(e) => {
+                setLightingPreset("custom");
+                setBrightness(Number(e.target.value));
+              }}
+              className="mt-1 w-full"
+            />
+          </label>
+          <label className="text-xs text-muted">
+            Parlaklik: <span className="text-foreground">{shine}%</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={shine}
+              disabled={controlsDisabled}
+              onChange={(e) => {
+                setLightingPreset("custom");
+                setShine(Number(e.target.value));
+              }}
               className="mt-1 w-full"
             />
           </label>
@@ -315,7 +384,10 @@ export function RemauraBackgroundRemovalSection({ t }: { t: T }) {
               step={0.1}
               value={soften}
               disabled={controlsDisabled}
-              onChange={(e) => setSoften(Number(e.target.value))}
+              onChange={(e) => {
+                setLightingPreset("custom");
+                setSoften(Number(e.target.value));
+              }}
               className="mt-1 w-full"
             />
           </label>
@@ -327,7 +399,10 @@ export function RemauraBackgroundRemovalSection({ t }: { t: T }) {
               max={40}
               value={tone}
               disabled={controlsDisabled}
-              onChange={(e) => setTone(Number(e.target.value))}
+              onChange={(e) => {
+                setLightingPreset("custom");
+                setTone(Number(e.target.value));
+              }}
               className="mt-1 w-full"
             />
           </label>
@@ -338,6 +413,44 @@ export function RemauraBackgroundRemovalSection({ t }: { t: T }) {
             className="sm:col-span-2 rounded-lg border border-white/15 bg-white/[0.03] px-4 py-2 text-xs font-semibold text-foreground transition-colors hover:border-white/30"
           >
             Ayarlari Sifirla
+          </button>
+        </div>
+        <div className={`mt-4 rounded-xl border border-white/10 bg-black/20 p-4 ${controlsDisabled ? "opacity-60" : ""}`}>
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Isik Presetleri</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {(Object.keys(LIGHTING_PRESETS) as Array<keyof typeof LIGHTING_PRESETS>).map((key) => (
+              <button
+                key={key}
+                type="button"
+                disabled={controlsDisabled}
+                onClick={() => applyLightingPreset(key)}
+                className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                  lightingPreset === key
+                    ? "border-[#b76e79] bg-[#b76e79]/15 text-[#b76e79]"
+                    : "border-white/15 bg-white/[0.03] text-foreground hover:border-[#b76e79]/40 hover:bg-[#b76e79]/10"
+                }`}
+              >
+                {LIGHTING_PRESETS[key].label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-2 rounded-xl border border-white/10 bg-black/20 p-4">
+          <button
+            type="button"
+            disabled={controlsDisabled}
+            onClick={() => void handleDownload("png")}
+            className="rounded-lg border border-white/15 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-[#b76e79]/40 hover:bg-[#b76e79]/10"
+          >
+            {t.downloadImage} (PNG - Seffaf)
+          </button>
+          <button
+            type="button"
+            disabled={controlsDisabled}
+            onClick={() => void handleDownload("jpg")}
+            className="rounded-lg border border-white/15 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-[#b76e79]/40 hover:bg-[#b76e79]/10"
+          >
+            {t.downloadImage} (JPG - Beyaz)
           </button>
         </div>
       </aside>
