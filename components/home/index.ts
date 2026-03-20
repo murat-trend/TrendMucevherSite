@@ -1,0 +1,10 @@
+export { HeroSection } from "./HeroSection";
+export { ValueProposition } from "./ValueProposition";
+export { MainPathways } from "./MainPathways";
+export { PathwaysSection } from "./PathwaysSection";
+export { FeaturedProducts } from "./FeaturedProducts";
+export { RemauraSection } from "./RemauraSection";
+export { SellerSection } from "./SellerSection";
+export { HowItWorks } from "./HowItWorks";
+export { TrustSection } from "./TrustSection";
+export { FAQSection } from "./FAQSection";

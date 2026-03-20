@@ -1,0 +1,85 @@
+{
+  "description": "gpt-image-1.5 model API parametreleri – kalite ile ilgili tüm seçenekler",
+  "source": "OpenAI Images API + node_modules/openai/resources/images.ts",
+  "ourCurrentCalls": {
+    "images.generate": {
+      "model": "gpt-image-1.5",
+      "prompt": "<fullPrompt – metin>",
+      "size": "1024x1024 | 1024x1536 | 1536x1024 | auto",
+      "quality": "high"
+    },
+    "images.edit": {
+      "model": "gpt-image-1.5",
+      "image": "<File>",
+      "prompt": "<editPrompt>",
+      "size": "1024x1024 | 1024x1536 | 1536x1024",
+      "quality": "high",
+      "input_fidelity": "high"
+    }
+  },
+  "allAvailableParams": {
+    "quality": {
+      "type": "string",
+      "values": ["low", "medium", "high", "auto"],
+      "default": "auto",
+      "effect": "low = hızlı/düşük detay, high = en yüksek kalite (biz kullanıyoruz: high)",
+      "weUse": "high"
+    },
+    "size": {
+      "type": "string",
+      "values": ["1024x1024", "1536x1024", "1024x1536", "auto"],
+      "default": "auto",
+      "effect": "Çözünürlük. 1024x1024 = kare, 1024x1536 = portrait, 1536x1024 = landscape",
+      "weUse": "format'a göre (insta=1024x1024, reels=1024x1536 vb.)"
+    },
+    "background": {
+      "type": "string",
+      "values": ["transparent", "opaque", "auto"],
+      "default": "auto",
+      "effect": "Arka plan: transparent = şeffaf PNG, opaque = opak, auto = model seçer",
+      "weUse": "YOK – varsayılan auto"
+    },
+    "output_format": {
+      "type": "string",
+      "values": ["png", "jpeg", "webp"],
+      "default": "png",
+      "effect": "Çıktı formatı. PNG varsayılan, şeffaflık için gerekli",
+      "weUse": "YOK – varsayılan png"
+    },
+    "output_compression": {
+      "type": "number",
+      "range": "0-100",
+      "default": 100,
+      "effect": "Sadece webp/jpeg için. 100 = sıkıştırma yok",
+      "weUse": "YOK"
+    },
+    "moderation": {
+      "type": "string",
+      "values": ["low", "auto"],
+      "default": "auto",
+      "effect": "İçerik moderasyonu. low = daha az kısıtlama",
+      "weUse": "YOK"
+    },
+    "input_fidelity": {
+      "type": "string",
+      "values": ["high", "low"],
+      "default": "low",
+      "effect": "Sadece images.edit için. Referans görsele ne kadar sadık kalacak",
+      "weUse": "images.edit'te: high"
+    },
+    "style": {
+      "type": "string",
+      "values": ["vivid", "natural"],
+      "supportedFor": "dall-e-3 (gpt-image-1.5 için SDK'da belirtilmemiş)",
+      "effect": "vivid = hiper-gerçekçi, dramatik; natural = daha doğal",
+      "weUse": "YOK – gpt-image-1.5'te bu parametre yok"
+    }
+  },
+  "kaliteIcinKullanilabilecekParametreler": {
+    "quality": "high – ZATEN KULLANIYORUZ",
+    "background": "opaque – net arka plan istiyorsak",
+    "moderation": "low – sadece filtre gevşek olsun istersek (kalite değil)",
+    "input_fidelity": "high – edit modunda ZATEN KULLANIYORUZ"
+  },
+  "onemliNot": "gpt-image-1.5 için kaliteyi doğrudan kontrol eden tek API parametresi 'quality: high'. Medusa kalitesi için asıl belirleyici PROMPT içeriğidir (8K, macro, chiaroscuro, photorealistic metal vb.). API'de ek kalite komutu yok."
+}

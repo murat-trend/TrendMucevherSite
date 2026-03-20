@@ -1,0 +1,293 @@
+/**
+ * Mücevher Analiz ve Hikaye Anlatıcılığı
+ * OpenAI Vision (gpt-4o) ile görsel analizi → platform bazlı SEO içerik üretimi
+ */
+
+import OpenAI from "openai";
+import { getRulesForPrompt, loadPlatformRules } from "./platform-rules";
+
+const BASE_SYSTEM_PROMPT = `Sen 'Trend Mücevher'in baş tasarımcısı ve SEO uzmanısın.
+KRİTİK GÖREV: Verilen mücevher görselini analiz et ve ASLA BOŞ ALAN KALMAYACAK ŞEKİLDE JSON üret.
+
+Görevin, görseli şu perspektiflerden incelemektir:
+1. Teknik Mükemmellik: Metalin işlenişi, taşın mıhlanma tarzı, form ve detaylar.
+2. Spiritüel Anlam: Tasarımın arkasındaki sembolizm, manevi güç ve hikaye.
+3. Pazar Uyumu: Her platform için uygun, satış odaklı içerik.
+
+ETİKET VE HASHTAG MANTIĞI (her platformun ilgili kutularına doğru yazılmalı):
+- HASHTAG platformları (Instagram, TikTok, Threads, Facebook, LinkedIn, X): hashtags alanına # ile formatlanmış etiketler yaz. Örn: #mücevher #altın #elişçiliği
+- TAG platformları (Pinterest, YouTube): tags alanına virgülle ayrılmış anahtar kelimeler. Örn: gold jewelry, handmade pendant, 14k gold
+- ETİKET platformları (Trendyol, Çiçek Sepeti): etiketler alanına virgülle ayrılmış arama etiketleri. Örn: altın kolye, el işçiliği, madalyon
+- ETSY: tagler alanına 13'e kadar virgülle ayrılmış tag. Long-tail keyword kullan.
+- AMAZON: keywords alanına virgülle ayrılmış anahtar kelimeler.
+- STOK platformları (Adobe Stock, Shutterstock): keywords alanına virgülle ayrılmış, İngilizce.
+- NEXT (Trend Mücevher platformu): caption, hashtags, tags alanları. Görsel paylaşımda açıklama, etiket ve hashtag kullanır.
+
+Her platformun algoritma kurallarındaki önerilen sayıya uy. İçeriği ilgili kutuya (Açıklama / Etiketler / Hashtagler) doğru yerleştir.
+
+Yanıtın SADECE aşağıdaki JSON formatında olmalı. Tüm alanlar dolu olmalı:
+{
+  "analiz": "Teknik açıklama: metal, taş, işçilik, form detayları...",
+  "sembolizm": "Manevi anlam ve derin sembol analizi. Tasarımın 'ruhunu' anlatan edebi ve etkileyici metin. 2-4 cümle.",
+  "hediyeNotu": "Bu tasarımı satın alan biri için duygusal kart notu. 1-2 cümle.",
+  "trendyol": {
+    "baslik": "Ürün başlığı (max 100 karakter)",
+    "hikaye": "Ürün hikayesi ve açıklama",
+    "teknik": "Teknik özellikler",
+    "bakim": "Bakım önerileri",
+    "paketleme": "Paketleme bilgisi",
+    "etiketler": "Arama etiketleri, virgülle ayrılmış (altın kolye, el işçiliği, madalyon vb.)"
+  },
+  "ciceksepeti": {
+    "baslik": "Ürün başlığı (max 100 karakter)",
+    "hikaye": "Ürün hikayesi ve açıklama",
+    "teknik": "Teknik özellikler",
+    "bakim": "Bakım önerileri",
+    "paketleme": "Paketleme bilgisi",
+    "etiketler": "Arama etiketleri, virgülle ayrılmış (altın kolye, hediye, el işçiliği vb.)"
+  },
+  "etsy": {
+    "baslik": "Ürün başlığı",
+    "tagler": "13 tag, virgülle ayrılmış, long-tail keyword (14k gold pendant, handmade necklace vb.)"
+  },
+  "instagram": {
+    "caption": "Paylaşım metni, emoji ile zengin",
+    "hashtags": "#mücevher #altın #elişçiliği formatında, algoritma kurallarına uygun sayıda"
+  },
+  "tiktok": {
+    "caption": "Video açıklaması",
+    "hashtags": "# ile format, trend + niş hashtag karışımı"
+  },
+  "threads": {
+    "caption": "Paylaşım metni",
+    "hashtags": "# ile format, 2-4 adet"
+  },
+  "facebook": {
+    "caption": "Paylaşım metni",
+    "hashtags": "# ile format, 0-2 adet (az kullan)"
+  },
+  "pinterest": {
+    "description": "Pin açıklaması, SEO uyumlu",
+    "tags": "virgülle ayrılmış 5-8 anahtar kelime (gold jewelry, pendant vb.)"
+  },
+  "youtube": {
+    "description": "Video açıklaması",
+    "tags": "virgülle ayrılmış 10-15 tag, SEO odaklı"
+  },
+  "linkedin": {
+    "caption": "Profesyonel paylaşım metni",
+    "hashtags": "# ile format, 3-5 adet profesyonel"
+  },
+  "x": {
+    "caption": "Tweet metni (kısa, etkileyici)",
+    "hashtags": "# ile format, 1-2 adet (karakter sınırı nedeniyle)"
+  },
+  "amazon": {
+    "baslik": "Ürün başlığı",
+    "description": "Detaylı ürün açıklaması",
+    "keywords": "anahtar kelimeler"
+  },
+  "shopier": {
+    "baslik": "Ürün başlığı",
+    "description": "Ürün açıklaması"
+  },
+  "gumroad": {
+    "baslik": "Ürün başlığı",
+    "description": "Ürün açıklaması"
+  },
+  "adobeStock": {
+    "title": "Görsel başlığı",
+    "keywords": "keyword1, keyword2, ..."
+  },
+  "shutterstock": {
+    "title": "Görsel başlığı",
+    "keywords": "keyword1, keyword2, ..."
+  },
+  "creativeMarket": {
+    "title": "Ürün başlığı",
+    "description": "Ürün açıklaması"
+  },
+  "google": {
+    "metaTitle": "SEO başlık (max 60 karakter)",
+    "metaDesc": "Meta açıklama (max 160 karakter)"
+  },
+  "next": {
+    "caption": "Trend Mücevher / NEXT platformu için paylaşım açıklaması",
+    "hashtags": "#mücevher #elişçiliği formatında hashtagler",
+    "tags": "virgülle ayrılmış etiketler (mücevher, el işçiliği, altın takı vb.)"
+  }
+}`;
+
+/** Dinamik platform kuralları ile tam system prompt */
+function buildSystemPrompt(): string {
+  const rules = getRulesForPrompt();
+  return (
+    BASE_SYSTEM_PROMPT +
+    "\n\n" +
+    rules +
+    "\n\nKRİTİK - HALÜSİNASYON YASAĞI: Yukarıdaki PLATFORM ALGORİTMA KURALLARI araştırılmış gerçek veridir. " +
+    "SADECE bu kurallardaki sayıları, formatları ve limitleri kullan. Asla uydurma, tahmin veya varsayım yapma. " +
+    "Karakter limitleri, hashtag sayıları, tag sayıları tam olarak kurallardaki gibi olmalı."
+  );
+}
+
+export const JEWELRY_ANALYZER_SYSTEM_PROMPT = BASE_SYSTEM_PROMPT;
+
+export type JewelryAnalysisResult = {
+  analiz: string;
+  sembolizm: string;
+  hediyeNotu: string;
+  trendyol: {
+    baslik: string;
+    hikaye: string;
+    teknik: string;
+    bakim: string;
+    paketleme: string;
+    etiketler: string;
+  };
+  ciceksepeti: {
+    baslik: string;
+    hikaye: string;
+    teknik: string;
+    bakim: string;
+    paketleme: string;
+    etiketler: string;
+  };
+  etsy: { baslik: string; tagler: string };
+  instagram: { caption: string; hashtags: string };
+  tiktok: { caption: string; hashtags: string };
+  threads: { caption: string; hashtags: string };
+  facebook: { caption: string; hashtags: string };
+  pinterest: { description: string; tags: string };
+  youtube: { description: string; tags: string };
+  linkedin: { caption: string; hashtags: string };
+  x: { caption: string; hashtags: string };
+  amazon: { baslik: string; description: string; keywords: string };
+  shopier: { baslik: string; description: string };
+  gumroad: { baslik: string; description: string };
+  adobeStock: { title: string; keywords: string };
+  shutterstock: { title: string; keywords: string };
+  creativeMarket: { title: string; description: string };
+  google: { metaTitle: string; metaDesc: string };
+  next: { caption: string; hashtags: string; tags: string };
+};
+
+export async function analyzeJewelryImage(
+  apiKey: string,
+  imageBase64: string,
+  mimeType: string,
+  userPrompt?: string
+): Promise<JewelryAnalysisResult> {
+  const openai = new OpenAI({ apiKey });
+
+  const userContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
+    {
+      type: "image_url",
+      image_url: {
+        url: `data:${mimeType};base64,${imageBase64}`,
+        detail: "high",
+      },
+    },
+    {
+      type: "text",
+      text: userPrompt?.trim()
+        ? `Bu mücevher görselini analiz et ve tasarımın ruhuna uygun DOLU içerik üret. Kullanıcı notu: ${userPrompt}`
+        : "Bu mücevher görselini analiz et ve tasarımın ruhuna uygun EKSİKSİZ SEO verisi ile spiritüel hikaye üret. Tüm JSON alanlarını doldur.",
+    },
+  ];
+
+  const res = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      { role: "system", content: buildSystemPrompt() },
+      { role: "user", content: userContent },
+    ],
+    response_format: { type: "json_object" },
+    max_tokens: 4096,
+  });
+
+  const content = res.choices[0]?.message?.content ?? "{}";
+  const raw = JSON.parse(content) as JewelryAnalysisResult;
+  if (!raw.next) {
+    raw.next = {
+      caption: raw.instagram?.caption ?? "",
+      hashtags: raw.instagram?.hashtags ?? "#mücevher #elişçiliği",
+      tags: "mücevher, el işçiliği, altın takı, özel tasarım",
+    };
+  }
+  return enforcePlatformRules(raw);
+}
+
+/** AI çıktısını platform kurallarına göre zorla uyumlu hale getirir - halüsinasyon önleme */
+function enforcePlatformRules(result: JewelryAnalysisResult): JewelryAnalysisResult {
+  const rules = loadPlatformRules().platforms;
+  const out = { ...result };
+
+  const truncate = (s: string | undefined, max: number) =>
+    s && s.length > max ? s.slice(0, max).trim() : s ?? "";
+
+  const limitHashtags = (hashtags: string, maxCount: number) => {
+    const list = hashtags.split(/\s+/).filter((h) => h.startsWith("#"));
+    if (list.length <= maxCount) return hashtags;
+    return list.slice(0, maxCount).join(" ");
+  };
+
+  const limitTags = (tags: string, maxCount: number) => {
+    const list = tags.split(",").map((t) => t.trim()).filter(Boolean);
+    if (list.length <= maxCount) return tags;
+    return list.slice(0, maxCount).join(", ");
+  };
+
+  if (rules.instagram) {
+    if (rules.instagram.maxCaptionLength && out.instagram?.caption)
+      out.instagram.caption = truncate(out.instagram.caption, rules.instagram.maxCaptionLength);
+    if (rules.instagram.maxHashtags && out.instagram?.hashtags)
+      out.instagram.hashtags = limitHashtags(out.instagram.hashtags, rules.instagram.maxHashtags);
+  }
+  if (rules.tiktok) {
+    if (rules.tiktok.maxCaptionLength && out.tiktok?.caption)
+      out.tiktok.caption = truncate(out.tiktok.caption, rules.tiktok.maxCaptionLength);
+    const thMax = rules.tiktok.recommendedHashtagCount ? parseInt(rules.tiktok.recommendedHashtagCount.split("-")[1] || "4", 10) : 4;
+    if (out.tiktok?.hashtags) out.tiktok.hashtags = limitHashtags(out.tiktok.hashtags, thMax);
+  }
+  if (rules.threads?.maxCaptionLength && out.threads?.caption)
+    out.threads.caption = truncate(out.threads.caption, rules.threads.maxCaptionLength);
+  if (rules.facebook?.maxCaptionLength && out.facebook?.caption)
+    out.facebook.caption = truncate(out.facebook.caption, Math.min(rules.facebook.maxCaptionLength, 5000));
+  if (rules.pinterest) {
+    if (rules.pinterest.maxCaptionLength && out.pinterest?.description)
+      out.pinterest.description = truncate(out.pinterest.description, rules.pinterest.maxCaptionLength);
+    const pMax = rules.pinterest.recommendedKeywordCount ? parseInt(rules.pinterest.recommendedKeywordCount.split("-")[1] || "8", 10) : 8;
+    if (out.pinterest?.tags) out.pinterest.tags = limitTags(out.pinterest.tags, pMax);
+  }
+  if (rules.youtube?.recommendedTagCount && out.youtube?.tags) {
+    const yMax = parseInt(rules.youtube.recommendedTagCount.split("-")[1] || "15", 10);
+    out.youtube.tags = limitTags(out.youtube.tags, yMax);
+  }
+  if (rules.linkedin?.maxCaptionLength && out.linkedin?.caption)
+    out.linkedin.caption = truncate(out.linkedin.caption, rules.linkedin.maxCaptionLength);
+  if (rules.x?.maxCaptionLength && out.x?.caption)
+    out.x.caption = truncate(out.x.caption, rules.x.maxCaptionLength);
+  if (rules.trendyol?.maxBaslikLength && out.trendyol?.baslik)
+    out.trendyol.baslik = truncate(out.trendyol.baslik, rules.trendyol.maxBaslikLength);
+  if (rules.ciceksepeti?.maxBaslikLength && out.ciceksepeti?.baslik)
+    out.ciceksepeti.baslik = truncate(out.ciceksepeti.baslik, rules.ciceksepeti.maxBaslikLength);
+  if (rules.etsy) {
+    if (rules.etsy.maxBaslikLength && out.etsy?.baslik)
+      out.etsy.baslik = truncate(out.etsy.baslik, rules.etsy.maxBaslikLength);
+    if (rules.etsy.maxTagCount && out.etsy?.tagler)
+      out.etsy.tagler = limitTags(out.etsy.tagler, rules.etsy.maxTagCount);
+  }
+  if (rules.amazon?.maxBaslikLength && out.amazon?.baslik)
+    out.amazon.baslik = truncate(out.amazon.baslik, rules.amazon.maxBaslikLength);
+  if (rules.google) {
+    if (rules.google.metaTitleMaxLength && out.google?.metaTitle)
+      out.google.metaTitle = truncate(out.google.metaTitle, rules.google.metaTitleMaxLength);
+    if (rules.google.metaDescMaxLength && out.google?.metaDesc)
+      out.google.metaDesc = truncate(out.google.metaDesc, rules.google.metaDescMaxLength);
+  }
+  if (rules.next?.maxCaptionLength && out.next?.caption)
+    out.next.caption = truncate(out.next.caption, rules.next.maxCaptionLength);
+
+  return out;
+}

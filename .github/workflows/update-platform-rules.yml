@@ -1,0 +1,39 @@
+# Her Pazartesi 09:00'da platform algoritma kurallarını günceller
+name: Update Platform Algorithm Rules
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"  # Her Pazartesi 09:00 UTC
+  workflow_dispatch:  # Manuel tetikleme
+
+jobs:
+  update-rules:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Push için gerekli
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Update platform rules
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: npm run update-platform-rules
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet data/platform-algorithm-rules.json; then
+            echo "Değişiklik yok."
+          else
+            git add data/platform-algorithm-rules.json
+            git commit -m "chore: haftalık platform algoritma kuralları güncellemesi"
+            git push
+          fi
