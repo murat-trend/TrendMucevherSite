@@ -20,6 +20,7 @@ import {
   type RemauraAppContextValue,
   type RemauraLayoutContextValue,
 } from "@/components/remaura/workspace/RemauraWorkspaceContexts";
+import { RemauraBackgroundRemovalSection } from "@/components/remaura/RemauraBackgroundRemovalSection";
 import { RemauraPanelWorkspace } from "@/components/remaura/workspace/RemauraPanelWorkspace";
 import type { ChannelTab } from "@/components/remaura/remaura-types";
 import type { PlatformFormat } from "@/components/remaura/remaura-types";
@@ -27,6 +28,8 @@ import { IMAGE_SIZE_MAP } from "@/components/remaura/remaura-types";
 import type { OptimizedPromptResult } from "@/lib/ai/remaura/prompt-optimizer";
 import type { StyleAnalysisResult } from "@/lib/ai/remaura/style-analyzer";
 import type { JewelryAnalysisResult } from "@/lib/ai/remaura/jewelry-analyzer";
+
+type RemauraCategory = "jewelry" | "background";
 
 export function RemauraWorkspace() {
   const { t, locale } = useLanguage();
@@ -81,6 +84,7 @@ export function RemauraWorkspace() {
   const [isAnalyzingJewelry, setIsAnalyzingJewelry] = useState(false);
   const [jewelryAnalysisError, setJewelryAnalysisError] = useState<string | null>(null);
   const [bgRemoverError, setBgRemoverError] = useState<string | null>(null);
+  const [remauraCategory, setRemauraCategory] = useState<RemauraCategory>("jewelry");
 
   const charCount = prompt.length;
 
@@ -257,6 +261,18 @@ export function RemauraWorkspace() {
     setJewelryAnalysis(null);
     setJewelryAnalysisError(null);
   }, [generatedImage]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const requested = new URLSearchParams(window.location.search).get("category");
+    if (requested === "background") {
+      setRemauraCategory("background");
+      return;
+    }
+    if (requested === "jewelry") {
+      setRemauraCategory("jewelry");
+    }
+  }, []);
 
   const handleAnalyzeJewelry = useCallback(async () => {
     if (!generatedImage || isAnalyzingJewelry) return;
@@ -548,6 +564,38 @@ export function RemauraWorkspace() {
             >
               {t.remauraWorkspace.heroTitle} <span className="font-bold">{t.remauraWorkspace.heroAi}</span>
             </h1>
+            <div
+              className="mt-5 flex flex-wrap items-center justify-center gap-2"
+              role="tablist"
+              aria-label="Remaura kategorileri"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={remauraCategory === "jewelry"}
+                onClick={() => setRemauraCategory("jewelry")}
+                className={`rounded-full border px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] transition-colors ${
+                  remauraCategory === "jewelry"
+                    ? "border-[#b76e79] bg-[#b76e79]/15 text-[#b76e79]"
+                    : "border-white/10 bg-white/[0.03] text-muted hover:border-white/20"
+                }`}
+              >
+                {t.remauraWorkspace.categoryJewelryDesign}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={remauraCategory === "background"}
+                onClick={() => setRemauraCategory("background")}
+                className={`rounded-full border px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] transition-colors ${
+                  remauraCategory === "background"
+                    ? "border-[#b76e79] bg-[#b76e79]/15 text-[#b76e79]"
+                    : "border-white/10 bg-white/[0.03] text-muted hover:border-white/20"
+                }`}
+              >
+                {t.remauraWorkspace.categoryBackgroundRemoval}
+              </button>
+            </div>
             <div className="flex items-center gap-4">
               <span className="h-px w-8 bg-foreground/10" aria-hidden />
               <span className="text-[9px] font-medium uppercase tracking-[0.6em] text-muted">
@@ -557,7 +605,20 @@ export function RemauraWorkspace() {
             </div>
           </div>
 
-          <RemauraPanelWorkspace />
+          {remauraCategory === "jewelry" ? (
+            <RemauraPanelWorkspace />
+          ) : (
+            <RemauraBackgroundRemovalSection
+              t={{
+                removeBackground: t.remauraWorkspace.removeBackground,
+                removingBackground: t.remauraWorkspace.removingBackground,
+                removeBackgroundHint: t.remauraWorkspace.removeBackgroundHint,
+                uploadImage: t.remauraWorkspace.uploadImage,
+                uploadImageHint: t.remauraWorkspace.uploadImageHint,
+                downloadImage: t.remauraWorkspace.downloadImage,
+              }}
+            />
+          )}
         </div>
       </RemauraLayoutContext.Provider>
     </RemauraAppContext.Provider>
