@@ -53,7 +53,7 @@ export function BackgroundRemoverPanel({
         type="button"
         onClick={() => void handleRemoveBackground()}
         disabled={isRemoving}
-        className="flex w-full items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-bold text-white transition-[transform,box-shadow,background-color] duration-150 ease-out hover:bg-violet-700 active:translate-y-px active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#141414] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isRemoving ? (
           <>

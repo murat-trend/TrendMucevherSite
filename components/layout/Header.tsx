@@ -73,10 +73,22 @@ export function Header() {
                         {t.remauraWorkspace.categoryJewelryDesign}
                       </Link>
                       <Link
-                        href="/remaura?category=background"
+                        href="/remaura/arka-plan-kaldir"
                         className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground"
                       >
                         {t.remauraWorkspace.categoryBackgroundRemoval}
+                      </Link>
+                      <Link
+                        href="/remaura/foto-edit"
+                        className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground"
+                      >
+                        {t.remauraWorkspace.categoryPhotoEdit}
+                      </Link>
+                      <Link
+                        href="/remaura/3d"
+                        className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground"
+                      >
+                        Remaura AI 3D
                       </Link>
                     </div>
                   </div>
@@ -211,11 +223,25 @@ export function Header() {
                           {t.remauraWorkspace.categoryJewelryDesign}
                         </Link>
                         <Link
-                          href="/remaura?category=background"
+                          href="/remaura/arka-plan-kaldir"
                           onClick={() => setMobileMenuOpen(false)}
                           className="rounded-lg px-2 py-2 text-[13px] text-foreground/85 hover:bg-foreground/[0.02]"
                         >
                           {t.remauraWorkspace.categoryBackgroundRemoval}
+                        </Link>
+                        <Link
+                          href="/remaura/foto-edit"
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="rounded-lg px-2 py-2 text-[13px] text-foreground/85 hover:bg-foreground/[0.02]"
+                        >
+                          {t.remauraWorkspace.categoryPhotoEdit}
+                        </Link>
+                        <Link
+                          href="/remaura/3d"
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="rounded-lg px-2 py-2 text-[13px] text-foreground/85 hover:bg-foreground/[0.02]"
+                        >
+                          Remaura AI 3D
                         </Link>
                       </div>
                     </div>

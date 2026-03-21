@@ -21,6 +21,7 @@ import {
   type RemauraLayoutContextValue,
 } from "@/components/remaura/workspace/RemauraWorkspaceContexts";
 import { RemauraBackgroundRemovalSection } from "@/components/remaura/RemauraBackgroundRemovalSection";
+import { RemauraPhotoEditSection } from "@/components/remaura/RemauraPhotoEditSection";
 import { RemauraPanelWorkspace } from "@/components/remaura/workspace/RemauraPanelWorkspace";
 import type { ChannelTab } from "@/components/remaura/remaura-types";
 import type { PlatformFormat } from "@/components/remaura/remaura-types";
@@ -29,9 +30,13 @@ import type { OptimizedPromptResult } from "@/lib/ai/remaura/prompt-optimizer";
 import type { StyleAnalysisResult } from "@/lib/ai/remaura/style-analyzer";
 import type { JewelryAnalysisResult } from "@/lib/ai/remaura/jewelry-analyzer";
 
-type RemauraCategory = "jewelry" | "background";
+type RemauraCategory = "jewelry" | "background" | "photoEdit";
 
-export function RemauraWorkspace() {
+type RemauraWorkspaceProps = {
+  initialCategory?: RemauraCategory;
+};
+
+export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspaceProps) {
   const { t, locale } = useLanguage();
 
   const [prompt, setPrompt] = useState("");
@@ -84,7 +89,7 @@ export function RemauraWorkspace() {
   const [isAnalyzingJewelry, setIsAnalyzingJewelry] = useState(false);
   const [jewelryAnalysisError, setJewelryAnalysisError] = useState<string | null>(null);
   const [bgRemoverError, setBgRemoverError] = useState<string | null>(null);
-  const [remauraCategory, setRemauraCategory] = useState<RemauraCategory>("jewelry");
+  const [remauraCategory, setRemauraCategory] = useState<RemauraCategory>(initialCategory);
 
   const charCount = prompt.length;
 
@@ -271,6 +276,10 @@ export function RemauraWorkspace() {
     }
     if (requested === "jewelry") {
       setRemauraCategory("jewelry");
+      return;
+    }
+    if (requested === "photo-edit") {
+      setRemauraCategory("photoEdit");
     }
   }, []);
 
@@ -542,7 +551,7 @@ export function RemauraWorkspace() {
   return (
     <RemauraAppContext.Provider value={appValue}>
       <RemauraLayoutContext.Provider value={layoutValue}>
-        <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-10">
+        <div id="remaura-workspace" className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-10">
           <div className="mb-6 flex flex-col items-center justify-center space-y-2 py-6 sm:mb-10 sm:py-8">
             <div className="mb-3 flex items-center justify-center">
               <div className="icon-2-5d">
@@ -595,6 +604,19 @@ export function RemauraWorkspace() {
               >
                 {t.remauraWorkspace.categoryBackgroundRemoval}
               </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={remauraCategory === "photoEdit"}
+                onClick={() => setRemauraCategory("photoEdit")}
+                className={`rounded-full border px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] transition-colors ${
+                  remauraCategory === "photoEdit"
+                    ? "border-[#b76e79] bg-[#b76e79]/15 text-[#b76e79]"
+                    : "border-white/10 bg-white/[0.03] text-muted hover:border-white/20"
+                }`}
+              >
+                {t.remauraWorkspace.categoryPhotoEdit}
+              </button>
             </div>
             <div className="flex items-center gap-4">
               <span className="h-px w-8 bg-foreground/10" aria-hidden />
@@ -607,7 +629,7 @@ export function RemauraWorkspace() {
 
           {remauraCategory === "jewelry" ? (
             <RemauraPanelWorkspace />
-          ) : (
+          ) : remauraCategory === "background" ? (
             <RemauraBackgroundRemovalSection
               t={{
                 removeBackground: t.remauraWorkspace.removeBackground,
@@ -616,6 +638,19 @@ export function RemauraWorkspace() {
                 uploadImage: t.remauraWorkspace.uploadImage,
                 uploadImageHint: t.remauraWorkspace.uploadImageHint,
                 downloadImage: t.remauraWorkspace.downloadImage,
+              }}
+            />
+          ) : (
+            <RemauraPhotoEditSection
+              t={{
+                title: t.remauraWorkspace.photoEditTitle,
+                hint: t.remauraWorkspace.photoEditHint,
+                uploadImage: t.remauraWorkspace.uploadImage,
+                uploadImageHint: t.remauraWorkspace.uploadImageHint,
+                clearImage: t.remauraWorkspace.clearImage,
+                downloadImage: t.remauraWorkspace.downloadImage,
+                resetAdjustments: t.remauraWorkspace.resetAdjustments,
+                noImage: t.remauraWorkspace.noImageSelected,
               }}
             />
           )}
