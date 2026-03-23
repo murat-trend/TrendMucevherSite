@@ -8,6 +8,8 @@ import { JEWELRY_CONSTITUTION } from "@/lib/ai/constitution/jewelry.constitution
 import { styleToPromptParts } from "@/lib/ai/remaura/style-analyzer";
 import type { OptimizedPromptResult } from "@/lib/ai/remaura/prompt-optimizer";
 import type { StyleAnalysisResult } from "@/lib/ai/remaura/style-analyzer";
+import { appendRemauraJob } from "@/lib/remaura/jobs-store";
+import { getAdminSettings } from "@/lib/site/settings-store";
 
 loadEnvConfig(process.cwd());
 
@@ -27,7 +29,17 @@ const SIZE_MAP: Record<string, ValidSize> = {
 };
 
 export async function POST(req: Request) {
+  const startedAt = Date.now();
+  let userId = "";
+  let format = "";
   try {
+    const settings = await getAdminSettings();
+    if (!settings.features.generateEnabled) {
+      return NextResponse.json(
+        { error: "Gorsel uretimi gecici olarak kapali." },
+        { status: 503 }
+      );
+    }
     const apiKey = getOpenAIApiKey();
     if (!apiKey) {
       return NextResponse.json(
@@ -39,12 +51,13 @@ export async function POST(req: Request) {
     const client = new OpenAI({ apiKey });
 
     const body = await req.json();
+    userId = (body.userId as string | undefined)?.trim() || "";
     const rawPrompt = body.prompt as string | undefined;
     const revisedPrompt = body.revisedPrompt as string | undefined;
     const promptLocale = (body.locale ?? body.revisedPromptLocale) as "tr" | "en" | undefined;
     const effectiveLocale = promptLocale === "en" ? "en" : "tr";
     const customNegative = body.negativePrompt as string | undefined;
-    const format = body.format as string | undefined;
+    format = (body.format as string | undefined) ?? "";
     const optimizedResult = body.optimizedResult as OptimizedPromptResult | undefined;
     const styleAnalysis = body.styleAnalysis as StyleAnalysisResult | undefined;
     const styleImages = body.styleImages as Array<{ base64: string; mimeType?: string }> | undefined;
@@ -182,6 +195,16 @@ export async function POST(req: Request) {
       );
     }
 
+    await appendRemauraJob({
+      type: "generate",
+      status: "ok",
+      userId: userId || undefined,
+      platform: format || undefined,
+      durationMs: Date.now() - startedAt,
+      estimatedCostUsd: 0.2,
+      message: "generate_ok",
+    });
+
     return NextResponse.json({
       image: `data:image/png;base64,${imageBase64}`,
       promptUsed,
@@ -189,6 +212,16 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     console.error("API ERROR:", error);
     const err = error as { status?: number; code?: string; message?: string; error?: { message?: string } };
+    const errMsg = (err?.message ?? err?.error?.message ?? "") as string;
+    await appendRemauraJob({
+      type: "generate",
+      status: "error",
+      userId: userId || undefined,
+      platform: format || undefined,
+      durationMs: Date.now() - startedAt,
+      estimatedCostUsd: 0.2,
+      message: errMsg || "generate_error",
+    });
     if (err?.status === 401 || err?.code === "invalid_api_key") {
       return NextResponse.json(
         {
@@ -198,7 +231,6 @@ export async function POST(req: Request) {
         { status: 401 }
       );
     }
-    const errMsg = (err?.message ?? err?.error?.message ?? "") as string;
     const isSafetyRejection = err?.status === 400 || /safety|rejected|content_policy/i.test(errMsg);
     if (isSafetyRejection) {
       return NextResponse.json(

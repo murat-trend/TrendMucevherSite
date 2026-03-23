@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getReplicateApiKey } from "@/lib/api/replicate";
 import Replicate from "replicate";
 import { depthToNormalMap } from "@/lib/ai/depth/depth-to-normal";
+import { getAdminSettings } from "@/lib/site/settings-store";
 
 loadEnvConfig(process.cwd());
 
@@ -10,6 +11,14 @@ const DEPTH_MODEL = "chenxwh/depth-anything-v2:b239ea33cff32bb7abb5db39ffe9a09c1
 
 export async function POST(req: Request) {
   try {
+    const settings = await getAdminSettings();
+    if (!settings.features.depthEnabled) {
+      return NextResponse.json(
+        { error: "Depth araclari gecici olarak kapali." },
+        { status: 503 }
+      );
+    }
+
     const apiKey = getReplicateApiKey();
     if (!apiKey) {
       return NextResponse.json(

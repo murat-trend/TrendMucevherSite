@@ -1,0 +1,85 @@
+{
+  "source_document": "docs/cad/rhino-users-guide-windows.pdf",
+  "source_note": "Initial index extracted from table-of-contents and chapter scan of Rhino User's Guide for Windows (2023-01-17).",
+  "categories": [
+    {
+      "id": "core-setup",
+      "title": "Core Setup and Accuracy",
+      "chapters": ["Introduction", "Accurate Modeling"],
+      "commands_or_tools": [
+        "Template selection",
+        "Command line options",
+        "Undo/Redo",
+        "GridSnap",
+        "Ortho",
+        "Osnap",
+        "SmartTrack",
+        "CPlane / coordinate usage"
+      ]
+    },
+    {
+      "id": "curve-surface-creation",
+      "title": "Curve and Surface Creation",
+      "chapters": ["Create Surfaces from Curves"],
+      "commands_or_tools": [
+        "ExtrudeCrv",
+        "Loft",
+        "Revolve",
+        "RailRevolve",
+        "Sweep1",
+        "Sweep2"
+      ]
+    },
+    {
+      "id": "editing-repair",
+      "title": "Editing and Repair",
+      "chapters": ["Edit Curves and Surfaces"],
+      "commands_or_tools": [
+        "Join",
+        "Explode",
+        "Trim",
+        "Split",
+        "Untrim"
+      ]
+    },
+    {
+      "id": "transforms",
+      "title": "Transforms and Placement",
+      "chapters": ["Transforms - Move, Copy, Rotate, and Scale"],
+      "commands_or_tools": [
+        "Move",
+        "Copy",
+        "Rotate",
+        "Scale",
+        "Mirror"
+      ]
+    },
+    {
+      "id": "analysis",
+      "title": "Quality and Surface Analysis",
+      "chapters": ["Curve and Surface Analysis"],
+      "commands_or_tools": [
+        "Distance/Angle/Radius checks",
+        "Curvature analysis",
+        "Environment map",
+        "Zebra",
+        "Edge evaluation",
+        "Diagnostics"
+      ]
+    },
+    {
+      "id": "render-and-output",
+      "title": "Rendering and Presentation",
+      "chapters": ["Render", "Layouts"],
+      "commands_or_tools": [
+        "Lights",
+        "Materials",
+        "Environment",
+        "Ground Plane",
+        "Render Preview",
+        "Layout viewports",
+        "Title block"
+      ]
+    }
+  ]
+}

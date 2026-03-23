@@ -13,7 +13,7 @@ const NAV_ITEMS = [
   { href: "/remaura", key: "remaura" as const },
   { href: "/gunluk", key: "daily" as const },
   { href: "/iletisim", key: "contact" as const },
-  { href: "/giris", key: "login" as const },
+  { href: "/admin", key: "superAdmin" as const },
 ];
 
 export function Header() {
@@ -90,13 +90,23 @@ export function Header() {
                       >
                         Remaura AI 3D
                       </Link>
+                      <Link
+                        href="/remaura/cad-koc"
+                        className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground"
+                      >
+                        CAD Kocu
+                      </Link>
                     </div>
                   </div>
                 ) : (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="text-[14px] font-medium tracking-[0.02em] text-foreground/80 transition-colors hover:text-foreground"
+                    className={
+                      item.key === "superAdmin"
+                        ? "text-[13px] font-medium tracking-[0.02em] text-muted-foreground transition-colors hover:text-foreground"
+                        : "text-[14px] font-medium tracking-[0.02em] text-foreground/80 transition-colors hover:text-foreground"
+                    }
                   >
                     {t.nav[item.key]}
                   </Link>
@@ -243,6 +253,13 @@ export function Header() {
                         >
                           Remaura AI 3D
                         </Link>
+                        <Link
+                          href="/remaura/cad-koc"
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="rounded-lg px-2 py-2 text-[13px] text-foreground/85 hover:bg-foreground/[0.02]"
+                        >
+                          CAD Kocu
+                        </Link>
                       </div>
                     </div>
                   ) : (
@@ -250,7 +267,11 @@ export function Header() {
                       key={item.href}
                       href={item.href}
                       onClick={() => setMobileMenuOpen(false)}
-                      className="border-b border-border/60 py-4 text-[14px] font-medium tracking-[0.02em] text-foreground transition-colors last:border-b-0 hover:bg-foreground/[0.02] active:bg-foreground/5"
+                      className={
+                        item.key === "superAdmin"
+                          ? "border-b border-border/60 py-4 text-[13px] font-medium tracking-[0.02em] text-muted-foreground transition-colors hover:text-foreground"
+                          : "border-b border-border/60 py-4 text-[14px] font-medium tracking-[0.02em] text-foreground transition-colors last:border-b-0 hover:bg-foreground/[0.02] active:bg-foreground/5"
+                      }
                     >
                       {t.nav[item.key]}
                     </Link>

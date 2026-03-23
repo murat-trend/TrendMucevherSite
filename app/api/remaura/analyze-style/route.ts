@@ -2,11 +2,23 @@ import { loadEnvConfig } from "@next/env";
 import { NextResponse } from "next/server";
 import { getOpenAIApiKey } from "@/lib/api/openai";
 import { analyzeStyleReferences } from "@/lib/ai/remaura/style-analyzer";
+import { appendRemauraJob } from "@/lib/remaura/jobs-store";
+import { getAdminSettings } from "@/lib/site/settings-store";
 
 loadEnvConfig(process.cwd());
 
 export async function POST(req: Request) {
+  const startedAt = Date.now();
+  let status: "ok" | "error" = "ok";
+  let userId = "";
   try {
+    const settings = await getAdminSettings();
+    if (!settings.features.analyzeStyleEnabled) {
+      return NextResponse.json(
+        { error: "Stil analizi gecici olarak kapali." },
+        { status: 503 }
+      );
+    }
     const apiKey = getOpenAIApiKey();
     if (!apiKey) {
       return NextResponse.json(
@@ -16,6 +28,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
+    userId = (body.userId as string | undefined)?.trim() || "";
 
     // Tek görsel (eski format) veya çoklu görsel
     const images = body.images as Array<{ base64: string; mimeType?: string }> | undefined;
@@ -45,8 +58,17 @@ export async function POST(req: Request) {
     }
 
     const result = await analyzeStyleReferences(apiKey, imageInputs);
+    await appendRemauraJob({
+      type: "analyze_style",
+      status,
+      userId: userId || undefined,
+      durationMs: Date.now() - startedAt,
+      estimatedCostUsd: 0.015,
+      message: "analyze_style_ok",
+    });
     return NextResponse.json(result);
   } catch (error: unknown) {
+    status = "error";
     console.error("ANALYZE STYLE ERROR:", error);
     const err = error as { status?: number; code?: string; message?: string };
     if (err?.status === 401 || err?.code === "invalid_api_key") {
@@ -70,5 +92,16 @@ export async function POST(req: Request) {
       { error: "Stil analizi başarısız." },
       { status: 500 }
     );
+  } finally {
+    if (status === "error") {
+      await appendRemauraJob({
+        type: "analyze_style",
+        status: "error",
+        userId: userId || undefined,
+        durationMs: Date.now() - startedAt,
+        estimatedCostUsd: 0.015,
+        message: "analyze_style_error",
+      });
+    }
   }
 }

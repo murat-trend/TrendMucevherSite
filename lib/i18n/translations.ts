@@ -10,6 +10,7 @@ export const translations = {
       daily: "Günlük",
       contact: "İletişim",
       login: "Giriş Yap",
+      superAdmin: "Super Admin",
     },
     header: {
       menuOpen: "Menüyü aç",
@@ -261,6 +262,7 @@ export const translations = {
       daily: "Daily",
       contact: "Contact",
       login: "Log In",
+      superAdmin: "Super Admin",
     },
     header: {
       menuOpen: "Open menu",

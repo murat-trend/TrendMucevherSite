@@ -3,6 +3,7 @@
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { PlatformBox } from "@/components/remaura/PlatformBox";
 import { useRemauraApp } from "@/components/remaura/workspace/RemauraWorkspaceContexts";
+import type { JewelryPlatformTarget } from "@/lib/ai/remaura/jewelry-analyzer";
 
 export function DistributionPanel() {
   const { t } = useLanguage();
@@ -45,12 +46,18 @@ export function DistributionPanel() {
     setNextTab,
     expandedPlatforms,
     togglePlatform,
+    setSelectedDistributionPlatform,
     handleCopy,
     copiedId,
     copyIconDefault,
     copyIconCopied,
     getContentForPlatform,
   } = useRemauraApp();
+
+  const handlePlatformToggle = (platform: JewelryPlatformTarget) => {
+    setSelectedDistributionPlatform(platform);
+    togglePlatform(platform);
+  };
 
   return (
     <div className="w-full px-1 sm:px-2">
@@ -80,7 +87,7 @@ export function DistributionPanel() {
             copyId="instagram"
             descBorder="border-l-2 border-pink-500/50"
             expanded={expandedPlatforms.has("instagram")}
-            onToggle={() => togglePlatform("instagram")}
+            onToggle={() => handlePlatformToggle("instagram")}
             handleCopy={handleCopy}
             copiedId={copiedId}
             copyIconDefault={copyIconDefault}
@@ -96,7 +103,7 @@ export function DistributionPanel() {
             copyId="tiktok"
             descBorder="border-l-2 border-black/30 dark:border-white/30"
             expanded={expandedPlatforms.has("tiktok")}
-            onToggle={() => togglePlatform("tiktok")}
+            onToggle={() => handlePlatformToggle("tiktok")}
             handleCopy={handleCopy}
             copiedId={copiedId}
             copyIconDefault={copyIconDefault}
@@ -112,7 +119,7 @@ export function DistributionPanel() {
             copyId="threads"
             descBorder="border-l-2 border-[#5C5C5C]/50"
             expanded={expandedPlatforms.has("threads")}
-            onToggle={() => togglePlatform("threads")}
+            onToggle={() => handlePlatformToggle("threads")}
             handleCopy={handleCopy}
             copiedId={copiedId}
             copyIconDefault={copyIconDefault}
@@ -127,7 +134,7 @@ export function DistributionPanel() {
             setTab={setFacebookTab}
             copyId="facebook"
             expanded={expandedPlatforms.has("facebook")}
-            onToggle={() => togglePlatform("facebook")}
+            onToggle={() => handlePlatformToggle("facebook")}
             handleCopy={handleCopy}
             copiedId={copiedId}
             copyIconDefault={copyIconDefault}
@@ -154,7 +161,7 @@ export function DistributionPanel() {
             copyId="linkedin"
             descBorder="border-l-2 border-[#0A66C2]/50"
             expanded={expandedPlatforms.has("linkedin")}
-            onToggle={() => togglePlatform("linkedin")}
+            onToggle={() => handlePlatformToggle("linkedin")}
             handleCopy={handleCopy}
             copiedId={copiedId}
             copyIconDefault={copyIconDefault}
@@ -170,7 +177,7 @@ export function DistributionPanel() {
             copyId="pinterest"
             descBorder="border-l-2 border-[#E60023]/50"
             expanded={expandedPlatforms.has("pinterest")}
-            onToggle={() => togglePlatform("pinterest")}
+            onToggle={() => handlePlatformToggle("pinterest")}
             handleCopy={handleCopy}
             copiedId={copiedId}
             copyIconDefault={copyIconDefault}
@@ -186,7 +193,7 @@ export function DistributionPanel() {
             copyId="x"
             descBorder="border-l-2 border-black/30 dark:border-white/30"
             expanded={expandedPlatforms.has("x")}
-            onToggle={() => togglePlatform("x")}
+            onToggle={() => handlePlatformToggle("x")}
             handleCopy={handleCopy}
             copiedId={copiedId}
             copyIconDefault={copyIconDefault}
@@ -201,7 +208,7 @@ export function DistributionPanel() {
             setTab={setYoutubeTab}
             copyId="youtube"
             expanded={expandedPlatforms.has("youtube")}
-            onToggle={() => togglePlatform("youtube")}
+            onToggle={() => handlePlatformToggle("youtube")}
             handleCopy={handleCopy}
             copiedId={copiedId}
             copyIconDefault={copyIconDefault}
@@ -228,7 +235,7 @@ export function DistributionPanel() {
             copyId="trendyol"
             descBorder="border-l-2 border-[#F27A1A]/50"
             expanded={expandedPlatforms.has("trendyol")}
-            onToggle={() => togglePlatform("trendyol")}
+            onToggle={() => handlePlatformToggle("trendyol")}
             handleCopy={handleCopy}
             copiedId={copiedId}
             copyIconDefault={copyIconDefault}
@@ -244,7 +251,7 @@ export function DistributionPanel() {
             copyId="ciceksepeti"
             descBorder="border-l-2 border-[#00A650]/50"
             expanded={expandedPlatforms.has("ciceksepeti")}
-            onToggle={() => togglePlatform("ciceksepeti")}
+            onToggle={() => handlePlatformToggle("ciceksepeti")}
             handleCopy={handleCopy}
             copiedId={copiedId}
             copyIconDefault={copyIconDefault}
@@ -260,7 +267,7 @@ export function DistributionPanel() {
             copyId="etsy"
             descBorder="border-l-2 border-[#F1641E]/50"
             expanded={expandedPlatforms.has("etsy")}
-            onToggle={() => togglePlatform("etsy")}
+            onToggle={() => handlePlatformToggle("etsy")}
             handleCopy={handleCopy}
             copiedId={copiedId}
             copyIconDefault={copyIconDefault}
@@ -275,7 +282,7 @@ export function DistributionPanel() {
             setTab={setAmazonHandmadeTab}
             copyId="amazon"
             expanded={expandedPlatforms.has("amazon")}
-            onToggle={() => togglePlatform("amazon")}
+            onToggle={() => handlePlatformToggle("amazon")}
             handleCopy={handleCopy}
             copiedId={copiedId}
             copyIconDefault={copyIconDefault}
@@ -291,7 +298,7 @@ export function DistributionPanel() {
             copyId="shopier"
             descBorder="border-l-2 border-[#96BF48]/50"
             expanded={expandedPlatforms.has("shopier")}
-            onToggle={() => togglePlatform("shopier")}
+            onToggle={() => handlePlatformToggle("shopier")}
             handleCopy={handleCopy}
             copiedId={copiedId}
             copyIconDefault={copyIconDefault}
@@ -307,7 +314,7 @@ export function DistributionPanel() {
             copyId="gumroad"
             descBorder="border-l-2 border-[#36A9AE]/50"
             expanded={expandedPlatforms.has("gumroad")}
-            onToggle={() => togglePlatform("gumroad")}
+            onToggle={() => handlePlatformToggle("gumroad")}
             handleCopy={handleCopy}
             copiedId={copiedId}
             copyIconDefault={copyIconDefault}
@@ -334,7 +341,7 @@ export function DistributionPanel() {
             copyId="adobeStock"
             descBorder="border-l-2 border-[#FF0000]/50"
             expanded={expandedPlatforms.has("adobeStock")}
-            onToggle={() => togglePlatform("adobeStock")}
+            onToggle={() => handlePlatformToggle("adobeStock")}
             handleCopy={handleCopy}
             copiedId={copiedId}
             copyIconDefault={copyIconDefault}
@@ -350,7 +357,7 @@ export function DistributionPanel() {
             copyId="shutterstock"
             descBorder="border-l-2 border-[#EE2B24]/50"
             expanded={expandedPlatforms.has("shutterstock")}
-            onToggle={() => togglePlatform("shutterstock")}
+            onToggle={() => handlePlatformToggle("shutterstock")}
             handleCopy={handleCopy}
             copiedId={copiedId}
             copyIconDefault={copyIconDefault}
@@ -366,7 +373,7 @@ export function DistributionPanel() {
             copyId="creativeMarket"
             descBorder="border-l-2 border-[#27A776]/50"
             expanded={expandedPlatforms.has("creativeMarket")}
-            onToggle={() => togglePlatform("creativeMarket")}
+            onToggle={() => handlePlatformToggle("creativeMarket")}
             handleCopy={handleCopy}
             copiedId={copiedId}
             copyIconDefault={copyIconDefault}
@@ -382,7 +389,7 @@ export function DistributionPanel() {
             copyId="next"
             descBorder="border-l-2 border-[#00D1B2]/50"
             expanded={expandedPlatforms.has("next")}
-            onToggle={() => togglePlatform("next")}
+            onToggle={() => handlePlatformToggle("next")}
             handleCopy={handleCopy}
             copiedId={copiedId}
             copyIconDefault={copyIconDefault}

@@ -28,13 +28,30 @@ import type { PlatformFormat } from "@/components/remaura/remaura-types";
 import { IMAGE_SIZE_MAP } from "@/components/remaura/remaura-types";
 import type { OptimizedPromptResult } from "@/lib/ai/remaura/prompt-optimizer";
 import type { StyleAnalysisResult } from "@/lib/ai/remaura/style-analyzer";
-import type { JewelryAnalysisResult } from "@/lib/ai/remaura/jewelry-analyzer";
+import type { JewelryAnalysisResult, JewelryPlatformTarget } from "@/lib/ai/remaura/jewelry-analyzer";
 
 type RemauraCategory = "jewelry" | "background" | "photoEdit";
 
 type RemauraWorkspaceProps = {
   initialCategory?: RemauraCategory;
 };
+
+function getOrCreateBillingUserId(): string {
+  const key = "remaura-billing-user-id";
+  const existing = localStorage.getItem(key);
+  if (existing?.trim()) return existing;
+  const created = crypto.randomUUID();
+  localStorage.setItem(key, created);
+  return created;
+}
+
+function mapFormatToAnalysisPlatform(format: PlatformFormat): JewelryPlatformTarget {
+  if (format === "story-reels") return "tiktok";
+  if (format === "youtube-web") return "youtube";
+  if (format === "3d-export") return "next";
+  if (format === "portrait") return "instagram";
+  return "instagram";
+}
 
 export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspaceProps) {
   const { t, locale } = useLanguage();
@@ -60,6 +77,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
   const [creativeMarketTab, setCreativeMarketTab] = useState<ChannelTab>("desc");
   const [nextTab, setNextTab] = useState<ChannelTab>("desc");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [selectedDistributionPlatform, setSelectedDistributionPlatform] = useState<JewelryPlatformTarget | null>(null);
   const [expandedPlatforms, setExpandedPlatforms] = useState<Set<string>>(new Set());
   const togglePlatform = useCallback((id: string) => {
     setExpandedPlatforms((prev) => {
@@ -88,6 +106,9 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
   const [jewelryAnalysis, setJewelryAnalysis] = useState<JewelryAnalysisResult | null>(null);
   const [isAnalyzingJewelry, setIsAnalyzingJewelry] = useState(false);
   const [jewelryAnalysisError, setJewelryAnalysisError] = useState<string | null>(null);
+  const [billingUserId, setBillingUserId] = useState<string>("");
+  const [billingCredits, setBillingCredits] = useState<number>(0);
+  const [billingCheckoutUrl, setBillingCheckoutUrl] = useState<string | null>(null);
   const [bgRemoverError, setBgRemoverError] = useState<string | null>(null);
   const [remauraCategory, setRemauraCategory] = useState<RemauraCategory>(initialCategory);
 
@@ -119,6 +140,19 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const id = getOrCreateBillingUserId();
+    setBillingUserId(id);
+    void fetch(`/api/billing/wallet?userId=${encodeURIComponent(id)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const credits = Number(data?.wallet?.balanceCredits ?? 0);
+        if (Number.isFinite(credits)) setBillingCredits(credits);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     const onEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") setImageZoomOpen(false);
     };
@@ -144,6 +178,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
           prompt: prompt.trim(),
           locale,
           mode3DExport: platformFormat === "3d-export",
+          userId: billingUserId || undefined,
         }),
       });
       const data = await res.json();
@@ -157,7 +192,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     } finally {
       setIsOptimizing(false);
     }
-  }, [prompt, locale, platformFormat]);
+  }, [prompt, locale, platformFormat, billingUserId]);
 
   const handleAnalyzeStyle = useCallback(async () => {
     const imagesToSend = styleImages
@@ -177,7 +212,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
       const res = await fetch("/api/remaura/analyze-style", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ images: imagesToSend }),
+        body: JSON.stringify({ images: imagesToSend, userId: billingUserId || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Hata");
@@ -187,7 +222,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     } finally {
       setIsAnalyzing(false);
     }
-  }, [styleImages]);
+  }, [styleImages, billingUserId]);
 
   const handleGenerate = useCallback(async () => {
     const useNormal = prompt.trim() || optimizedResult?.optimizedPrompt;
@@ -211,7 +246,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
           const analyzeRes = await fetch("/api/remaura/analyze-style", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ images: imagesToSend }),
+            body: JSON.stringify({ images: imagesToSend, userId: billingUserId || undefined }),
           });
           const analyzeData = await analyzeRes.json();
           if (analyzeRes.ok) {
@@ -235,6 +270,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
           optimizedResult: optimizedResult ?? undefined,
           styleAnalysis: effectiveStyleAnalysis ?? undefined,
           styleImages: imagesToSend.length > 0 ? imagesToSend : undefined,
+          userId: billingUserId || undefined,
         }),
       });
       const data = await res.json();
@@ -259,6 +295,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     styleAnalysis,
     styleImages,
     locale,
+    billingUserId,
     t.remauraWorkspace.generateError,
   ]);
 
@@ -288,23 +325,34 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     setIsAnalyzingJewelry(true);
     setJewelryAnalysisError(null);
     try {
+      const selectedPlatform = selectedDistributionPlatform ?? mapFormatToAnalysisPlatform(platformFormat);
       const res = await fetch("/api/remaura/analyze-jewelry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           image: generatedImage.startsWith("data:") ? generatedImage : `data:image/png;base64,${generatedImage}`,
           prompt: prompt.trim() || undefined,
+          selectedPlatform,
+          userId: billingUserId,
         }),
       });
       const data = await res.json();
+      if (res.status === 402 && data?.checkoutUrl) {
+        setBillingCheckoutUrl(data.checkoutUrl);
+        const credits = Number(data?.wallet?.balanceCredits ?? 0);
+        if (Number.isFinite(credits)) setBillingCredits(credits);
+        throw new Error("Kredi yetersiz. Odeme adimina gecin.");
+      }
       if (!res.ok) throw new Error(data?.error ?? "Analiz başarısız.");
       setJewelryAnalysis(data);
+      setBillingCheckoutUrl(null);
+      setBillingCredits((prev) => Math.max(0, prev - 1));
     } catch (e) {
       setJewelryAnalysisError(e instanceof Error ? e.message : "Mücevher analizi başarısız.");
     } finally {
       setIsAnalyzingJewelry(false);
     }
-  }, [generatedImage, prompt, isAnalyzingJewelry]);
+  }, [generatedImage, prompt, isAnalyzingJewelry, platformFormat, selectedDistributionPlatform, billingUserId]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -507,6 +555,8 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     copiedId,
     expandedPlatforms,
     togglePlatform,
+    selectedDistributionPlatform,
+    setSelectedDistributionPlatform,
     styleImages,
     platformFormat,
     setPlatformFormat,
@@ -533,6 +583,10 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     jewelryAnalysis,
     jewelryAnalysisError,
     isAnalyzingJewelry,
+    billingUserId,
+    billingCredits,
+    billingCheckoutUrl,
+    setBillingCheckoutUrl,
     bgRemoverError,
     setBgRemoverError,
     handleOptimize,

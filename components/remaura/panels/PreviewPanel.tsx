@@ -29,6 +29,8 @@ export function PreviewPanel() {
     handleAnalyzeJewelry,
     isAnalyzingJewelry,
     jewelryAnalysis,
+    billingCredits,
+    billingCheckoutUrl,
     isGenerating,
     generateError,
     handleGenerate,
@@ -181,6 +183,10 @@ export function PreviewPanel() {
               ) : (
                 <div key="jewelry" className="mt-4 w-full">
                   <div className="w-full">
+                    <div className="mb-2 flex items-center justify-between rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px]">
+                      <span className="text-foreground/80">Icerik kredisi</span>
+                      <span className="font-semibold text-amber-700 dark:text-amber-300">{billingCredits}</span>
+                    </div>
                     {jewelryAnalysisError && (
                       <p className="mb-2 text-xs text-red-600 dark:text-red-400">{jewelryAnalysisError}</p>
                     )}
@@ -226,6 +232,16 @@ export function PreviewPanel() {
                         </>
                       )}
                     </button>
+                    {billingCheckoutUrl && (
+                      <a
+                        href={billingCheckoutUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-[#b76e79]/40 bg-[#b76e79]/10 px-4 py-2.5 text-xs font-semibold text-[#b76e79] transition-colors hover:bg-[#b76e79]/20"
+                      >
+                        30 TL ile kredi yukle
+                      </a>
+                    )}
                     {jewelryAnalysis && (
                       <p className="mt-2 text-[10px] text-emerald-600 dark:text-emerald-400">
                         ✓ Platform içerikleri güncellendi

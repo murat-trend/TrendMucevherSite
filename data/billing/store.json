@@ -1,0 +1,22 @@
+{
+  "wallets": {
+    "c0d04b59-e946-4b9f-8d40-2ab44a912ff8": {
+      "userId": "c0d04b59-e946-4b9f-8d40-2ab44a912ff8",
+      "balanceCredits": 0,
+      "updatedAt": "2026-03-21T18:52:57.612Z"
+    }
+  },
+  "ledger": [],
+  "sessions": {
+    "24e69893-11d7-42f5-84de-4dd54e255229": {
+      "id": "24e69893-11d7-42f5-84de-4dd54e255229",
+      "userId": "c0d04b59-e946-4b9f-8d40-2ab44a912ff8",
+      "status": "pending",
+      "amountTry": 30,
+      "credits": 1,
+      "createdAt": "2026-03-22T21:43:48.451Z",
+      "checkoutUrl": "http://localhost:3000/fiyatlandirma?billingSession=24e69893-11d7-42f5-84de-4dd54e255229&amountTry=30",
+      "providerRef": "hbk-24e69893"
+    }
+  }
+}

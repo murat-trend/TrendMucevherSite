@@ -40,3 +40,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Otomatik günlük dashboard PDF raporları
+/Reports/*.pdf
+
+# Yüklenen fatura dosyaları (public altında)
+/public/uploads/invoices/*
+!/public/uploads/invoices/.gitkeep
+
+# Gider satırları (sunucu senkronu) ve gece PDF yedekleri
+/data/finance/expenses.json
+/data/finance/backups/*.pdf
+/data/finance/backups/manifest.jsonl

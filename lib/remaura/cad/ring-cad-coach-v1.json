@@ -1,0 +1,59 @@
+{
+  "id": "ring-basic-prong-v1",
+  "title": "Ring Basic Prong Workflow",
+  "source": "Rhino User's Guide for Windows (2023-01-17), chapters: Accurate Modeling, Create Surfaces from Curves, Edit Curves and Surfaces, Transforms.",
+  "steps": [
+    {
+      "id": "ring-rail",
+      "title": "Ring Rail Baslangici",
+      "objective": "Yuzuk govdesi icin ana rail egrisini olustur.",
+      "commandCandidates": ["InterpCrv", "ControlPointCurve", "Circle"],
+      "instruction": "Olcuyu gir, Front veya Right viewportta ana ring rail egrisini ciz. Ortho ve Osnap acik olsun.",
+      "validationChecks": [
+        "Egrinin capi hedef olcuya yakin mi?",
+        "Curve kapali veya beklenen formda mi?",
+        "Control point sayisi gereginden fazla mi?"
+      ],
+      "focus": "ringRail"
+    },
+    {
+      "id": "head-curves",
+      "title": "Ust Kisim Curves",
+      "objective": "Tas yuvasi ve ust formu belirleyen kilavuz egri setini kur.",
+      "commandCandidates": ["InterpCrv", "BlendCrv", "Rebuild"],
+      "instruction": "Top viewde tas merkezini al, ust profil ve yan profil curves ciz. Gerekirse Rebuild ile adil akisa getir.",
+      "validationChecks": [
+        "Ust profile curve merkezde mi?",
+        "Sag/sol simetri korunuyor mu?",
+        "Curvature kiriklari var mi?"
+      ],
+      "focus": "headCurves"
+    },
+    {
+      "id": "prong-layout",
+      "title": "Tirnak Yerlesimi",
+      "objective": "Tas tutucu tirnaklari esit aci ile dagit.",
+      "commandCandidates": ["PolarArray", "Mirror", "Move"],
+      "instruction": "Ilk tirnagi merkez referansina gore yerlestir, sonra PolarArray ile cogalt. Gerekiyorsa Mirror ile dengele.",
+      "validationChecks": [
+        "Tirnaklar esit aci aralikli mi?",
+        "Tas capina gore tirnak offseti dogru mu?",
+        "Top viewde merkez kacikligi var mi?"
+      ],
+      "focus": "prongLayout"
+    },
+    {
+      "id": "shank-blend",
+      "title": "Shank Birlesimi",
+      "objective": "Govde gecislerini yumusatip son katiyi kapat.",
+      "commandCandidates": ["Sweep1", "BlendSrf", "FilletEdge", "Join"],
+      "instruction": "Govde ve ust parcayi Sweep/Blend ile birlestir, keskin gecisleri FilletEdge ile yumusat, en sonda Join ile kapat.",
+      "validationChecks": [
+        "Acik edge kaldi mi?",
+        "Fillet radiusleri tutarli mi?",
+        "Modelde self-intersection var mi?"
+      ],
+      "focus": "shankBlend"
+    }
+  ]
+}

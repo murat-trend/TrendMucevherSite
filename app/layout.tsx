@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, Outfit } from "next/font/google";
 import "./globals.css";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { ThemeScript } from "@/components/theme/ThemeScript";
 import { LanguageProvider } from "@/components/i18n/LanguageProvider";
@@ -42,11 +40,7 @@ export default function RootLayout({
       >
         <ThemeScript />
         <ThemeProvider>
-          <LanguageProvider>
-            <Header />
-            <main>{children}</main>
-            <Footer />
-          </LanguageProvider>
+          <LanguageProvider>{children}</LanguageProvider>
         </ThemeProvider>
       </body>
     </html>

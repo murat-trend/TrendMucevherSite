@@ -8,6 +8,7 @@ import type { PlatformFormat } from "@/components/remaura/remaura-types";
 import type { OptimizedPromptResult } from "@/lib/ai/remaura/prompt-optimizer";
 import type { StyleAnalysisResult } from "@/lib/ai/remaura/style-analyzer";
 import type { JewelryAnalysisResult } from "@/lib/ai/remaura/jewelry-analyzer";
+import type { JewelryPlatformTarget } from "@/lib/ai/remaura/jewelry-analyzer";
 import type { RemauraPanelId, WorkspaceMode } from "@/lib/remaura/workspace/types";
 
 export type RemauraAppContextValue = {
@@ -57,6 +58,8 @@ export type RemauraAppContextValue = {
   copiedId: string | null;
   expandedPlatforms: Set<string>;
   togglePlatform: (id: string) => void;
+  selectedDistributionPlatform: JewelryPlatformTarget | null;
+  setSelectedDistributionPlatform: (p: JewelryPlatformTarget | null) => void;
   styleImages: (string | null)[];
   platformFormat: PlatformFormat;
   setPlatformFormat: (f: PlatformFormat) => void;
@@ -85,6 +88,10 @@ export type RemauraAppContextValue = {
   jewelryAnalysis: JewelryAnalysisResult | null;
   jewelryAnalysisError: string | null;
   isAnalyzingJewelry: boolean;
+  billingUserId: string;
+  billingCredits: number;
+  billingCheckoutUrl: string | null;
+  setBillingCheckoutUrl: (url: string | null) => void;
   bgRemoverError: string | null;
   setBgRemoverError: (v: string | null) => void;
   handleOptimize: () => Promise<void>;

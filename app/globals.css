@@ -200,3 +200,99 @@ html.dark .alpha-checkerboard {
     linear-gradient(45deg, transparent 75%, #3a3a3a 75%),
     linear-gradient(-45deg, transparent 75%, #3a3a3a 75%);
 }
+
+/* Admin empty state — subtle animated glow (prefers-reduced-motion respected) */
+@keyframes admin-empty-bloom {
+  0%,
+  100% {
+    opacity: 0.32;
+  }
+  50% {
+    opacity: 0.68;
+  }
+}
+@keyframes admin-empty-sheen {
+  0%,
+  100% {
+    background-position: 0% 50%;
+    opacity: 0.35;
+  }
+  50% {
+    background-position: 100% 50%;
+    opacity: 0.55;
+  }
+}
+.admin-empty-bloom {
+  animation: admin-empty-bloom 9s ease-in-out infinite;
+}
+.admin-empty-sheen {
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(198, 149, 117, 0.06) 40%,
+    rgba(198, 149, 117, 0.12) 50%,
+    rgba(198, 149, 117, 0.06) 60%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  animation: admin-empty-sheen 14s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-empty-bloom,
+  .admin-empty-sheen {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
+/* Admin data cards — thin, visible scrollbar (dark admin UI) */
+.admin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(161, 161, 170, 0.55) rgba(24, 24, 27, 0.5);
+}
+.admin-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.admin-scrollbar::-webkit-scrollbar-track {
+  background: rgba(39, 39, 42, 0.55);
+  border-radius: 9999px;
+}
+.admin-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(161, 161, 170, 0.55);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.admin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(212, 212, 216, 0.72);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.admin-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Finans tabloları — sadece tbody alanı; ince, görünür kaydırma */
+.finance-table-body-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(161, 161, 170, 0.52) rgba(24, 24, 27, 0.35);
+}
+.finance-table-body-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.finance-table-body-scroll::-webkit-scrollbar-track {
+  background: rgba(39, 39, 42, 0.28);
+  border-radius: 6px;
+}
+.finance-table-body-scroll::-webkit-scrollbar-thumb {
+  background: rgba(161, 161, 170, 0.52);
+  border-radius: 6px;
+}
+.finance-table-body-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(200, 200, 210, 0.62);
+}
+.finance-table-body-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}

@@ -1,0 +1,76 @@
+[
+  {
+    "id": "565198a2-6be9-4ba5-ac25-1e02c993b923",
+    "createdAt": "2026-03-22T21:59:50.780Z",
+    "type": "generate",
+    "status": "ok",
+    "userId": "c0d04b59-e946-4b9f-8d40-2ab44a912ff8",
+    "platform": "insta-post",
+    "durationMs": 42492,
+    "estimatedCostUsd": 0.2,
+    "message": "generate_ok"
+  },
+  {
+    "id": "249031d0-aca1-46c7-9290-ae1d44db5221",
+    "createdAt": "2026-03-22T21:57:18.074Z",
+    "type": "generate",
+    "status": "ok",
+    "userId": "c0d04b59-e946-4b9f-8d40-2ab44a912ff8",
+    "platform": "insta-post",
+    "durationMs": 44294,
+    "estimatedCostUsd": 0.2,
+    "message": "generate_ok"
+  },
+  {
+    "id": "02954d43-54b6-4eda-943b-70e64ecace4a",
+    "createdAt": "2026-03-22T21:56:07.324Z",
+    "type": "optimize",
+    "status": "ok",
+    "userId": "c0d04b59-e946-4b9f-8d40-2ab44a912ff8",
+    "durationMs": 4135,
+    "estimatedCostUsd": 0.01,
+    "message": "optimize_ok"
+  },
+  {
+    "id": "a369b732-1db1-400d-867e-72bc61df2b2a",
+    "createdAt": "2026-03-22T21:43:48.459Z",
+    "type": "analyze_jewelry",
+    "status": "error",
+    "userId": "c0d04b59-e946-4b9f-8d40-2ab44a912ff8",
+    "platform": "instagram",
+    "durationMs": 25,
+    "estimatedCostUsd": 0,
+    "message": "insufficient_credit"
+  },
+  {
+    "id": "58cacde3-f002-4ed3-b5f1-4415d6f9420c",
+    "createdAt": "2026-03-22T21:39:58.499Z",
+    "type": "generate",
+    "status": "ok",
+    "userId": "c0d04b59-e946-4b9f-8d40-2ab44a912ff8",
+    "platform": "insta-post",
+    "durationMs": 44105,
+    "estimatedCostUsd": 0.2,
+    "message": "generate_ok"
+  },
+  {
+    "id": "c37882f4-5f7e-476e-ab27-e7418474adab",
+    "createdAt": "2026-03-22T21:39:14.180Z",
+    "type": "analyze_style",
+    "status": "ok",
+    "userId": "c0d04b59-e946-4b9f-8d40-2ab44a912ff8",
+    "durationMs": 8170,
+    "estimatedCostUsd": 0.015,
+    "message": "analyze_style_ok"
+  },
+  {
+    "id": "276d00fe-4026-4628-9c69-32d23fd29728",
+    "createdAt": "2026-03-22T21:38:46.830Z",
+    "type": "optimize",
+    "status": "ok",
+    "userId": "c0d04b59-e946-4b9f-8d40-2ab44a912ff8",
+    "durationMs": 4394,
+    "estimatedCostUsd": 0.01,
+    "message": "optimize_ok"
+  }
+]

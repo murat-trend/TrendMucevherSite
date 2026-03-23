@@ -172,11 +172,72 @@ export type JewelryAnalysisResult = {
   next: { caption: string; hashtags: string; tags: string };
 };
 
+export type JewelryPlatformTarget =
+  | "trendyol"
+  | "ciceksepeti"
+  | "etsy"
+  | "instagram"
+  | "tiktok"
+  | "threads"
+  | "facebook"
+  | "pinterest"
+  | "youtube"
+  | "linkedin"
+  | "x"
+  | "amazon"
+  | "shopier"
+  | "gumroad"
+  | "adobeStock"
+  | "shutterstock"
+  | "creativeMarket"
+  | "google"
+  | "next";
+
+function createEmptyJewelryAnalysis(): JewelryAnalysisResult {
+  return {
+    analiz: "",
+    sembolizm: "",
+    hediyeNotu: "",
+    trendyol: { baslik: "", hikaye: "", teknik: "", bakim: "", paketleme: "", etiketler: "" },
+    ciceksepeti: { baslik: "", hikaye: "", teknik: "", bakim: "", paketleme: "", etiketler: "" },
+    etsy: { baslik: "", tagler: "" },
+    instagram: { caption: "", hashtags: "" },
+    tiktok: { caption: "", hashtags: "" },
+    threads: { caption: "", hashtags: "" },
+    facebook: { caption: "", hashtags: "" },
+    pinterest: { description: "", tags: "" },
+    youtube: { description: "", tags: "" },
+    linkedin: { caption: "", hashtags: "" },
+    x: { caption: "", hashtags: "" },
+    amazon: { baslik: "", description: "", keywords: "" },
+    shopier: { baslik: "", description: "" },
+    gumroad: { baslik: "", description: "" },
+    adobeStock: { title: "", keywords: "" },
+    shutterstock: { title: "", keywords: "" },
+    creativeMarket: { title: "", description: "" },
+    google: { metaTitle: "", metaDesc: "" },
+    next: { caption: "", hashtags: "", tags: "" },
+  };
+}
+
+function buildTargetedPrompt(platform: JewelryPlatformTarget): string {
+  return `Sadece "${platform}" platformu için içerik üret.
+Yanıt JSON olmalı ve SADECE şu üst alanları içermeli:
+{
+  "analiz": "...",
+  "sembolizm": "...",
+  "hediyeNotu": "...",
+  "${platform}": { ...platforma uygun alanlar... }
+}
+Diğer platformları ekleme.`;
+}
+
 export async function analyzeJewelryImage(
   apiKey: string,
   imageBase64: string,
   mimeType: string,
-  userPrompt?: string
+  userPrompt?: string,
+  selectedPlatform?: JewelryPlatformTarget
 ): Promise<JewelryAnalysisResult> {
   const openai = new OpenAI({ apiKey });
 
@@ -191,9 +252,12 @@ export async function analyzeJewelryImage(
     {
       type: "text",
       text: userPrompt?.trim()
-        ? `Bu mücevher görselini analiz et ve tasarımın ruhuna uygun DOLU içerik üret. Kullanıcı notu: ${userPrompt}`
-        : "Bu mücevher görselini analiz et ve tasarımın ruhuna uygun EKSİKSİZ SEO verisi ile spiritüel hikaye üret. Tüm JSON alanlarını doldur.",
+        ? `Bu mücevher görselini analiz et ve tasarımın ruhuna uygun içerik üret. Kullanıcı notu: ${userPrompt}`
+        : "Bu mücevher görselini analiz et ve tasarımın ruhuna uygun içerik üret.",
     },
+    ...(selectedPlatform
+      ? ([{ type: "text", text: buildTargetedPrompt(selectedPlatform) }] as OpenAI.Chat.Completions.ChatCompletionContentPart[])
+      : []),
   ];
 
   const res = await openai.chat.completions.create({
@@ -203,19 +267,42 @@ export async function analyzeJewelryImage(
       { role: "user", content: userContent },
     ],
     response_format: { type: "json_object" },
-    max_tokens: 4096,
+    max_tokens: selectedPlatform ? 1400 : 4096,
   });
 
   const content = res.choices[0]?.message?.content ?? "{}";
-  const raw = JSON.parse(content) as JewelryAnalysisResult;
-  if (!raw.next) {
-    raw.next = {
-      caption: raw.instagram?.caption ?? "",
-      hashtags: raw.instagram?.hashtags ?? "#mücevher #elişçiliği",
-      tags: "mücevher, el işçiliği, altın takı, özel tasarım",
-    };
-  }
-  return enforcePlatformRules(raw);
+  const raw = JSON.parse(content) as Partial<JewelryAnalysisResult>;
+  const base = createEmptyJewelryAnalysis();
+
+  const merged: JewelryAnalysisResult = {
+    ...base,
+    ...raw,
+    trendyol: { ...base.trendyol, ...(raw.trendyol ?? {}) },
+    ciceksepeti: { ...base.ciceksepeti, ...(raw.ciceksepeti ?? {}) },
+    etsy: { ...base.etsy, ...(raw.etsy ?? {}) },
+    instagram: { ...base.instagram, ...(raw.instagram ?? {}) },
+    tiktok: { ...base.tiktok, ...(raw.tiktok ?? {}) },
+    threads: { ...base.threads, ...(raw.threads ?? {}) },
+    facebook: { ...base.facebook, ...(raw.facebook ?? {}) },
+    pinterest: { ...base.pinterest, ...(raw.pinterest ?? {}) },
+    youtube: { ...base.youtube, ...(raw.youtube ?? {}) },
+    linkedin: { ...base.linkedin, ...(raw.linkedin ?? {}) },
+    x: { ...base.x, ...(raw.x ?? {}) },
+    amazon: { ...base.amazon, ...(raw.amazon ?? {}) },
+    shopier: { ...base.shopier, ...(raw.shopier ?? {}) },
+    gumroad: { ...base.gumroad, ...(raw.gumroad ?? {}) },
+    adobeStock: { ...base.adobeStock, ...(raw.adobeStock ?? {}) },
+    shutterstock: { ...base.shutterstock, ...(raw.shutterstock ?? {}) },
+    creativeMarket: { ...base.creativeMarket, ...(raw.creativeMarket ?? {}) },
+    google: { ...base.google, ...(raw.google ?? {}) },
+    next: { ...base.next, ...(raw.next ?? {}) },
+  };
+
+  if (!merged.next.caption && merged.instagram.caption) merged.next.caption = merged.instagram.caption;
+  if (!merged.next.hashtags) merged.next.hashtags = merged.instagram.hashtags || "#mücevher #elişçiliği";
+  if (!merged.next.tags) merged.next.tags = "mücevher, el işçiliği, altın takı, özel tasarım";
+
+  return enforcePlatformRules(merged);
 }
 
 /** AI çıktısını platform kurallarına göre zorla uyumlu hale getirir - halüsinasyon önleme */

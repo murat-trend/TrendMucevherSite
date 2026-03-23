@@ -1,0 +1,45 @@
+{
+  "categories": [
+    {
+      "id": "6a72cf90-3427-44b1-8273-5c6859e85b2e",
+      "name": "Yuzuk",
+      "slug": "yuzuk",
+      "active": true,
+      "createdAt": "2026-03-21T18:14:27.586Z"
+    },
+    {
+      "id": "3adedaeb-e28d-4cc8-a6fd-9d1feb3aef65",
+      "name": "Kolye",
+      "slug": "kolye",
+      "active": true,
+      "createdAt": "2026-03-21T18:14:27.586Z"
+    }
+  ],
+  "products": [
+    {
+      "id": "3a6cb662-1485-4a21-aff2-c0c8be3d155c",
+      "name": "Minimal Altin Yuzuk",
+      "slug": "minimal-altin-yuzuk",
+      "categoryId": "6a72cf90-3427-44b1-8273-5c6859e85b2e",
+      "priceTry": 3950,
+      "stock": 5,
+      "status": "draft",
+      "createdAt": "2026-03-21T18:14:27.586Z",
+      "updatedAt": "2026-03-21T18:14:54.926Z"
+    },
+    {
+      "id": "3ac6106c-d1e6-43b3-b890-c95470d628e7",
+      "name": "Madalyon Kolye",
+      "slug": "madalyon-kolye",
+      "categoryId": "3adedaeb-e28d-4cc8-a6fd-9d1feb3aef65",
+      "priceTry": 4600,
+      "stock": 3,
+      "status": "draft",
+      "createdAt": "2026-03-21T18:14:27.586Z",
+      "updatedAt": "2026-03-21T18:14:27.586Z"
+    }
+  ],
+  "orders": [],
+  "campaigns": [],
+  "inventory": []
+}
