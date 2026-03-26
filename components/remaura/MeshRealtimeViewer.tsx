@@ -6,11 +6,21 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
 import { OBJExporter } from "three/examples/jsm/exporters/OBJExporter.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
+
+export type MeshStats = {
+  vertices: number;
+  faces: number;
+};
 
 type MeshRealtimeViewerProps = {
   modelUrl?: string | null;
   /** Kalınlık (Z ekseni) mm cinsinden. min=0.01, max=1.0, step=0.001 */
   zScaleMm?: number;
+  /** Dosya formatını zorla belirt (blob URL'ler için gerekli) */
+  fileType?: "stl" | "glb" | "auto";
+  /** Model yüklendiğinde vertex/face istatistiklerini bildir */
+  onMeshStats?: (stats: MeshStats) => void;
 };
 
 export type MeshRealtimeViewerHandle = {
@@ -19,7 +29,7 @@ export type MeshRealtimeViewerHandle = {
 };
 
 export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealtimeViewerProps>(function MeshRealtimeViewer(
-  { modelUrl, zScaleMm = 1.0 },
+  { modelUrl, zScaleMm = 1.0, fileType = "auto", onMeshStats },
   ref
 ) {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -237,57 +247,106 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
 
     if (!modelUrl) return;
 
-    const loader = new GLTFLoader();
-    loader.load(
-      modelUrl,
-      (gltf) => {
-        const loadedRoot = gltf.scene;
-        modelRootRef.current = loadedRoot;
-        // Tüm GLTF-kaynaklı offset'leri sıfırla
-        loadedRoot.position.set(0, 0, 0);
-        loadedRoot.rotation.set(0, 0, 0);
-        loadedRoot.scale.set(1, 1, 1);
-        scene.add(loadedRoot);
-        loadedRoot.updateMatrixWorld(true);
+    const placeModel = (loadedRoot: THREE.Object3D) => {
+      modelRootRef.current = loadedRoot;
+      loadedRoot.position.set(0, 0, 0);
+      loadedRoot.rotation.set(0, 0, 0);
+      loadedRoot.scale.set(1, 1, 1);
+      scene.add(loadedRoot);
+      loadedRoot.updateMatrixWorld(true);
 
-        // 1. Ham bounding box
-        const rawBox = new THREE.Box3().setFromObject(loadedRoot);
-        const rawSize = rawBox.getSize(new THREE.Vector3());
+      const rawBox = new THREE.Box3().setFromObject(loadedRoot);
+      const rawSize = rawBox.getSize(new THREE.Vector3());
+      const maxDim = Math.max(rawSize.x, rawSize.y, rawSize.z, 1e-6);
+      const uniformScale = 1.8 / maxDim;
+      uniformScaleRef.current = uniformScale;
 
-        // 2. Üniform ölçek hesapla ve kaydet
-        const maxDim = Math.max(rawSize.x, rawSize.y, rawSize.z, 1e-6);
-        const uniformScale = 1.8 / maxDim;
-        uniformScaleRef.current = uniformScale;
+      loadedRoot.scale.setScalar(uniformScale);
+      loadedRoot.updateMatrixWorld(true);
 
-        // 3. Üniform ölçek uygula
-        loadedRoot.scale.setScalar(uniformScale);
-        loadedRoot.updateMatrixWorld(true);
+      const scaledBox = new THREE.Box3().setFromObject(loadedRoot);
+      const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
+      loadedRoot.position.x = -scaledCenter.x;
+      loadedRoot.position.z = -scaledCenter.z;
+      loadedRoot.position.y = -scaledBox.min.y;
+      loadedRoot.updateMatrixWorld(true);
 
-        // 4. Ölçek sonrası bounding box → X/Z merkeze al
-        const scaledBox = new THREE.Box3().setFromObject(loadedRoot);
-        const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
-        loadedRoot.position.x = -scaledCenter.x;
-        loadedRoot.position.z = -scaledCenter.z;
-        loadedRoot.position.y = -scaledBox.min.y;
-        loadedRoot.updateMatrixWorld(true);
+      applyMicronDepth();
 
-        // 5. Mikron derinliğini hemen uygula (mevcut zScaleMm değeriyle)
-        applyMicronDepth();
-
-        // 6. Kamera hedefini modelin görsel merkezine kilitle
-        if (controlsRef.current) {
-          const finalBox = new THREE.Box3().setFromObject(loadedRoot);
-          const modelHeight = finalBox.max.y - finalBox.min.y;
-          controlsRef.current.target.set(0, modelHeight * 0.5, 0);
-          controlsRef.current.update();
-        }
-      },
-      undefined,
-      () => {
-        // Model yuklenemezse bos sahne gorunsun.
+      if (controlsRef.current) {
+        const finalBox = new THREE.Box3().setFromObject(loadedRoot);
+        const modelHeight = finalBox.max.y - finalBox.min.y;
+        controlsRef.current.target.set(0, modelHeight * 0.5, 0);
+        controlsRef.current.update();
       }
-    );
-  }, [modelUrl, applyMicronDepth]);
+
+      if (onMeshStats) {
+        let totalVerts = 0;
+        let totalFaces = 0;
+        loadedRoot.traverse((child) => {
+          const m = child as THREE.Mesh;
+          if (m.isMesh && m.geometry) {
+            const pos = m.geometry.getAttribute("position");
+            if (pos) totalVerts += pos.count;
+            const idx = m.geometry.index;
+            totalFaces += idx ? idx.count / 3 : (pos ? pos.count / 3 : 0);
+          }
+        });
+        onMeshStats({ vertices: Math.round(totalVerts), faces: Math.round(totalFaces) });
+      }
+    };
+
+    const isStl =
+      fileType === "stl" ||
+      (fileType === "auto" && modelUrl.toLowerCase().endsWith(".stl"));
+
+    const tryLoadStl = (url: string) => {
+      const stlLoader = new STLLoader();
+      stlLoader.load(
+        url,
+        (geometry) => {
+          geometry.computeVertexNormals();
+          const material = new THREE.MeshStandardMaterial({
+            color: 0xc0c0c0,
+            metalness: 0.4,
+            roughness: 0.5,
+            flatShading: false,
+          });
+          const mesh = new THREE.Mesh(geometry, material);
+          const group = new THREE.Group();
+          group.add(mesh);
+          placeModel(group);
+        },
+        undefined,
+        () => {}
+      );
+    };
+
+    const tryLoadGltf = (url: string) => {
+      const gltfLoader = new GLTFLoader();
+      gltfLoader.load(
+        url,
+        (gltf) => placeModel(gltf.scene),
+        undefined,
+        () => {}
+      );
+    };
+
+    if (isStl) {
+      tryLoadStl(modelUrl);
+    } else if (modelUrl.startsWith("blob:")) {
+      // blob URL'lerde uzantı olmayabilir, önce GLTF dene, başarısız olursa STL dene
+      const gltfLoader = new GLTFLoader();
+      gltfLoader.load(
+        modelUrl,
+        (gltf) => placeModel(gltf.scene),
+        undefined,
+        () => tryLoadStl(modelUrl)
+      );
+    } else {
+      tryLoadGltf(modelUrl);
+    }
+  }, [modelUrl, fileType, applyMicronDepth, onMeshStats]);
 
   // zScaleMm her değiştiğinde mikron derinliğini yeniden uygula
   useEffect(() => {

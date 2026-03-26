@@ -3,3 +3,5 @@ numpy
 scipy
 shapely
 pygltflib
+pymeshlab
+open3d

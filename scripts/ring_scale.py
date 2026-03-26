@@ -17,22 +17,8 @@ PI = math.pi
 
 
 # ---------------------------------------------------------------------------
-# 1. Ring size -> inner diameter (mm)
+# 1. (reserved for future size-system helpers)
 # ---------------------------------------------------------------------------
-
-def size_to_inner_diameter_mm(size_value: float, system: str) -> float:
-    """
-    Swiss: inner circumference = size + 40 mm -> diameter = circumference / pi
-    EU   : inner circumference = size mm       -> diameter = size / pi
-    """
-    system = system.lower().strip()
-    if system == "swiss":
-        circumference_mm = float(size_value) + 40.0
-    elif system == "eu":
-        circumference_mm = float(size_value)
-    else:
-        raise ValueError(f"Unknown size system: {system}")
-    return circumference_mm / PI
 
 
 # ---------------------------------------------------------------------------
@@ -155,48 +141,25 @@ def extract_loops_from_path2d(path2d) -> list:
 
 
 # ---------------------------------------------------------------------------
-# 7. Bounding-box fallback inner diameter
+# 7. Outer diameter measurement (cross-section based)
 # ---------------------------------------------------------------------------
 
-def inner_diameter_from_bbox(mesh: trimesh.Trimesh) -> float:
+def measure_outer_diameter_mm(mesh: trimesh.Trimesh) -> float:
     """
-    When cross-section fails: the two largest bounding-box extents approximate
-    the outer diameter. Jewelry rings typically have inner/outer ratio ~ 0.83.
-    """
-    extents = sorted(mesh.bounding_box.extents)
-    outer_diameter = (extents[1] + extents[2]) / 2.0
-    inner_diameter = outer_diameter * 0.83
-    print(f"[fallback] BBox extents={[round(e,3) for e in extents]} "
-          f"-> outer~{outer_diameter:.3f} mm -> inner~{inner_diameter:.3f} mm")
-    return float(inner_diameter)
-
-
-# ---------------------------------------------------------------------------
-# 8. Main inner-diameter measurement
-# ---------------------------------------------------------------------------
-
-def measure_inner_diameter_mm(mesh: trimesh.Trimesh) -> float:
-    """
-    Measures the inner diameter of a ring mesh (in mm).
-    Requires the mesh to already be in millimeter coordinates (call normalize_to_mm first).
-    Falls back to bounding-box estimation if cross-section fails.
+    Slice at center plane, fit circles to loops, return the largest
+    circular loop diameter in mm.  Returns -1 on failure.
     """
     axis = estimate_ring_axis(mesh)
     center = mesh.bounding_box.centroid
-
-    # Minimum radius for a valid finger hole: 25% of the model's max extent.
-    # This filters out decorative elements (gem settings, engravings) which
-    # are much smaller than the actual ring hole.
     max_extent = float(np.max(mesh.bounding_box.extents))
-    min_hole_radius = max_extent * 0.25
+    min_valid_radius = max_extent * 0.05
 
     section = mesh.section(plane_origin=center, plane_normal=axis)
     if section is None:
-        print("[warn] Cross-section returned None -> bbox fallback")
-        return inner_diameter_from_bbox(mesh)
+        print("[ring_scale] cross-section returned None")
+        return -1.0
 
     try:
-        # to_2D (trimesh 4.x) or to_planar (older, deprecated)
         try:
             path2d, _ = section.to_2D()
         except AttributeError:
@@ -205,14 +168,12 @@ def measure_inner_diameter_mm(mesh: trimesh.Trimesh) -> float:
                 path2d, _ = section.to_planar()
 
         loops = extract_loops_from_path2d(path2d)
-
         if not loops:
-            print("[warn] No loops found in cross-section -> bbox fallback")
-            return inner_diameter_from_bbox(mesh)
+            print("[ring_scale] no loops found in cross-section")
+            return -1.0
 
-        candidates = []
-        for loop in loops:
-            # Remove duplicate closing point if present
+        fitted = []
+        for i, loop in enumerate(loops):
             if len(loop) > 1 and np.linalg.norm(loop[0] - loop[-1]) < 1e-6:
                 loop = loop[:-1]
             if loop.shape[0] < 8:
@@ -220,25 +181,25 @@ def measure_inner_diameter_mm(mesh: trimesh.Trimesh) -> float:
             center_2d, radius = fit_circle_radius(loop)
             radial = np.linalg.norm(loop - center_2d, axis=1)
             deviation = np.std(radial) / max(np.mean(radial), 1e-9)
-            # Loop must be large enough to be a finger hole (not a decorative detail)
-            # and reasonably circular
-            if radius > min_hole_radius and deviation < 0.30:
-                candidates.append({"radius": radius, "deviation": deviation})
+            if deviation < 0.30 and radius > min_valid_radius:
+                fitted.append({"idx": i, "radius": radius, "dev": deviation, "pts": loop.shape[0]})
 
-        if not candidates:
-            print("[warn] No valid loop candidates -> bbox fallback")
-            return inner_diameter_from_bbox(mesh)
+        print(f"[ring_scale] {len(fitted)} circular loop(s) detected:")
+        for f in fitted:
+            print(f"  loop#{f['idx']}: dia={f['radius']*2:.3f} mm  dev={f['dev']:.4f}  pts={f['pts']}")
 
-        # Smallest qualifying circular loop = inner hole
-        hole = min(candidates, key=lambda c: c["radius"])
-        diameter = hole["radius"] * 2.0
-        print(f"[cross-section] Inner diameter: {diameter:.3f} mm "
-              f"(circularity deviation: {hole['deviation']:.4f})")
-        return float(diameter)
+        if not fitted:
+            print("[ring_scale] no valid circular loops found")
+            return -1.0
+
+        fitted.sort(key=lambda c: c["radius"], reverse=True)
+        outer_dia = fitted[0]["radius"] * 2.0
+        print(f"[ring_scale] detected outer diameter: {outer_dia:.3f} mm")
+        return float(outer_dia)
 
     except Exception as exc:
-        print(f"[error] Cross-section failed: {exc} -> bbox fallback")
-        return inner_diameter_from_bbox(mesh)
+        print(f"[ring_scale] cross-section failed: {exc}")
+        return -1.0
 
 
 # ---------------------------------------------------------------------------
@@ -257,47 +218,60 @@ def scale_mesh_uniform(mesh: trimesh.Trimesh, factor: float) -> trimesh.Trimesh:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Remaura Ring Scale: scale a ring mesh to a target ring size."
+        description="Remaura 3D Scale: scale a mesh to a target outer diameter (mm)."
     )
     parser.add_argument("--input",       required=True, help="Input file (.glb/.stl/.obj)")
     parser.add_argument("--output",      required=True, help="Output file path")
-    parser.add_argument("--size-system", required=True, choices=["eu", "swiss"])
-    parser.add_argument("--size-value",  required=True, type=float)
+    parser.add_argument("--target-diameter-mm", required=True, type=float,
+                        help="Desired outer diameter in millimeters")
     parser.add_argument("--dry-run",     action="store_true",
                         help="Measure and print only, do not save file")
     args = parser.parse_args()
 
-    target_inner_diameter_mm = size_to_inner_diameter_mm(args.size_value, args.size_system)
+    target_outer_mm = args.target_diameter_mm
+    print(f"[ring_scale] target outer diameter: {target_outer_mm:.3f} mm")
 
-    # Load
     loaded = trimesh.load(args.input, force="scene")
     mesh = scene_to_single_mesh(loaded)
 
-    # Normalize units
     mesh_mm, was_converted = normalize_to_mm(mesh)
 
-    # Measure current inner diameter
-    current_inner_diameter_mm = measure_inner_diameter_mm(mesh_mm)
+    current_outer_mm = measure_outer_diameter_mm(mesh_mm)
 
-    if current_inner_diameter_mm <= 0:
-        raise RuntimeError("Inner diameter is 0 or negative -- measurement failed.")
+    if current_outer_mm <= 0:
+        print("[ring_scale] SKIP: could not detect outer diameter from cross-section.")
+        print("[ring_scale] exporting original model without scaling.")
+        mesh_mm.export(args.output)
+        print(f"[ring_scale] Saved (unscaled): {args.output}")
+        return
 
-    scale_factor = target_inner_diameter_mm / current_inner_diameter_mm
+    scale_factor = target_outer_mm / current_outer_mm
 
     print("-------------------------------------")
-    print(f"Unit conversion  : {'meters -> mm' if was_converted else 'already mm'}")
-    print(f"Target inner dia : {target_inner_diameter_mm:.3f} mm")
-    print(f"Current inner dia: {current_inner_diameter_mm:.3f} mm")
-    print(f"Scale factor     : {scale_factor:.6f}")
+    print(f"[ring_scale] unit conversion    : {'meters -> mm' if was_converted else 'already mm'}")
+    print(f"[ring_scale] target outer dia   : {target_outer_mm:.3f} mm")
+    print(f"[ring_scale] current outer dia  : {current_outer_mm:.3f} mm")
+    print(f"[ring_scale] scale factor       : {scale_factor:.6f}")
     print("-------------------------------------")
 
     if args.dry_run:
-        print("Dry-run mode -- file not saved.")
+        print("[ring_scale] Dry-run mode -- file not saved.")
         return
 
     scaled = scale_mesh_uniform(mesh_mm, scale_factor)
+
+    final_outer_mm = measure_outer_diameter_mm(scaled)
+    if final_outer_mm > 0:
+        error_mm = final_outer_mm - target_outer_mm
+        print("=====================================")
+        print(f"[ring_scale] final outer diameter: {final_outer_mm:.3f} mm")
+        print(f"[ring_scale] final error: {error_mm:+.3f} mm")
+        print("=====================================")
+    else:
+        print("[ring_scale] post-scale verification: could not re-measure (non-critical)")
+
     scaled.export(args.output)
-    print(f"Saved: {args.output}")
+    print(f"[ring_scale] Saved: {args.output}")
 
 
 if __name__ == "__main__":

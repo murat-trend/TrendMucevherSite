@@ -17,8 +17,7 @@ export async function applyRingScale(
   inputBuffer: Buffer,
   inputExt: string,
   outputExt: string,
-  sizeSystem: "eu" | "swiss",
-  sizeValue: number
+  targetDiameterMm: number
 ): Promise<{ buffer: Buffer; scaled: boolean; log: string }> {
   const id = randomUUID();
   const inExt  = inputExt.toLowerCase().replace(/^\./, "");
@@ -44,8 +43,7 @@ export async function applyRingScale(
         SCRIPT_PATH,
         "--input", tmpIn,
         "--output", tmpOut,
-        "--size-system", sizeSystem,
-        "--size-value", String(sizeValue),
+        "--target-diameter-mm", String(targetDiameterMm),
       ];
 
       let attemptIndex = 0;

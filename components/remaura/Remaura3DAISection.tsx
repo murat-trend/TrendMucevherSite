@@ -3,7 +3,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import Image from "next/image";
 import { MeshRealtimeViewer, type MeshRealtimeViewerHandle } from "@/components/remaura/MeshRealtimeViewer";
-import { RING_SIZE_SWISS, getRingSizeTargetMm, getTargetDiameter } from "@/lib/remaura/ring-size";
 
 type DownloadModelFormat = "glb" | "stl";
 type MeshGenerationMode = "production" | "visual";
@@ -35,7 +34,7 @@ export function Remaura3DAISection() {
   const [downloadFormat, setDownloadFormat] = useState<DownloadModelFormat>("glb");
   const [generationMode, setGenerationMode] = useState<MeshGenerationMode>("production");
   const [remainingAttempts, setRemainingAttempts] = useState<number>(MAX_ATTEMPTS_PER_IMAGE);
-  const [ringSize, setRingSize] = useState<number | null>(null);
+  const [outerDiameterMm, setOuterDiameterMm] = useState<number | null>(null);
   const [zScaleMm, setZScaleMm] = useState<number>(1.0);
   const [cleanedPreviewUrl, setCleanedPreviewUrl] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -175,15 +174,12 @@ export function Remaura3DAISection() {
       if (!mesh3DTaskId) return null;
       const format = formatOverride ?? (kind === "view" ? resolvedViewFormat() : downloadFormat);
       let url = `/api/remaura/mesh3d/file?taskId=${encodeURIComponent(mesh3DTaskId)}&format=${encodeURIComponent(format)}&kind=${kind}`;
-      // Yüzük boyutu seçildiyse hem view hem download için ring_scale.py tetiklenir
-      if (ringSize !== null) {
-        url += `&ringSize=${ringSize}&sizeSystem=swiss`;
+      if (outerDiameterMm !== null && outerDiameterMm > 0) {
+        url += `&diameterMm=${outerDiameterMm}`;
       }
-      console.log("Selected ring size:", ringSize);
-      console.log("URL:", url);
       return url;
     },
-    [mesh3DTaskId, resolvedViewFormat, downloadFormat, ringSize]
+    [mesh3DTaskId, resolvedViewFormat, downloadFormat, outerDiameterMm]
   );
 
   const handleDownloadModel = useCallback(async () => {
@@ -326,7 +322,7 @@ export function Remaura3DAISection() {
     } finally {
       setIsCreating3D(false);
     }
-  }, [uploadedImage, isCreating3D, toDataUrl, dataUrlToPngBlob, pollMeshStatus, generationMode, remainingAttempts, ringSize]);
+  }, [uploadedImage, isCreating3D, toDataUrl, dataUrlToPngBlob, pollMeshStatus, generationMode, remainingAttempts]);
 
   return (
     <section className="mx-auto w-full max-w-6xl rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-6">
@@ -520,40 +516,36 @@ export function Remaura3DAISection() {
           </p>
         </div>
 
-        {/* Yüzük Numarası — her zaman görünür */}
+        {/* Dış Çap (mm) — her zaman görünür */}
         <div className="rounded-lg border border-teal-500/20 bg-teal-500/5 p-2.5">
           <div className="mb-1.5 flex items-center justify-between">
             <p className="text-[10px] font-bold uppercase tracking-widest text-teal-400">
-              Yüzük Numarası (İsviçre/EU)
+              Hedef Dış Çap (mm)
             </p>
-            {ringSize !== null && (
+            {outerDiameterMm !== null && outerDiameterMm > 0 && (
               <span className="text-[10px] font-semibold text-teal-300">
-                {getTargetDiameter(ringSize, "swiss").toFixed(2)} mm iç çap
+                {outerDiameterMm.toFixed(1)} mm
               </span>
             )}
           </div>
-          <select
-            value={ringSize ?? ""}
-            onChange={(e) => setRingSize(e.target.value === "" ? null : Number(e.target.value))}
+          <input
+            type="number"
+            min={1}
+            max={200}
+            step={0.1}
+            value={outerDiameterMm ?? ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              setOuterDiameterMm(v === "" ? null : Number(v));
+            }}
+            placeholder="Ör: 18.5"
             className="min-h-9 w-full rounded-lg border border-white/15 px-3 text-xs outline-none"
             style={{ backgroundColor: "#1a1f2e", color: "#e2e8f0" }}
-          >
-            <option value="" style={{ backgroundColor: "#1a1f2e", color: "#94a3b8" }}>
-              — Numara seçin (opsiyonel) —
-            </option>
-            {Object.entries(RING_SIZE_SWISS).map(([size, diam]) => {
-              const n = Number(size);
-              return (
-                <option key={n} value={n} style={{ backgroundColor: "#1a1f2e", color: "#e2e8f0" }}>
-                  {n} — {diam.toFixed(2)} mm
-                </option>
-              );
-            })}
-          </select>
+          />
           <p className="mt-1 text-[10px] text-teal-400/60">
-            {ringSize !== null
-              ? `${getTargetDiameter(ringSize, "swiss").toFixed(2)} mm iç çapa ölçeklenir`
-              : "Seçilmezse model orijinal boyutuyla indirilir"}
+            {outerDiameterMm !== null && outerDiameterMm > 0
+              ? `Model ${outerDiameterMm.toFixed(1)} mm dış çapa ölçeklenir`
+              : "Boş bırakılırsa model orijinal boyutuyla indirilir"}
           </p>
         </div>
 

@@ -34,10 +34,9 @@ export async function GET(req: Request) {
     const formatReq = searchParams.get("format")?.trim().toLowerCase() ?? "glb";
     const kind = searchParams.get("kind")?.trim() ?? "view";
 
-    // Yüzük ölçekleme parametreleri (yalnızca indirme sırasında)
-    const ringSizeParam = searchParams.get("ringSize");
-    const sizeSystem = (searchParams.get("sizeSystem") ?? "swiss") as "eu" | "swiss";
-    const ringSize = ringSizeParam ? parseFloat(ringSizeParam) : null;
+    // Dış çap ölçekleme parametresi (mm)
+    const diameterParam = searchParams.get("diameterMm");
+    const diameterMm = diameterParam ? parseFloat(diameterParam) : null;
 
     if (!taskId && !remeshTaskId) {
       return NextResponse.json({ error: "taskId veya remeshTaskId gerekli." }, { status: 400 });
@@ -100,10 +99,10 @@ export async function GET(req: Request) {
     };
     const contentType = CONTENT_TYPES[outputExt] ?? "application/octet-stream";
 
-    // Ring scaling: ALWAYS use GLB as input (GLTF spec = meters, deterministic unit).
+    // Outer-diameter scaling: ALWAYS use GLB as input (GLTF spec = meters, deterministic unit).
     // Meshy STL coordinates are inconsistent; GLB is always in meters.
     let finalBuffer: ArrayBuffer = rawBuffer;
-    if (ringSize !== null && Number.isFinite(ringSize) && ringSize > 0) {
+    if (diameterMm !== null && Number.isFinite(diameterMm) && diameterMm > 0) {
       try {
         const { applyRingScale } = await import("@/lib/remaura/ring-scale-runner");
 
@@ -130,8 +129,7 @@ export async function GET(req: Request) {
           Buffer.from(glbBuffer),
           inputExtForPython, // always "glb" when possible
           outputExt,         // export in user-requested format (stl / glb)
-          sizeSystem,
-          ringSize
+          diameterMm
         );
         if (result.scaled) {
           finalBuffer = result.buffer.buffer.slice(
