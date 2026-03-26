@@ -22,6 +22,7 @@ import {
 } from "@/components/remaura/workspace/RemauraWorkspaceContexts";
 import { RemauraBackgroundRemovalSection } from "@/components/remaura/RemauraBackgroundRemovalSection";
 import { RemauraPhotoEditSection } from "@/components/remaura/RemauraPhotoEditSection";
+import { Remaura3DAISection } from "@/components/remaura/Remaura3DAISection";
 import { RemauraPanelWorkspace } from "@/components/remaura/workspace/RemauraPanelWorkspace";
 import type { ChannelTab } from "@/components/remaura/remaura-types";
 import type { PlatformFormat } from "@/components/remaura/remaura-types";
@@ -30,7 +31,7 @@ import type { OptimizedPromptResult } from "@/lib/ai/remaura/prompt-optimizer";
 import type { StyleAnalysisResult } from "@/lib/ai/remaura/style-analyzer";
 import type { JewelryAnalysisResult, JewelryPlatformTarget } from "@/lib/ai/remaura/jewelry-analyzer";
 
-type RemauraCategory = "jewelry" | "background" | "photoEdit";
+type RemauraCategory = "jewelry" | "background" | "photoEdit" | "mesh3d";
 
 type RemauraWorkspaceProps = {
   initialCategory?: RemauraCategory;
@@ -316,7 +317,11 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
       return;
     }
     if (requested === "photo-edit") {
-      setRemauraCategory("photoEdit");
+        setRemauraCategory("photoEdit");
+      return;
+    }
+    if (requested === "mesh3d") {
+      setRemauraCategory("mesh3d");
     }
   }, []);
 
@@ -671,6 +676,19 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
               >
                 {t.remauraWorkspace.categoryPhotoEdit}
               </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={remauraCategory === "mesh3d"}
+                onClick={() => setRemauraCategory("mesh3d")}
+                className={`rounded-full border px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] transition-colors ${
+                  remauraCategory === "mesh3d"
+                    ? "border-teal-400 bg-teal-500/15 text-teal-300"
+                    : "border-white/10 bg-white/[0.03] text-muted hover:border-white/20"
+                }`}
+              >
+                REMURA 3D AI
+              </button>
             </div>
             <div className="flex items-center gap-4">
               <span className="h-px w-8 bg-foreground/10" aria-hidden />
@@ -694,6 +712,8 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
                 downloadImage: t.remauraWorkspace.downloadImage,
               }}
             />
+          ) : remauraCategory === "mesh3d" ? (
+            <Remaura3DAISection />
           ) : (
             <RemauraPhotoEditSection
               t={{

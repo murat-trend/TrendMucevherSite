@@ -1,0 +1,58 @@
+---
+description: Remaura 3D AI — Remesh API kullanım yasağı
+globs:
+  - "components/remaura/Remaura3DAISection.tsx"
+  - "app/api/remaura/mesh3d/**"
+alwaysApply: true
+---
+
+# KURAL: Meshy Remesh API Boyutlandırma İçin KULLANILMAZ
+
+## Temel Kural
+
+Meshy'nin `/openapi/v1/remesh` endpoint'i **hiçbir koşulda** boyutlandırma amacıyla kullanılamaz.
+
+Bu kural **kullanıcı tarafından kalıcı olarak belirlenmiştir** ve değiştirilemez.
+
+## Neden?
+
+Meshy Remesh API varsayılan olarak mesh'i 30.000 poligona düşürür.
+Bu, Image-to-3D'den gelen yüksek kaliteli mesh'i **bozar** ("hamurlaşma" — doughy/mushy mesh).
+`target_polycount` parametresi eklenmesi de kullanıcı tarafından açıkça yasaklanmıştır.
+
+## Yüzük Numarası (İsviçre/EU) Dropdown
+
+- Dropdown **yalnızca referans bilgisi** olarak gösterilir.
+- Seçilen yüzük numarası **hiçbir API isteğini tetiklemez**.
+- Boyutlandırma kullanıcının kendi CAD/baskı yazılımında yapılır.
+
+## Yasaklı Kodlar
+
+Aşağıdaki kodları **asla** ekleme:
+
+```typescript
+// YASAK — Remesh API çağrısı
+await fetch("/api/remaura/mesh3d/remesh", { ... });
+
+// YASAK — Remesh polling
+await pollRemeshStatus(rTaskId);
+
+// YASAK — Remesh state'leri
+const [isRemeshing, setIsRemeshing] = useState(false);
+const [remeshTaskId, setRemeshTaskId] = useState<string | null>(null);
+const [remeshStatus, setRemeshStatus] = useState<string | null>(null);
+
+// YASAK — Meshy Remesh payload'ında herhangi bir boyut parametresi
+resize_height: ...,
+target_polycount: ...,
+```
+
+## İzin Verilen Akış
+
+1. Kullanıcı görsel yükler.
+2. Arka plan temizlenir (`removeBackground` → alpha PNG).
+3. Temizlenmiş PNG, Meshy Image-to-3D API'sine gönderilir.
+4. Model doğrudan viewer'a yüklenir.
+5. İndirme: orijinal Image-to-3D çıktısı (GLB veya STL).
+
+Boyutlandırma bu akışın **dışındadır**.

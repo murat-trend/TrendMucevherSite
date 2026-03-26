@@ -1,5 +1,90 @@
 [
   {
+    "id": "ceccd00e-51e2-4308-b7c6-f9fbc3012f22",
+    "createdAt": "2026-03-26T10:22:25.499Z",
+    "type": "analyze_jewelry",
+    "status": "error",
+    "userId": "c0d04b59-e946-4b9f-8d40-2ab44a912ff8",
+    "platform": "instagram",
+    "durationMs": 37,
+    "estimatedCostUsd": 0,
+    "message": "insufficient_credit"
+  },
+  {
+    "id": "1abb8902-3af4-442d-8872-ed6984bf3566",
+    "createdAt": "2026-03-26T10:21:31.398Z",
+    "type": "generate",
+    "status": "ok",
+    "userId": "c0d04b59-e946-4b9f-8d40-2ab44a912ff8",
+    "platform": "insta-post",
+    "durationMs": 50118,
+    "estimatedCostUsd": 0.2,
+    "message": "generate_ok"
+  },
+  {
+    "id": "b2e90a61-0e6b-408f-a5dd-c20366e08ef1",
+    "createdAt": "2026-03-26T10:20:41.250Z",
+    "type": "analyze_style",
+    "status": "ok",
+    "userId": "c0d04b59-e946-4b9f-8d40-2ab44a912ff8",
+    "durationMs": 7225,
+    "estimatedCostUsd": 0.015,
+    "message": "analyze_style_ok"
+  },
+  {
+    "id": "01dddf63-439b-46fe-bc69-1b762ad024ad",
+    "createdAt": "2026-03-26T10:20:02.859Z",
+    "type": "generate",
+    "status": "ok",
+    "userId": "c0d04b59-e946-4b9f-8d40-2ab44a912ff8",
+    "platform": "insta-post",
+    "durationMs": 32562,
+    "estimatedCostUsd": 0.2,
+    "message": "generate_ok"
+  },
+  {
+    "id": "2eaed617-1c8c-4603-9c0a-ea5f2da3cb63",
+    "createdAt": "2026-03-26T10:19:26.571Z",
+    "type": "optimize",
+    "status": "ok",
+    "userId": "c0d04b59-e946-4b9f-8d40-2ab44a912ff8",
+    "durationMs": 6106,
+    "estimatedCostUsd": 0.01,
+    "message": "optimize_ok"
+  },
+  {
+    "id": "fc3526e0-4d9a-4497-b450-a55e9ff5cb4d",
+    "createdAt": "2026-03-26T10:18:28.380Z",
+    "type": "generate",
+    "status": "ok",
+    "userId": "c0d04b59-e946-4b9f-8d40-2ab44a912ff8",
+    "platform": "insta-post",
+    "durationMs": 35421,
+    "estimatedCostUsd": 0.2,
+    "message": "generate_ok"
+  },
+  {
+    "id": "9a7d1cce-1fd2-4c20-b709-e850f3d04bd1",
+    "createdAt": "2026-03-26T10:17:32.188Z",
+    "type": "generate",
+    "status": "ok",
+    "userId": "c0d04b59-e946-4b9f-8d40-2ab44a912ff8",
+    "platform": "insta-post",
+    "durationMs": 35158,
+    "estimatedCostUsd": 0.2,
+    "message": "generate_ok"
+  },
+  {
+    "id": "78b98f05-68b1-42a3-9d80-c3493dc042fe",
+    "createdAt": "2026-03-26T10:16:48.946Z",
+    "type": "optimize",
+    "status": "ok",
+    "userId": "c0d04b59-e946-4b9f-8d40-2ab44a912ff8",
+    "durationMs": 4811,
+    "estimatedCostUsd": 0.01,
+    "message": "optimize_ok"
+  },
+  {
     "id": "565198a2-6be9-4ba5-ac25-1e02c993b923",
     "createdAt": "2026-03-22T21:59:50.780Z",
     "type": "generate",
