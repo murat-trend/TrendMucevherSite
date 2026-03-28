@@ -4,6 +4,7 @@ import { getOpenAIApiKey } from "@/lib/api/openai";
 import { analyzeStyleReferences } from "@/lib/ai/remaura/style-analyzer";
 import { appendRemauraJob } from "@/lib/remaura/jobs-store";
 import { getAdminSettings } from "@/lib/site/settings-store";
+import { MAX_STYLE_REFERENCE_SLOTS } from "@/components/remaura/remaura-types";
 
 loadEnvConfig(process.cwd());
 
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
     const imageInputs: Array<{ base64: string; mimeType: string }> = [];
 
     if (images?.length) {
-      for (const img of images.slice(0, 4)) {
+      for (const img of images.slice(0, MAX_STYLE_REFERENCE_SLOTS)) {
         if (img?.base64) {
           imageInputs.push({
             base64: img.base64,

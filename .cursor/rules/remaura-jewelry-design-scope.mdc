@@ -1,0 +1,20 @@
+---
+description: Remaura’da varsayılan kapsam yalnızca mücevher tasarımı; diğer sekmelere dokunma
+alwaysApply: true
+---
+
+# Kapsam: Yalnızca Mücevher Tasarımı (varsayılan)
+
+Kullanıcı **başka bir alanı açıkça** (isim vererek veya “şu sekmede / şu sayfada” diyerek) istemedikçe:
+
+## Yapılacaklar
+
+- Değişiklikleri **Mücevher Tasarımı** akışıyla sınırla: `RemauraWorkspace` içinde `remauraCategory === "jewelry"` iken görünen içerik, `RemauraPanelWorkspace`, mücevher panel bileşenleri (`FormatPanel` mücevher hariç tutmaları dahil), bu akıştan tetiklenen üretim/optimize davranışı ve mücevhere özgü metinler.
+- Paylaşılan katmanda (ör. `app/api/generate`, `lib/remaura/*`) yalnızca **mücevher tasarımı için gerekli** en küçük dokunuşu yap; mümkünse mantığı mücevhere özel dosyalarda tut.
+
+## Dokunma (açık talep olmadan)
+
+- `RemauraBackgroundRemovalSection`, `RemauraPhotoEditSection`, `Remaura3DAISection`, `RemauraMeshAISection`, `RemauraRingRailResizeSection` ve bunlara özel API/route’lar.
+- Yalnızca bu sekmelerde kullanılan UI veya sadece 3D mesh / ring rail / arka plan / foto edit için olan özellikler.
+
+Kullanıcı “tüm Remaura”, “3D AI”, “ring rail” vb. dediğinde bu kuralı o göreve göre gevşet.

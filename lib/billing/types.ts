@@ -35,5 +35,6 @@ export type BillingStore = {
 };
 
 export type DebitResult =
-  | { ok: true; wallet: Wallet; ledgerEntryId: string }
+  | { ok: true; wallet: Wallet; ledgerEntryId: string; charged: true }
+  | { ok: true; wallet: Wallet; charged: false }
   | { ok: false; wallet: Wallet };

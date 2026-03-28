@@ -41,8 +41,6 @@ function layoutLg(): Layout {
   y += negativeGenerate.h!;
   const style = { ...item("style", leftX, y, "left"), w: leftW };
   y += style.h!;
-  const imageMaps = { ...item("imageMaps", leftX, y, "left"), w: leftW };
-  y += imageMaps.h!;
 
   const leftH = y;
   const preview = {
@@ -58,7 +56,7 @@ function layoutLg(): Layout {
     minH: 14,
   };
 
-  return [format, prompt, negativeGenerate, style, imageMaps, preview, distribution];
+  return [format, prompt, negativeGenerate, style, preview, distribution];
 }
 
 function layoutMd(): Layout {
@@ -76,8 +74,6 @@ function layoutSm(): Layout {
   y += neg.h!;
   const st = { ...item("style", 0, y, "left"), w: 3, minW: 2, maxW: 6 };
   y += st.h!;
-  const img = { ...item("imageMaps", 0, y, "left"), w: 3, minW: 2, maxW: 6 };
-  y += img.h!;
   const leftH = y;
   const preview = {
     ...item("preview", leftW, 0, "right"),
@@ -93,19 +89,13 @@ function layoutSm(): Layout {
     h: 24,
     minH: 12,
   };
-  return [fmt, pr, neg, st, img, preview, distribution];
+  return [fmt, pr, neg, st, preview, distribution];
 }
 
 function layoutXs(): Layout {
   let y = 0;
   const out: LayoutItem[] = [];
-  for (const id of [
-    "format",
-    "prompt",
-    "negativeGenerate",
-    "style",
-    "imageMaps",
-  ] as RemauraPanelId[]) {
+  for (const id of ["format", "prompt", "negativeGenerate", "style"] as RemauraPanelId[]) {
     const base = item(id, 0, y, "left", { w: 4, minW: 2, maxW: 4 });
     out.push(base);
     y += base.h!;
@@ -127,7 +117,6 @@ function layoutXxs(): Layout {
     "prompt",
     "negativeGenerate",
     "style",
-    "imageMaps",
     "preview",
     "distribution",
   ];

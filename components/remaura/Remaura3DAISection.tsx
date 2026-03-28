@@ -336,9 +336,25 @@ export function Remaura3DAISection() {
           REMURA 3D AI — Görselden 3D Model
         </span>
       </div>
-      <p className="mb-4 text-[10px] text-muted/80">
+      <p className="mb-3 text-[10px] text-muted/80">
         Görsel yükleyin, arka planı otomatik temizlenir ve Meshy AI ile 3D modele dönüştürülür.
       </p>
+      <div className="mb-4 rounded-lg border border-teal-500/20 bg-teal-500/[0.06] px-3 py-2.5">
+        <p className="text-[10px] leading-relaxed text-teal-100/85">
+          <span className="font-semibold text-teal-300">Meshy API anahtarı:</span> Sunucuda bu özellik için proje kökünde{" "}
+          <code className="rounded bg-black/35 px-1 py-px font-mono text-[9px]">.env.local</code> dosyasına{" "}
+          <code className="rounded bg-black/35 px-1 py-px font-mono text-[9px]">MESHY_API_KEY=...</code> eklenmelidir. Anahtarı{" "}
+          <a
+            href="https://app.meshy.ai/settings"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-teal-400 underline decoration-teal-500/50 underline-offset-2 hover:text-teal-300"
+          >
+            app.meshy.ai/settings
+          </a>{" "}
+          üzerinden oluşturabilirsiniz.
+        </p>
+      </div>
 
       <div className="grid w-full gap-4 md:grid-cols-2">
         {/* Sol: Görsel yükleme */}

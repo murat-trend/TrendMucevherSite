@@ -2,7 +2,9 @@ import { loadEnvConfig } from "@next/env";
 import { NextResponse } from "next/server";
 import { getOpenAIApiKey } from "@/lib/api/openai";
 import { optimizePrompt } from "@/lib/ai/remaura/prompt-optimizer";
+import type { OptimizedPromptResult } from "@/lib/ai/remaura/prompt-optimizer";
 import { appendRemauraJob } from "@/lib/remaura/jobs-store";
+import { appendRingThreeQuarterRule, stripRingThreeQuarterRule } from "@/lib/remaura/internal-visual-rules";
 
 loadEnvConfig(process.cwd());
 
@@ -25,6 +27,7 @@ export async function POST(req: Request) {
     const localeRaw = (body.locale as string) || "tr";
     const locale = localeRaw === "en" ? "en" : "tr";
     const mode3DExport = body.mode3DExport === true;
+    const applyRingThreeQuarterView = body.applyRingThreeQuarterView === true;
     if (!prompt) {
       return NextResponse.json(
         { error: "Prompt gerekli." },
@@ -32,7 +35,15 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await optimizePrompt(apiKey, prompt, undefined, locale, mode3DExport);
+    const promptForModel = applyRingThreeQuarterView ? appendRingThreeQuarterRule(prompt) : prompt;
+    const result = await optimizePrompt(apiKey, promptForModel, undefined, locale, mode3DExport);
+    const sanitized: OptimizedPromptResult = {
+      ...result,
+      optimizedPrompt: stripRingThreeQuarterRule(result.optimizedPrompt ?? ""),
+      optimizedPromptTr: result.optimizedPromptTr
+        ? stripRingThreeQuarterRule(result.optimizedPromptTr)
+        : result.optimizedPromptTr,
+    };
     await appendRemauraJob({
       type: "optimize",
       status,
@@ -41,7 +52,7 @@ export async function POST(req: Request) {
       estimatedCostUsd: 0.01,
       message: "optimize_ok",
     });
-    return NextResponse.json(result);
+    return NextResponse.json(sanitized);
   } catch (error: unknown) {
     status = "error";
     console.error("OPTIMIZE ERROR:", error);

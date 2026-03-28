@@ -408,9 +408,9 @@ export function RemauraMeshAISection() {
             <label className="flex flex-col gap-0.5 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
               <span className="flex items-center gap-2 text-xs text-foreground">
                 <input type="checkbox" checked={smoothSurface} onChange={(e) => setSmoothSurface(e.target.checked)} className="accent-violet-500" />
-                Smooth Surface
+                Laplacian refine
               </span>
-              <span className="pl-5 text-[9px] text-muted/60">Laplacian yumuşatma (yüzey pürüzleri azaltır)</span>
+              <span className="pl-5 text-[9px] text-muted/60">Laplacian iterasyonu (yüzey pürüzleri azaltır)</span>
             </label>
             <label className="flex flex-col gap-0.5 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
               <span className="flex items-center gap-2 text-xs text-foreground">

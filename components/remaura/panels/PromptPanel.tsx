@@ -1,9 +1,17 @@
 "use client";
 
 import Image from "next/image";
+import { useCallback, useState } from "react";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { MAX_CHARS } from "@/components/remaura/remaura-types";
 import { useRemauraApp } from "@/components/remaura/workspace/RemauraWorkspaceContexts";
+
+/** Yüzük/Kolye: buton seçimi; metin kutusuna ürün adı yazılmaz (sunucuda yüzük için Görüntü A kuralı birleştirilir). */
+const QUICK_TAG_BTN_BASE =
+  "rounded-lg border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] transition-[box-shadow,background-color,border-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b76e79]/50";
+const QUICK_TAG_BTN_IDLE = `${QUICK_TAG_BTN_BASE} border-[#b76e79]/40 bg-[#b76e79]/10 text-[#b76e79] hover:border-[#b76e79]/70 hover:bg-[#b76e79]/20`;
+const QUICK_TAG_BTN_ACTIVE = `${QUICK_TAG_BTN_BASE} border-[#b76e79] bg-[#b76e79]/30 text-[#fde8ec] shadow-[0_0_14px_rgba(183,110,121,0.55),0_0_28px_rgba(183,110,121,0.35),inset_0_0_12px_rgba(255,255,255,0.12)]`;
+
 export function PromptPanel() {
   const { t } = useLanguage();
   const {
@@ -12,9 +20,25 @@ export function PromptPanel() {
     charCount,
     handleOptimize,
     isOptimizing,
+    optimizedResult,
     handleKeyDown,
     setOptimizedResult,
+    setApplyRingThreeQuarterView,
   } = useRemauraApp();
+
+  const [activeQuickTag, setActiveQuickTag] = useState<"ring" | "kolye" | null>(null);
+
+  const selectRingQuickTag = useCallback(() => {
+    setActiveQuickTag("ring");
+    setApplyRingThreeQuarterView(true);
+    setOptimizedResult(null);
+  }, [setOptimizedResult, setApplyRingThreeQuarterView]);
+
+  const selectKolyeQuickTag = useCallback(() => {
+    setActiveQuickTag("kolye");
+    setApplyRingThreeQuarterView(false);
+    setOptimizedResult(null);
+  }, [setOptimizedResult, setApplyRingThreeQuarterView]);
 
   return (
     <div className="rounded-none border-0 bg-transparent p-0">
@@ -22,7 +46,7 @@ export function PromptPanel() {
         type="button"
         onClick={() => void handleOptimize()}
         disabled={isOptimizing || !prompt.trim()}
-        className="mb-4 flex w-full items-center justify-between rounded-xl p-3 text-left transition-all disabled:cursor-not-allowed disabled:opacity-50"
+        className="mb-4 flex w-full min-h-[3.75rem] items-center justify-between rounded-xl p-3 text-left transition-all disabled:cursor-not-allowed disabled:opacity-50"
         style={{
           backgroundColor: "rgba(96, 165, 250, 0.45)",
           boxShadow: "0 0 0 1px rgba(96,165,250,0.2), 0 0 10px rgba(96,165,250,0.15)",
@@ -46,11 +70,20 @@ export function PromptPanel() {
           </div>
           <div>
             <h4 className="text-xs font-bold uppercase text-white">{t.remauraWorkspace.assistantTitle}</h4>
-            <p className="text-[10px] text-white/85">{t.remauraWorkspace.assistantDesc}</p>
+            {isOptimizing ? (
+              <p className="text-[10px] text-white/85" aria-live="polite">
+                {t.remauraWorkspace.assistantOptimizing}
+              </p>
+            ) : null}
           </div>
         </div>
-        <span className="text-white/95" aria-hidden>
-          {isOptimizing ? "…" : "✨"}
+        <span className="flex items-center gap-1.5 text-white/95">
+          {!isOptimizing && optimizedResult?.optimizedPrompt?.trim() ? (
+            <span className="rounded-md bg-white/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
+              {t.remauraWorkspace.assistantReady}
+            </span>
+          ) : null}
+          <span aria-hidden>{isOptimizing ? "…" : "✨"}</span>
         </span>
       </button>
 
@@ -72,6 +105,24 @@ export function PromptPanel() {
         <span className="text-[10px] text-muted">
           {charCount} / {MAX_CHARS}
         </span>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          aria-pressed={activeQuickTag === "ring"}
+          onClick={() => selectRingQuickTag()}
+          className={activeQuickTag === "ring" ? QUICK_TAG_BTN_ACTIVE : QUICK_TAG_BTN_IDLE}
+        >
+          Yüzük
+        </button>
+        <button
+          type="button"
+          aria-pressed={activeQuickTag === "kolye"}
+          onClick={() => selectKolyeQuickTag()}
+          className={activeQuickTag === "kolye" ? QUICK_TAG_BTN_ACTIVE : QUICK_TAG_BTN_IDLE}
+        >
+          Kolye
+        </button>
       </div>
     </div>
   );

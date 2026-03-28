@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { BillingStore, DebitResult, LedgerEntry, PaymentSession, Wallet } from "./types";
+import { isRemauraSuperAdminUserId } from "./super-admin";
 
 const BILLING_DIR = path.join(process.cwd(), "data", "billing");
 const STORE_PATH = path.join(BILLING_DIR, "store.json");
@@ -69,6 +70,12 @@ export async function getWallet(userId: string): Promise<Wallet> {
 export async function debitCredits(userId: string, credits: number, reason: string, sessionId?: string): Promise<DebitResult> {
   const store = await readStore();
   const wallet = ensureWallet(store, userId);
+
+  if (isRemauraSuperAdminUserId(userId)) {
+    await writeStore(store);
+    return { ok: true, wallet, charged: false };
+  }
+
   if (wallet.balanceCredits < credits) {
     await writeStore(store);
     return { ok: false, wallet };
@@ -88,7 +95,7 @@ export async function debitCredits(userId: string, credits: number, reason: stri
   });
   store.wallets[userId] = wallet;
   await writeStore(store);
-  return { ok: true, wallet, ledgerEntryId: entryId };
+  return { ok: true, wallet, ledgerEntryId: entryId, charged: true };
 }
 
 export async function creditCredits(userId: string, credits: number, reason: string, sessionId?: string): Promise<Wallet> {

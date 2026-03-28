@@ -15,12 +15,6 @@ function firstString(...values: unknown[]): string | null {
   return null;
 }
 
-function extFromUrl(url: string): string {
-  const clean = url.split("?")[0]?.split("#")[0] ?? "";
-  const match = /\.([a-z0-9]+)$/i.exec(clean);
-  return match?.[1]?.toLowerCase() ?? "glb";
-}
-
 export async function GET(req: Request) {
   try {
     const apiKey = getMeshyApiKey();
@@ -132,10 +126,11 @@ export async function GET(req: Request) {
           diameterMm
         );
         if (result.scaled) {
-          finalBuffer = result.buffer.buffer.slice(
+          const sliced = result.buffer.buffer.slice(
             result.buffer.byteOffset,
             result.buffer.byteOffset + result.buffer.byteLength
           );
+          finalBuffer = sliced as ArrayBuffer;
         }
       } catch (e) {
         console.warn("[file/route] ring_scale failed, returning original:", e);

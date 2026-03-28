@@ -17,15 +17,13 @@ export type RemauraWidgetId =
   | "main"
   | "prompt"
   | "negativeGenerate"
-  | "style"
-  | "imageMaps";
+  | "style";
 
 export const REMAURA_WIDGET_ORDER: RemauraWidgetId[] = [
   "format",
   "prompt",
   "negativeGenerate",
   "style",
-  "imageMaps",
   "main",
 ];
 
@@ -34,7 +32,6 @@ export const WIDGET_CARD_SIZE: Record<RemauraWidgetId, DashboardCardSize> = {
   prompt: "medium",
   negativeGenerate: "medium",
   style: "medium",
-  imageMaps: "medium",
   main: "large",
 };
 
@@ -90,15 +87,13 @@ function layoutLg(): Layout {
   y += negativeGenerate.h!;
   const style = item("style", 0, y, "medium");
   y += style.h!;
-  const imageMaps = item("imageMaps", 0, y, "medium");
-  y += imageMaps.h!;
 
   const main = {
     ...item("main", leftW, 0, "large"),
     h: Math.max(y, DASHBOARD_SIZES.large.minH),
   };
 
-  return [format, prompt, negativeGenerate, style, imageMaps, main];
+  return [format, prompt, negativeGenerate, style, main];
 }
 
 /** md: lg ile aynı mantık */
@@ -118,9 +113,8 @@ function layoutSm(): Layout {
   y += neg.h!;
   const st = { ...item("style", 0, y, "medium"), w: 3, minW: 2, maxW: 6 };
   y += st.h!;
-  const img = { ...item("imageMaps", 0, y, "medium"), w: 3, minW: 2, maxW: 6 };
 
-  const leftH = fmt.h! + pr.h! + neg.h! + st.h! + img.h!;
+  const leftH = fmt.h! + pr.h! + neg.h! + st.h!;
   const main = {
     ...item("main", leftW, 0, "large"),
     w: 3,
@@ -128,14 +122,14 @@ function layoutSm(): Layout {
     maxW: 6,
     h: Math.max(leftH, DASHBOARD_SIZES.large.minH),
   };
-  return [fmt, pr, neg, st, img, main];
+  return [fmt, pr, neg, st, main];
 }
 
 /** xs: tek “mantıksal” sütun, 4 kolon */
 function layoutXs(): Layout {
   let y = 0;
   const out: LayoutItem[] = [];
-  for (const id of ["format", "prompt", "negativeGenerate", "style", "imageMaps"] as RemauraWidgetId[]) {
+  for (const id of ["format", "prompt", "negativeGenerate", "style"] as RemauraWidgetId[]) {
     const size = WIDGET_CARD_SIZE[id];
     const base = item(id, 0, y, size);
     const n = { ...base, w: 4, minW: 2, maxW: 4 };
@@ -160,7 +154,6 @@ function layoutXxs(): Layout {
     "prompt",
     "negativeGenerate",
     "style",
-    "imageMaps",
     "main",
   ];
   const out: LayoutItem[] = [];

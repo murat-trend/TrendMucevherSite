@@ -62,8 +62,8 @@ export class FinalPromptBuilder {
       /high contrast|chiaroscuro|dramatic/i.test(h)
     );
     const lightingStr = mode3DExport
-      ? "soft diffused studio lighting"
-      : dramaticLighting ?? (intent.lightingHints[0] || "soft studio lighting");
+      ? "directional studio lighting with crisp silhouette edges and readable relief separation"
+      : dramaticLighting ?? (intent.lightingHints[0] || "high-contrast directional studio lighting, hard edge definition");
     const bgHint = mode3DExport ? " Plain white or light gray background, no strong reflections." : "";
     return `Professional product photograph of a ${subject} in ${materialStr}. Single jewelry piece as main subject, ${composition}. ${lightingStr}, ${quality}. No blur, no watermark, no distortion.${bgHint}`;
   }

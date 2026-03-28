@@ -7,6 +7,7 @@ import { createPaymentSession, creditCredits, debitCredits, getWallet, setChecko
 import { createVirtualPosCheckout } from "@/lib/billing/provider";
 import { appendRemauraJob } from "@/lib/remaura/jobs-store";
 import { getAdminSettings } from "@/lib/site/settings-store";
+import { appendRingThreeQuarterRule } from "@/lib/remaura/internal-visual-rules";
 
 loadEnvConfig(process.cwd());
 
@@ -50,7 +51,7 @@ export async function POST(req: Request) {
     const settings = await getAdminSettings();
     if (!settings.features.analyzeJewelryEnabled) {
       return NextResponse.json(
-        { error: "Mucevher analizi gecici olarak kapali." },
+        { error: "Ürün hikayesi geçici olarak kapalı." },
         { status: 503 }
       );
     }
@@ -62,7 +63,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const prompt = (body?.prompt as string) || undefined;
+    let prompt = (body?.prompt as string) || undefined;
+    const applyRingThreeQuarterView = body?.applyRingThreeQuarterView === true;
+    if (applyRingThreeQuarterView && prompt?.trim()) {
+      prompt = appendRingThreeQuarterRule(prompt.trim());
+    }
     const userId = (body?.userId as string | undefined)?.trim();
     selectedPlatform = (body?.selectedPlatform as JewelryPlatformTarget | undefined) ?? undefined;
     if (!userId) {
@@ -106,8 +111,10 @@ export async function POST(req: Request) {
         { status: 402 }
       );
     }
-    debited = true;
-    debitUserId = userId;
+    if (debitResult.charged) {
+      debited = true;
+      debitUserId = userId;
+    }
 
     const result = await analyzeJewelryImage(
       apiKey,
@@ -126,7 +133,9 @@ export async function POST(req: Request) {
       estimatedCostUsd: 0.03,
       message: "analyze_jewelry_ok",
     });
-    return NextResponse.json(result);
+    return NextResponse.json(
+      debitResult.charged ? result : { ...result, remauraUnmetered: true as const }
+    );
   } catch (error: unknown) {
     if (debited && debitUserId) {
       try {
@@ -164,7 +173,7 @@ export async function POST(req: Request) {
       );
     }
     return NextResponse.json(
-      { error: typeof msg === "string" && msg ? msg : "Mücevher analizi başarısız." },
+      { error: typeof msg === "string" && msg ? msg : "Ürün hikayesi oluşturulamadı." },
       { status: 500 }
     );
   }

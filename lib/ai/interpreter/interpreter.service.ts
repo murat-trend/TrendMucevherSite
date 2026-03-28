@@ -150,7 +150,7 @@ function detectLightingHints(input: string): string[] {
     result.push("high contrast lighting");
   }
   if (lower.includes("yumuşak") || lower.includes("soft") || lower.includes("diffused")) {
-    result.push("soft studio lighting");
+    result.push("even studio lighting with crisp hard edges on metal, no fuzzy outlines");
   }
 
   return result;

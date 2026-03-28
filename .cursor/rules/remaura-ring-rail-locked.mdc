@@ -1,0 +1,41 @@
+---
+description: Ring Rail Resize — özellik kilitli (açık talimat olmadan dokunulmaz)
+globs:
+  - "components/remaura/RemauraRingRailResizeSection.tsx"
+  - "app/api/remaura/ring-rail/**"
+  - "lib/remaura/ring-rail-runner.ts"
+  - "scripts/ring_rail_measure.py"
+alwaysApply: true
+---
+
+# KURAL: Ring Rail Resize KİLİTLİ
+
+Bu özellik **çalışır durumda kilitlenmiştir**. Kullanıcı burada yeniden tasarım, refaktör veya “baştan iyileştirme” istemiyor.
+
+## Yasak (açık istisna olmadan)
+
+- `RemauraRingRailResizeSection.tsx`, `ring-rail-runner.ts`, `ring_rail_measure.py`, `app/api/remaura/ring-rail/**` dosyalarında **herhangi bir değişiklik yapma**.
+- Ölçüm / ölçekleme / kesit mantığını, API sözleşmesini veya UI akışını **tahminle güncelleme**.
+- “Temizlik”, “küçük refactor”, stil düzeltmesi bahanesiyle bu dosyalara dokunma.
+
+## İzin (sadece kullanıcı açıkça söylediğinde)
+
+- Kullanıcı **doğrudan** Ring Rail Resize ile ilgili bir hata düzeltmesi, tek satırlık güvenlik yaması veya net bir özellik isteği yazdığında bu dosyalarda değişiklik yapılabilir.
+
+## RemauraWorkspace
+
+`RemauraWorkspace.tsx` içinde **Ring Rail sekmesi** (tab, `ringRail`, URL `category=ring-rail`) yalnızca kullanıcı açıkça isterse değiştirilir; genel sekme/düzen refaktörlerinde Ring Rail dalını **bilerek bozma veya kaldırma**.
+
+## Yeni kod — bu sayfayı etkilemesin
+
+Kullanıcı başka yerlerde **yeni özellik / yeni kod** yazarken Ring Rail Resize **aynen kalmalıdır**.
+
+- Yeni modüller **Ring Rail dosyalarını import etmemeli**, `ring-rail` API route’larını veya `ring_rail_measure.py`’yi **yan etki olarak değiştirmemeli** (yeni iş Ring Rail değilse).
+- Ortak refaktör (layout, provider, `RemauraWorkspace` grid, global stiller) yapılırken **Ring Rail sekmesi ve `ringRail` render dalı** kırılmamalı; “hepsini tek bileşende toplayalım” gibi değişikliklerle Ring Rail’i **silme veya davranışını değiştirme**.
+- Paylaşılan dosyalar (`ring-size.ts`, ortak bileşenler) düzenlenirken Ring Rail’in **mevcut import ve davranışı bozuluyorsa** ya değişiklikten kaçın ya da Ring Rail tarafını kullanıcıya sormadan **ayrı bir yol** ile koru.
+
+Özet: **Yeni kod başka yerde yaşasın; Ring Rail yalnızca kullanıcı doğrudan o sayfayı hedeflediğinde değişsin.**
+
+## Not
+
+`lib/remaura/ring-size.ts` paylaşımlıdır; bu kural dosyası onu glob ile kapsamaz. Ring Rail için oraya yalnızca kullanıcı özellikle isterse dokun.

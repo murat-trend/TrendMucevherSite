@@ -1,0 +1,20 @@
+---
+description: .env ve API anahtarlarını asistanın silmemesi / boşaltmaması
+alwaysApply: true
+---
+
+# KURAL: API anahtarları ve .env gizlileri korunur
+
+## Yasak (kullanıcı açıkça istemedikçe)
+
+- `.env.local`, `.env`, `.env.development` veya repodaki diğer ortam dosyalarından **API anahtarlarını, token’ları veya gizli değerleri silme, boşaltma veya `...` / placeholder ile değiştirme**.
+- Bu dosyaları “şablon temizliği” veya “örnek .env” bahanesiyle **yeniden yazıp mevcut dolu satırları düşürme**.
+- Kullanıcı yeni bir anahtar eklememi istediğinde: **var olan diğer anahtar satırlarına dokunma**; yalnızca istenen satırı ekle veya güncelle.
+
+## İzin
+
+- Kullanıcı **doğrudan** “şu anahtarı kaldır”, “rotate”, “placeholder yap” veya “`.env.local`’i sıfırla” dediğinde ilgili satırı değiştir veya sil.
+
+## Not
+
+- `.env.example` gibi **commit edilen örnek** dosyalarda değerler zaten boş tutulur; bu kural **gerçek gizli içeren yerel dosyalar** için geçerlidir.

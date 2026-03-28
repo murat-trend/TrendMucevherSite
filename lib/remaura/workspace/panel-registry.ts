@@ -79,15 +79,6 @@ export const PANEL_REGISTRY: Record<RemauraPanelId, PanelRegistryEntry> = {
     enabled: true,
     inDefaultLayout: true,
   }),
-  imageMaps: entry({
-    id: "imageMaps",
-    titleKey: "depthMap",
-    titleFallback: "Haritalar",
-    defaultZone: "left",
-    defaultSize: "medium",
-    enabled: true,
-    inDefaultLayout: true,
-  }),
   preview: entry({
     id: "preview",
     titleFallback: "Önizleme",
@@ -120,7 +111,6 @@ export const DEFAULT_PANEL_ORDER: RemauraPanelId[] = [
   "prompt",
   "negativeGenerate",
   "style",
-  "imageMaps",
   "preview",
   "distribution",
   "seo",

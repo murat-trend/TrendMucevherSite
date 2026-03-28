@@ -9,7 +9,6 @@ export type RemauraPanelId =
   | "prompt"
   | "negativeGenerate"
   | "style"
-  | "imageMaps"
   | "preview"
   | "distribution"
   | "seo";

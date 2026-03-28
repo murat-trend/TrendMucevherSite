@@ -47,7 +47,7 @@ export async function optimizePrompt(
     parsed.optimizedPrompt = userPrompt.trim();
   }
   const templateSuffix3D =
-    ", plain white or light gray background, shot with 100mm macro lens, product centered with 15% margin, soft diffused studio lighting, minimal shadows, clear geometric separation between elements, distinct relief layers with readable depth, crisp sharp edges, moderate detail density for 3D conversion, structured composition, sharp focus, 8k resolution, optimized for Meshy Image to 3D.";
+    ", plain white or light gray background, shot with 100mm macro lens, product centered with 15% margin, directional studio lighting with hard silhouette edges, crisp micro-contrast between relief planes, short defined shadows, clear geometric separation between elements, distinct relief layers with readable depth, crisp sharp edges, no fuzzy transitions, moderate detail density for 3D conversion, structured composition, tack sharp focus, 8k resolution, optimized for Meshy Image to 3D.";
   const templateSuffix =
     ", shot with 100mm macro lens, extreme close-up, sharp focus on intricate textures, high-contrast studio lighting, photorealistic metal reflections, caustic light patterns, deep shadows for depth, 8k resolution, cinematic composition.";
   const templateSuffixToUse = mode3DExport ? templateSuffix3D : templateSuffix;
@@ -61,14 +61,11 @@ export async function optimizePrompt(
     parsed.optimizedPrompt = parsed.optimizedPrompt
       .replace(/black background/gi, "plain white background")
       .replace(/reflective surface/gi, "matte surface")
-      .replace(/dramatic directional lighting|high-contrast studio lighting|chiaroscuro/gi, "soft diffused studio lighting")
-      .replace(/,?\s*caustic light patterns,?/gi, "")
-      .replace(/deep shadows for depth/gi, "minimal shadows")
       .replace(/cinematic composition/gi, "optimized for 3D model conversion");
-    if (!/plain white|light gray|soft diffused|minimal shadow/i.test(parsed.optimizedPrompt)) {
+    if (!/plain white|light gray|hard silhouette|crisp sharp edges/i.test(parsed.optimizedPrompt)) {
       parsed.optimizedPrompt = parsed.optimizedPrompt.replace(
         /8k resolution[^.]*\.?/i,
-        "8k resolution, plain white background, soft diffused lighting, minimal shadows, optimized for 3D conversion. "
+        "8k resolution, plain white background, directional lighting with crisp silhouette edges, optimized for 3D conversion. "
       );
     }
   }

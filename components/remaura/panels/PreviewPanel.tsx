@@ -5,7 +5,25 @@ import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { MAIN_CONTENT_BLOCK_ORDER } from "@/components/remaura/remaura-types";
 import { useRemauraApp } from "@/components/remaura/workspace/RemauraWorkspaceContexts";
 import { BackgroundRemoverPanel } from "@/components/remaura/BackgroundRemoverPanel";
-import { DepthMapPanel } from "@/components/remaura/DepthMapPanel";
+
+/** Üretilen görsel önizlemesinde sağ alt köşe — tıklamayı engellemez */
+function GeneratedImageWatermark() {
+  return (
+    <span
+      className="pointer-events-none absolute bottom-2 right-2 z-[1] flex h-9 w-9 items-end justify-end"
+      aria-hidden
+    >
+      <Image
+        src="/rem-icon-64.png"
+        alt=""
+        width={36}
+        height={36}
+        className="h-9 w-9 opacity-50 drop-shadow-[0_1px_3px_rgba(0,0,0,0.65)]"
+        unoptimized
+      />
+    </span>
+  );
+}
 
 export function PreviewPanel() {
   const { t } = useLanguage();
@@ -19,12 +37,6 @@ export function PreviewPanel() {
     bgRemoverError,
     setGeneratedImage,
     setBgRemoverError,
-    lastPromptUsed,
-    showApiCommand,
-    setShowApiCommand,
-    goldenPrompts,
-    setGoldenPrompts,
-    GOLDEN_PROMPTS_KEY,
     jewelryAnalysisError,
     handleAnalyzeJewelry,
     isAnalyzingJewelry,
@@ -73,6 +85,7 @@ export function PreviewPanel() {
                       unoptimized
                       sizes="(max-width: 768px) 100vw, 512px"
                     />
+                    <GeneratedImageWatermark />
                     <span className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white pointer-events-none">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -92,6 +105,29 @@ export function PreviewPanel() {
                       </svg>
                     </span>
                   </button>
+                  <a
+                    href={generatedImage}
+                    download="remaura-jewelry.png"
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-[#b76e79]/40 bg-[#b76e79]/10 px-4 py-3 text-sm font-bold text-[#b76e79] transition-colors hover:bg-[#b76e79]/20 dark:border-[#b76e79]/35 dark:bg-[#b76e79]/10 dark:text-[#c4838b]"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" x2="12" y1="15" y2="3" />
+                    </svg>
+                    {t.remauraWorkspace.downloadImage}
+                  </a>
                 </div>
               ) : blockId === "bgRemover" ? (
                 <div key="bgRemover" className="mt-4 w-full">
@@ -108,76 +144,6 @@ export function PreviewPanel() {
                       onError={setBgRemoverError}
                       t={t.remauraWorkspace}
                     />
-                  </div>
-                </div>
-              ) : blockId === "apiCommand" ? (
-                <div key="apiCommand" className="mt-4 w-full">
-                  <div className="w-full rounded-xl border border-border bg-white/[0.02] p-3 dark:border-white/5">
-                    {lastPromptUsed && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setShowApiCommand((p) => !p)}
-                          className="flex w-full items-center justify-between gap-2 text-left"
-                        >
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
-                            {t.remauraWorkspace.apiCommandSent}
-                          </span>
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            className={`shrink-0 text-muted transition-transform ${showApiCommand ? "rotate-180" : ""}`}
-                          >
-                            <path d="m6 9 6 6 6-6" />
-                          </svg>
-                        </button>
-                        {showApiCommand && (
-                          <div className="mt-3 space-y-3">
-                            <pre className="max-h-40 overflow-auto rounded-lg bg-black/20 p-3 text-[11px] leading-relaxed text-foreground/90">
-                              {lastPromptUsed}
-                            </pre>
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(lastPromptUsed ?? "").catch(() => {});
-                                }}
-                                className="rounded-lg border border-[#b76e79]/40 bg-[#b76e79]/10 px-3 py-1.5 text-[11px] font-bold text-[#b76e79] transition-colors hover:bg-[#b76e79]/20"
-                              >
-                                {t.remauraWorkspace.copyCommand}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (!lastPromptUsed) return;
-                                  const entry = { prompt: lastPromptUsed, savedAt: new Date().toISOString() };
-                                  const next = [entry, ...goldenPrompts.filter((p) => p.prompt !== lastPromptUsed)].slice(
-                                    0,
-                                    20
-                                  );
-                                  setGoldenPrompts(next);
-                                  localStorage.setItem(GOLDEN_PROMPTS_KEY, JSON.stringify(next));
-                                }}
-                                className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-[11px] font-bold text-amber-600 transition-colors hover:bg-amber-500/20 dark:text-amber-400"
-                              >
-                                {t.remauraWorkspace.saveAsBestCommand}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-              ) : blockId === "depthMap" ? (
-                <div key="depthMap" className="mt-4 w-full">
-                  <div className="w-full">
-                    <DepthMapPanel imageSrc={generatedImage} t={t.remauraWorkspace} />
                   </div>
                 </div>
               ) : (
@@ -301,17 +267,18 @@ export function PreviewPanel() {
                   {t.remauraWorkspace.closeModal}
                 </button>
               </div>
-              {/* eslint-disable-next-line @next/next/no-img-element -- base64 */}
-              <img
-                src={generatedImage ?? ""}
-                alt=""
-                className="object-contain"
-                style={{
-                  maxHeight: "75vh",
-                  maxWidth: "min(90vw, 1200px)",
-                }}
+              <div
+                className="relative mx-auto w-fit max-h-[75vh] max-w-[min(90vw,1200px)]"
                 onClick={(e) => e.stopPropagation()}
-              />
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- base64 */}
+                <img
+                  src={generatedImage ?? ""}
+                  alt=""
+                  className="max-h-[75vh] max-w-[min(90vw,1200px)] h-auto w-auto object-contain"
+                />
+                <GeneratedImageWatermark />
+              </div>
             </div>
           )}
         </>

@@ -77,9 +77,12 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
   }, []);
 
   const exportToSTL = useCallback((mesh: THREE.Object3D) => {
-    const output = stlExporterRef.current.parse(mesh, { binary: true });
+    const output: unknown = stlExporterRef.current.parse(mesh, { binary: true });
     if (output instanceof DataView) {
-      const bytes = output.buffer.slice(output.byteOffset, output.byteOffset + output.byteLength);
+      const bytes = output.buffer.slice(
+        output.byteOffset,
+        output.byteOffset + output.byteLength
+      ) as ArrayBuffer;
       return new Blob([bytes], { type: "model/stl" });
     }
     if (output instanceof ArrayBuffer) {

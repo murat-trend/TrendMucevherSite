@@ -2,46 +2,84 @@
 
 import Image from "next/image";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
+import { MAX_STYLE_REFERENCE_SLOTS } from "@/components/remaura/remaura-types";
 import { useRemauraApp } from "@/components/remaura/workspace/RemauraWorkspaceContexts";
+import { styleAnalysisIsUsable } from "@/lib/ai/remaura/style-analyzer";
+
+const STYLE_BTN_SURFACE = "rgba(124, 58, 237, 0.42)";
+const STYLE_BTN_SURFACE_HOVER = "rgba(124, 58, 237, 0.52)";
 
 export function StylePanel() {
   const { t } = useLanguage();
   const {
     styleImages,
+    styleAnalysis,
     handleStyleImageUpload,
     removeStyleImage,
     handleAnalyzeStyle,
     isAnalyzing,
   } = useRemauraApp();
 
+  const slots = styleImages.slice(0, MAX_STYLE_REFERENCE_SLOTS);
+  const hasStyleRefs = slots.some(Boolean);
+  const styleGuideReady = styleAnalysisIsUsable(styleAnalysis);
+
   return (
     <div className="rounded-none border-0 bg-transparent p-0">
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-sm text-muted">
-          <span aria-hidden>🎨</span>
-          {t.remauraWorkspace.styleWindow}
-        </h2>
-        {styleImages.some(Boolean) && (
-          <button
-            type="button"
-            onClick={() => void handleAnalyzeStyle()}
-            disabled={isAnalyzing}
-            className="rounded px-2.5 py-1 text-[10px] font-medium text-accent hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isAnalyzing ? t.remauraWorkspace.analyzingStyle : t.remauraWorkspace.analyzeStyle}
-          </button>
-        )}
-      </div>
-      <p className="mb-3 text-[10px] text-muted/80">{t.remauraWorkspace.styleWindowHint}</p>
+      <button
+        type="button"
+        onClick={() => void handleAnalyzeStyle()}
+        disabled={!hasStyleRefs || isAnalyzing}
+        className="mb-4 flex w-full min-h-[3.75rem] items-center justify-between rounded-xl p-3 text-left transition-all disabled:cursor-not-allowed disabled:opacity-50"
+        style={{
+          backgroundColor: STYLE_BTN_SURFACE,
+          boxShadow: "0 0 0 1px rgba(124,58,237,0.22), 0 0 10px rgba(124,58,237,0.14)",
+        }}
+        onMouseEnter={(e) => {
+          if (!e.currentTarget.disabled) {
+            e.currentTarget.style.backgroundColor = STYLE_BTN_SURFACE_HOVER;
+            e.currentTarget.style.boxShadow =
+              "0 0 0 1px rgba(124,58,237,0.32), 0 0 12px rgba(124,58,237,0.2)";
+          }
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = STYLE_BTN_SURFACE;
+          e.currentTarget.style.boxShadow =
+            "0 0 0 1px rgba(124,58,237,0.22), 0 0 10px rgba(124,58,237,0.14)";
+        }}
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/25 icon-2-5d-sm">
+            <Image src="/rem-icon-64.png" alt="" width={24} height={24} className="opacity-90" unoptimized />
+          </div>
+          <div className="min-w-0">
+            <h4 className="text-xs font-bold uppercase text-white">{t.remauraWorkspace.styleWindow}</h4>
+            {isAnalyzing ? (
+              <p className="text-[10px] text-white/85" aria-live="polite">
+                {t.remauraWorkspace.analyzingStyle}
+              </p>
+            ) : null}
+          </div>
+        </div>
+        <span className="flex shrink-0 items-center gap-1.5 text-white/95">
+          {!isAnalyzing && styleGuideReady ? (
+            <span className="rounded-md bg-white/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
+              {t.remauraWorkspace.assistantReady}
+            </span>
+          ) : null}
+          <span aria-hidden>{isAnalyzing ? "…" : "🎨"}</span>
+        </span>
+      </button>
+
       <div className="grid grid-cols-2 gap-3">
-        {styleImages.map((url, i) => (
+        {slots.map((url, i) => (
           <div
             key={i}
-            className="relative flex h-24 flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border text-muted transition-colors hover:border-foreground/20 dark:border-white/10 dark:hover:border-white/20"
+            className="relative flex h-32 flex-col items-center justify-center overflow-hidden rounded-lg border border-border bg-surface-alt text-muted transition-colors hover:border-accent/40 focus-within:border-accent/50 dark:border-white/10 dark:bg-black/30"
           >
             {url ? (
               <>
-                <Image src={url} alt="" fill className="object-cover" unoptimized sizes="96px" />
+                <Image src={url} alt="" fill className="object-cover" unoptimized sizes="(max-width: 768px) 50vw, 200px" />
                 <button
                   type="button"
                   onClick={(e) => {

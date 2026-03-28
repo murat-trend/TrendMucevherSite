@@ -10,11 +10,27 @@ import type { OptimizedPromptResult } from "@/lib/ai/remaura/prompt-optimizer";
 import type { StyleAnalysisResult } from "@/lib/ai/remaura/style-analyzer";
 import { appendRemauraJob } from "@/lib/remaura/jobs-store";
 import { getAdminSettings } from "@/lib/site/settings-store";
+import { appendRingThreeQuarterRule } from "@/lib/remaura/internal-visual-rules";
+import { buildPlatformFormatPromptClause } from "@/lib/remaura/platform-format-prompt";
+import { REMAURA_VISUAL_SET_CLAUSE } from "@/lib/remaura/remaura-visual-dna";
+import { MAX_STYLE_REFERENCE_SLOTS } from "@/components/remaura/remaura-types";
 
 loadEnvConfig(process.cwd());
 
 /** gpt-image-1.5 desteklenen boyutlar: 1024x1024, 1024x1536, 1536x1024, auto */
 type ValidSize = "1024x1024" | "1024x1536" | "1536x1024" | "auto";
+/** Görsel modele giden metinde tasarım özeti ile teknik talimatları ayırır */
+const IMAGE_PROMPT_HEADING_DESIGN = "## Tasarım isteği";
+const IMAGE_PROMPT_HEADING_TECH = "## Görsel üretim ve teknik talimatları";
+
+function buildLabeledImagePrompt(designAfterExport: string, fullPrompt: string): string {
+  const d = designAfterExport.trim();
+  const tech = fullPrompt.startsWith(designAfterExport)
+    ? fullPrompt.slice(designAfterExport.length).trimStart()
+    : fullPrompt.trim();
+  return `${IMAGE_PROMPT_HEADING_DESIGN}\n${d}\n\n${IMAGE_PROMPT_HEADING_TECH}\n${tech}`;
+}
+
 const SIZE_MAP: Record<string, ValidSize> = {
   "insta-post": "1024x1024",
   "story-reels": "1024x1536",
@@ -63,6 +79,7 @@ export async function POST(req: Request) {
     const styleImages = body.styleImages as Array<{ base64: string; mimeType?: string }> | undefined;
     const hasStyleRef = styleImages && styleImages.length > 0 && styleImages[0]?.base64;
     const exportMode3D = body.exportMode3D === true;
+    const applyRingThreeQuarterView = body.applyRingThreeQuarterView === true;
 
     if (!rawPrompt?.trim() && !optimizedResult?.optimizedPrompt && !revisedPrompt?.trim()) {
       return NextResponse.json(
@@ -71,67 +88,70 @@ export async function POST(req: Request) {
       );
     }
 
-    let mainPrompt: string;
     let negativePrompt: string;
+    let designWithStyle: string;
 
     const hasFullTemplate = (p: string) => /Hyper-realistic jewelry photography/i.test(p) && /100mm macro lens/i.test(p);
     const suffix3D =
-      " 8K resolution, plain white or light gray background, soft diffused studio lighting, minimal shadows, product centered with 15% margin, clear geometric separation between elements, distinct relief layers with readable depth, crisp sharp edges, moderate detail density for 3D conversion, structured composition, sharp focus.";
+      " 8K resolution, plain white or light gray background, directional studio lighting with hard silhouette edges, crisp micro-contrast between relief planes, short defined shadows, product centered with 15% margin, clear geometric separation between elements, distinct relief layers with readable depth, crisp sharp edges, no fuzzy transitions, moderate detail density for 3D conversion, structured composition, tack sharp focus.";
     /** Referans kalite (Medusa madalyon seviyesi) – tüm promptlar bu kalitede çıksın */
     const suffixReferenceQuality =
-      " shot with 100mm macro lens, extreme close-up, sharp focus on intricate textures, high-contrast studio lighting, photorealistic metal reflections, caustic light patterns, deep shadows for depth, 8k resolution, cinematic composition.";
+      " 3/4 isometric perspective from a high-angle where appropriate for the piece, shot with 100mm macro lens, centered framing, entire jewelry fully visible with safe margin — no cropping at frame edges, extreme close-up, sharp focus on intricate textures and relief, high-contrast studio lighting, photorealistic metal reflections, hard-surface precision, specular highlights on facets, deep shadows in recesses, 8k resolution, cinematic composition.";
+    const stylePartsLimitMain = 20;
+    const stylePartsLimitEdit = 24;
 
     if (revisedPrompt?.trim()) {
       const revised = await optimizePrompt(apiKey, revisedPrompt.trim(), undefined, effectiveLocale, exportMode3D);
-      mainPrompt = revised.optimizedPrompt?.trim() || revisedPrompt.trim();
+      designWithStyle = revised.optimizedPrompt?.trim() || revisedPrompt.trim();
       negativePrompt = exportMode3D
         ? JEWELRY_CONSTITUTION.mode3DExport.negativeConstraints.join(", ")
         : JEWELRY_CONSTITUTION.defaultNegativeConstraints.join(", ");
       const styleParts = styleToPromptParts(styleAnalysis);
       if (styleParts.length > 0) {
-        mainPrompt = `${mainPrompt} Style: ${styleParts.slice(0, 12).join(", ")}.`;
-      }
-      if (!hasFullTemplate(mainPrompt)) {
-        mainPrompt += exportMode3D ? suffix3D : suffixReferenceQuality;
+        designWithStyle = `${designWithStyle} Style: ${styleParts.slice(0, stylePartsLimitMain).join(", ")}.`;
       }
     } else if (optimizedResult?.optimizedPrompt) {
-      mainPrompt = optimizedResult.optimizedPrompt;
+      designWithStyle = optimizedResult.optimizedPrompt;
       negativePrompt = exportMode3D
         ? JEWELRY_CONSTITUTION.mode3DExport.negativeConstraints.join(", ")
         : JEWELRY_CONSTITUTION.defaultNegativeConstraints.join(", ");
       const styleParts = styleToPromptParts(styleAnalysis);
       if (styleParts.length > 0) {
-        mainPrompt = `${mainPrompt} Style: ${styleParts.slice(0, 12).join(", ")}.`;
-      }
-      if (!hasFullTemplate(mainPrompt)) {
-        mainPrompt += exportMode3D ? suffix3D : suffixReferenceQuality;
+        designWithStyle = `${designWithStyle} Style: ${styleParts.slice(0, stylePartsLimitMain).join(", ")}.`;
       }
     } else {
       const { output } = generatePromptPipeline((rawPrompt ?? "").trim(), effectiveLocale, exportMode3D);
-      mainPrompt = output.imagePromptEn ?? output.finalPromptEn;
+      designWithStyle = output.imagePromptEn ?? output.finalPromptEn;
       negativePrompt = output.negativePrompt;
       if (styleAnalysis) {
         const styleParts = styleToPromptParts(styleAnalysis);
         if (styleParts.length > 0) {
-          mainPrompt = `${mainPrompt} Style: ${styleParts.slice(0, 12).join(", ")}.`;
+          designWithStyle = `${designWithStyle} Style: ${styleParts.slice(0, stylePartsLimitMain).join(", ")}.`;
         }
-      }
-      if (!hasFullTemplate(mainPrompt)) {
-        mainPrompt += exportMode3D ? suffix3D : suffixReferenceQuality;
       }
     }
 
+    const photoSuffix = !hasFullTemplate(designWithStyle) ? (exportMode3D ? suffix3D : suffixReferenceQuality) : "";
+    const designAfterExport = exportMode3D
+      ? designWithStyle
+          .replace(/black background/gi, "plain white background")
+          .replace(/reflective surface/gi, "matte surface")
+      : designWithStyle;
+
+    let mainPrompt = designWithStyle + photoSuffix;
     if (exportMode3D) {
       mainPrompt = mainPrompt
         .replace(/black background/gi, "plain white background")
-        .replace(/reflective surface/gi, "matte surface")
-        .replace(/dramatic directional lighting|high-contrast|chiaroscuro/gi, "soft diffused studio lighting")
-        .replace(/,?\s*caustic light patterns,?/gi, "")
-        .replace(/deep shadows/gi, "minimal shadows");
+        .replace(/reflective surface/gi, "matte surface");
     }
 
     let fullPrompt = mainPrompt;
-    const wantsFrontView = /\b(front view|frontal|karşıdan|direct front)\b/i.test(mainPrompt);
+    const mentionsRing =
+      /\b(yüzük|yuzuk)\b/i.test(mainPrompt) ||
+      /\bring\b/i.test(mainPrompt) ||
+      /\b(wedding band|eternity ring|signet)\b/i.test(mainPrompt);
+    const wantsFrontKeywords = /\b(front view|frontal|karşıdan|karsidan|direct front)\b/i.test(mainPrompt);
+    const wantsFrontView = wantsFrontKeywords && !mentionsRing;
     if (wantsFrontView) {
       fullPrompt += ` CRITICAL: Strict frontal view — camera directly facing the jewelry, perpendicular, no perspective angle, flat-on product shot.`;
     }
@@ -148,30 +168,57 @@ export async function POST(req: Request) {
     }
 
     const formatKey = typeof format === "string" ? format.toLowerCase().trim() : "";
+
+    if (applyRingThreeQuarterView) {
+      fullPrompt = appendRingThreeQuarterRule(fullPrompt, (rawPrompt ?? "").trim());
+      fullPrompt +=
+        " Avoid: ring lying flat on the surface, shank parallel to the floor, flat-lay jewelry on table, ring asleep on the ground plane.";
+    }
+
+    const platformFormatClause = buildPlatformFormatPromptClause(formatKey);
+    if (platformFormatClause) {
+      fullPrompt += ` ${platformFormatClause}`;
+    }
+
+    if (!exportMode3D) {
+      fullPrompt += ` ${REMAURA_VISUAL_SET_CLAUSE}`;
+    }
+
+    const promptForImageModel = buildLabeledImagePrompt(designAfterExport, fullPrompt);
+
     const size: ValidSize = (formatKey && SIZE_MAP[formatKey]) || "1024x1024";
 
     let imageBase64: string | undefined;
-    let promptUsed = fullPrompt;
 
     if (hasStyleRef) {
+      const styleRefs = styleImages!.filter((img) => img?.base64).slice(0, MAX_STYLE_REFERENCE_SLOTS);
       const styleParts = styleToPromptParts(styleAnalysis);
       const styleGuide = styleParts.length > 0
-        ? ` Maintain this exact style: ${styleParts.slice(0, 16).join(", ")}.`
+        ? ` Maintain this exact style (verbatim cues from style analysis): ${styleParts.slice(0, stylePartsLimitEdit).join(", ")}.`
         : "";
       const outputHint = exportMode3D
-        ? " Output: plain white background, soft diffused lighting, minimal shadows, clear geometric separation between elements, distinct relief layers, moderate detail density, structured composition for Meshy 3D conversion."
-        : " Output: photorealistic jewelry photography, same lighting, composition, background, and material appearance as the reference.";
-      const editPrompt = `Use the EXACT same visual style from this reference image. Generate a NEW jewelry design (different piece, same style): ${fullPrompt}.${styleGuide}${outputHint} Do not copy the design—create a new design in the same style.`;
-      promptUsed = editPrompt;
-      const firstImg = styleImages![0];
-      const base64Data = firstImg.base64.replace(/^data:[^;]+;base64,/, "");
-      const mimeType = firstImg.mimeType || "image/png";
-      const buffer = Buffer.from(base64Data, "base64");
-      const file = await toFile(buffer, "style-reference.png", { type: mimeType });
+        ? " Output: plain white background, directional lighting with hard silhouette edges, crisp relief separation, clear geometric separation between elements, distinct relief layers, moderate detail density, structured composition for Meshy 3D conversion. Keep metal texture, relief, and ornament vocabulary from the reference(s); no fuzzy or indistinct outlines."
+        : " Output: photorealistic jewelry photography. Keep the reference collection's metal family, surface finish, motif/engraving language, and gemstone look — but apply the prompt's high-contrast macro lighting: strong tonal separation, caustic speculars, and deep readable shadows so edges and relief read clearly for downstream image-to-3D / mesh reconstruction.";
+      const multiRefNote =
+        styleRefs.length > 1
+          ? `You are given ${styleRefs.length} reference images from the same style window; treat them as one collection — match their shared metal finish, motif language, and ornament vocabulary.\n\n`
+          : "";
+      const styleLockPreamble =
+        "STYLE LOCK: Transfer the reference collection's metal hue, finish, micro-texture, engraving/relief character, and gemstone treatment to a NEW piece. Do not flatten contrast: preserve punchy studio separation, crisp edges, and depth cues required for mesh-friendly imagery — only the jewelry design (silhouette/layout) changes.\n\n";
+      const editPrompt = `${styleLockPreamble}${multiRefNote}Use the EXACT same visual language from the reference image(s). Generate a NEW jewelry design (different piece, same style): ${promptForImageModel}.${styleGuide}${outputHint} Do not copy the silhouette or layout of the reference piece — invent a different design that could belong in the same collection.`;
+
+      const files = await Promise.all(
+        styleRefs.map(async (img, i) => {
+          const base64Data = img.base64.replace(/^data:[^;]+;base64,/, "");
+          const mimeType = img.mimeType || "image/png";
+          const buffer = Buffer.from(base64Data, "base64");
+          return toFile(buffer, `style-reference-${i}.png`, { type: mimeType });
+        })
+      );
 
       const editResult = await client.images.edit({
         model: "gpt-image-1.5",
-        image: file,
+        image: files.length === 1 ? files[0]! : files,
         prompt: editPrompt,
         size: size === "auto" ? "1024x1024" : size,
         quality: "high",
@@ -181,7 +228,7 @@ export async function POST(req: Request) {
     } else {
       const result = await client.images.generate({
         model: "gpt-image-1.5",
-        prompt: fullPrompt,
+        prompt: promptForImageModel,
         size: size === "auto" ? "auto" : size,
         quality: "high",
       });
@@ -205,9 +252,13 @@ export async function POST(req: Request) {
       message: "generate_ok",
     });
 
+    /** İstemcide yalnızca kullanıcının yazdığı metin gösterilir; model promptu asla dönülmez */
+    const promptUsedForClient =
+      (rawPrompt ?? "").trim() || (revisedPrompt ?? "").trim() || "";
+
     return NextResponse.json({
       image: `data:image/png;base64,${imageBase64}`,
-      promptUsed,
+      promptUsed: promptUsedForClient,
     });
   } catch (error: unknown) {
     console.error("API ERROR:", error);

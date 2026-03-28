@@ -4,9 +4,15 @@ import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { FORMAT_IDS, type PlatformFormat } from "@/components/remaura/remaura-types";
 import { useRemauraApp } from "@/components/remaura/workspace/RemauraWorkspaceContexts";
 
-export function FormatPanel() {
+type FormatPanelProps = {
+  /** Örn. mücevher tasarımında `JEWELRY_DESIGN_EXCLUDED_FORMATS` */
+  excludeFormats?: readonly PlatformFormat[];
+};
+
+export function FormatPanel({ excludeFormats = [] }: FormatPanelProps) {
   const { t } = useLanguage();
   const { platformFormat, setPlatformFormat } = useRemauraApp();
+  const formatIds = FORMAT_IDS.filter((id) => !excludeFormats.includes(id));
   const meta: Record<PlatformFormat, { label: string; size: string; ratio: string; boxSize: string }> = {
     "insta-post": {
       label: t.remauraWorkspace.formatInstagram,
@@ -53,7 +59,7 @@ export function FormatPanel() {
         </span>
       </div>
       <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-        {FORMAT_IDS.map((id) => {
+        {formatIds.map((id) => {
           const { label, size, ratio, boxSize } = meta[id];
           const isActive = platformFormat === id;
           return (
@@ -92,7 +98,7 @@ export function FormatPanel() {
           );
         })}
       </div>
-      {platformFormat === "3d-export" && (
+      {platformFormat === "3d-export" && !excludeFormats.includes("3d-export") && (
         <p className="mt-3 text-[10px] text-muted">{t.remauraWorkspace.format3DExportHint}</p>
       )}
     </div>

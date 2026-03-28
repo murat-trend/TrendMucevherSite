@@ -9,11 +9,10 @@ export const DEFAULT_MATERIAL_HINTS: string[] = [
 
 export const DEFAULT_BACKGROUND_HINTS: string[] = [
   "clean neutral",
-  "soft gradient",
+  "flat studio gradient with sharp product edges",
   "dark luxury",
   "minimal backdrop",
   "studio white",
-  "subtle bokeh",
 ];
 
 export const DEFAULT_MOOD: string[] = [

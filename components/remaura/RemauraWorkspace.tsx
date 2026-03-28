@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import type { ResponsiveLayouts } from "react-grid-layout";
@@ -24,15 +24,21 @@ import { RemauraBackgroundRemovalSection } from "@/components/remaura/RemauraBac
 import { RemauraPhotoEditSection } from "@/components/remaura/RemauraPhotoEditSection";
 import { Remaura3DAISection } from "@/components/remaura/Remaura3DAISection";
 import { RemauraMeshAISection } from "@/components/remaura/RemauraMeshAISection";
+import { RemauraRingRailResizeSection } from "@/components/remaura/RemauraRingRailResizeSection";
 import { RemauraPanelWorkspace } from "@/components/remaura/workspace/RemauraPanelWorkspace";
 import type { ChannelTab } from "@/components/remaura/remaura-types";
 import type { PlatformFormat } from "@/components/remaura/remaura-types";
-import { IMAGE_SIZE_MAP } from "@/components/remaura/remaura-types";
+import {
+  IMAGE_SIZE_MAP,
+  JEWELRY_DESIGN_EXCLUDED_FORMATS,
+  MAX_STYLE_REFERENCE_SLOTS,
+} from "@/components/remaura/remaura-types";
 import type { OptimizedPromptResult } from "@/lib/ai/remaura/prompt-optimizer";
-import type { StyleAnalysisResult } from "@/lib/ai/remaura/style-analyzer";
+import { styleAnalysisIsUsable, type StyleAnalysisResult } from "@/lib/ai/remaura/style-analyzer";
+import { styleDataUrlsToPayload } from "@/lib/remaura/data-url";
 import type { JewelryAnalysisResult, JewelryPlatformTarget } from "@/lib/ai/remaura/jewelry-analyzer";
 
-type RemauraCategory = "jewelry" | "background" | "photoEdit" | "mesh3d" | "meshAI";
+type RemauraCategory = "jewelry" | "background" | "photoEdit" | "mesh3d" | "meshAI" | "ringRail";
 
 type RemauraWorkspaceProps = {
   initialCategory?: RemauraCategory;
@@ -89,13 +95,11 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
       return next;
     });
   }, []);
-  const [styleImages, setStyleImages] = useState<(string | null)[]>([null, null, null, null]);
+  const [styleImages, setStyleImages] = useState<(string | null)[]>(() =>
+    Array.from({ length: MAX_STYLE_REFERENCE_SLOTS }, () => null)
+  );
   const [platformFormat, setPlatformFormat] = useState<PlatformFormat>("insta-post");
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
-  const [lastPromptUsed, setLastPromptUsed] = useState<string | null>(null);
-  const [showApiCommand, setShowApiCommand] = useState(false);
-  const GOLDEN_PROMPTS_KEY = "remaura-golden-prompts";
-  const [goldenPrompts, setGoldenPrompts] = useState<Array<{ prompt: string; savedAt: string }>>([]);
   const [imageDimensions, setImageDimensions] = useState<{ w: number; h: number } | null>(null);
   const [lastFormatUsed, setLastFormatUsed] = useState<PlatformFormat | null>(null);
   const [imageZoomOpen, setImageZoomOpen] = useState(false);
@@ -103,6 +107,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [optimizedResult, setOptimizedResult] = useState<OptimizedPromptResult | null>(null);
   const [styleAnalysis, setStyleAnalysis] = useState<StyleAnalysisResult | null>(null);
+  const styleAnalyzeAbortRef = useRef<AbortController | null>(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [jewelryAnalysis, setJewelryAnalysis] = useState<JewelryAnalysisResult | null>(null);
@@ -112,6 +117,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
   const [billingCredits, setBillingCredits] = useState<number>(0);
   const [billingCheckoutUrl, setBillingCheckoutUrl] = useState<string | null>(null);
   const [bgRemoverError, setBgRemoverError] = useState<string | null>(null);
+  const [applyRingThreeQuarterView, setApplyRingThreeQuarterView] = useState(false);
   const [remauraCategory, setRemauraCategory] = useState<RemauraCategory>(initialCategory);
 
   const charCount = prompt.length;
@@ -129,15 +135,6 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
       setLayoutsFull(s.layouts);
       setVisibility({ ...DEFAULT_VISIBILITY, ...s.visibility });
       setWorkspaceMode(s.workspaceMode);
-    }
-  }, []);
-
-  useEffect(() => {
-    try {
-      const rawGolden = localStorage.getItem(GOLDEN_PROMPTS_KEY);
-      if (rawGolden) setGoldenPrompts(JSON.parse(rawGolden) as Array<{ prompt: string; savedAt: string }>);
-    } catch {
-      /* ignore */
     }
   }, []);
 
@@ -180,33 +177,27 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
           prompt: prompt.trim(),
           locale,
           mode3DExport: platformFormat === "3d-export",
+          applyRingThreeQuarterView,
           userId: billingUserId || undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Hata");
       setOptimizedResult(data);
-      const displayTr = data.optimizedPromptTr?.trim();
-      const displayEn = data.optimizedPrompt?.trim();
-      setPrompt(locale === "tr" ? (displayTr || displayEn || prompt) : (displayEn || displayTr || prompt));
     } catch (e) {
       setGenerateError(e instanceof Error ? e.message : "Optimizasyon başarısız.");
     } finally {
       setIsOptimizing(false);
     }
-  }, [prompt, locale, platformFormat, billingUserId]);
+  }, [prompt, locale, platformFormat, billingUserId, applyRingThreeQuarterView]);
 
-  const handleAnalyzeStyle = useCallback(async () => {
-    const imagesToSend = styleImages
-      .filter((url): url is string => !!url && url.startsWith("data:"))
-      .map((url) => {
-        const base64 = url.split(",")[1];
-        const mimeType = url.includes("png") ? "image/png" : "image/jpeg";
-        return { base64, mimeType };
-      })
-      .filter((img) => !!img.base64);
-
+  const runStyleAnalysis = useCallback(async () => {
+    const imagesToSend = styleDataUrlsToPayload(styleImages);
     if (imagesToSend.length === 0) return;
+
+    styleAnalyzeAbortRef.current?.abort();
+    const ac = new AbortController();
+    styleAnalyzeAbortRef.current = ac;
 
     setIsAnalyzing(true);
     setGenerateError(null);
@@ -215,16 +206,38 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ images: imagesToSend, userId: billingUserId || undefined }),
+        signal: ac.signal,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Hata");
       setStyleAnalysis(data);
     } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return;
+      setStyleAnalysis(null);
       setGenerateError(e instanceof Error ? e.message : "Stil analizi başarısız.");
     } finally {
       setIsAnalyzing(false);
     }
   }, [styleImages, billingUserId]);
+
+  const handleAnalyzeStyle = useCallback(() => runStyleAnalysis(), [runStyleAnalysis]);
+
+  useEffect(() => {
+    const payload = styleDataUrlsToPayload(styleImages);
+    if (payload.length === 0) return;
+    const id = window.setTimeout(() => {
+      void runStyleAnalysis();
+    }, 550);
+    return () => {
+      window.clearTimeout(id);
+    };
+  }, [styleImages, runStyleAnalysis]);
+
+  useEffect(() => {
+    return () => {
+      styleAnalyzeAbortRef.current?.abort();
+    };
+  }, []);
 
   const handleGenerate = useCallback(async () => {
     const useNormal = prompt.trim() || optimizedResult?.optimizedPrompt;
@@ -233,14 +246,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     setGenerateError(null);
     try {
       let effectiveStyleAnalysis = styleAnalysis;
-      const imagesToSend = styleImages
-        .filter((url): url is string => !!url && url.startsWith("data:"))
-        .map((url) => {
-          const base64 = url.split(",")[1];
-          const mimeType = url.includes("png") ? "image/png" : "image/jpeg";
-          return { base64: base64 ?? "", mimeType };
-        })
-        .filter((img) => !!img.base64);
+      const imagesToSend = styleDataUrlsToPayload(styleImages);
 
       if (imagesToSend.length > 0 && !effectiveStyleAnalysis) {
         setIsAnalyzing(true);
@@ -251,13 +257,24 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
             body: JSON.stringify({ images: imagesToSend, userId: billingUserId || undefined }),
           });
           const analyzeData = await analyzeRes.json();
-          if (analyzeRes.ok) {
-            effectiveStyleAnalysis = analyzeData;
-            setStyleAnalysis(analyzeData);
+          if (!analyzeRes.ok) {
+            throw new Error(analyzeData?.error ?? "Stil analizi başarısız.");
           }
+          effectiveStyleAnalysis = analyzeData;
+          setStyleAnalysis(analyzeData);
+        } catch (e) {
+          setGenerateError(e instanceof Error ? e.message : "Stil analizi başarısız.");
+          setIsGenerating(false);
+          return;
         } finally {
           setIsAnalyzing(false);
         }
+      }
+
+      if (imagesToSend.length > 0 && !styleAnalysisIsUsable(effectiveStyleAnalysis)) {
+        setGenerateError(t.remauraWorkspace.styleAnalysisInsufficient);
+        setIsGenerating(false);
+        return;
       }
 
       const res = await fetch("/api/generate", {
@@ -272,6 +289,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
           optimizedResult: optimizedResult ?? undefined,
           styleAnalysis: effectiveStyleAnalysis ?? undefined,
           styleImages: imagesToSend.length > 0 ? imagesToSend : undefined,
+          applyRingThreeQuarterView,
           userId: billingUserId || undefined,
         }),
       });
@@ -281,7 +299,6 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
         return;
       }
       setGeneratedImage(data.image ?? null);
-      setLastPromptUsed(data.promptUsed ?? null);
       setLastFormatUsed(platformFormat);
       setImageDimensions(IMAGE_SIZE_MAP[platformFormat]);
     } catch {
@@ -298,13 +315,22 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     styleImages,
     locale,
     billingUserId,
+    applyRingThreeQuarterView,
     t.remauraWorkspace.generateError,
+    t.remauraWorkspace.styleAnalysisInsufficient,
   ]);
 
   useEffect(() => {
     setJewelryAnalysis(null);
     setJewelryAnalysisError(null);
   }, [generatedImage]);
+
+  useEffect(() => {
+    if (remauraCategory !== "jewelry") return;
+    if (JEWELRY_DESIGN_EXCLUDED_FORMATS.includes(platformFormat)) {
+      setPlatformFormat("insta-post");
+    }
+  }, [remauraCategory, platformFormat]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -327,6 +353,10 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     }
     if (requested === "mesh-ai") {
       setRemauraCategory("meshAI");
+      return;
+    }
+    if (requested === "ring-rail") {
+      setRemauraCategory("ringRail");
     }
   }, []);
 
@@ -343,6 +373,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
           image: generatedImage.startsWith("data:") ? generatedImage : `data:image/png;base64,${generatedImage}`,
           prompt: prompt.trim() || undefined,
           selectedPlatform,
+          applyRingThreeQuarterView,
           userId: billingUserId,
         }),
       });
@@ -354,15 +385,28 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
         throw new Error("Kredi yetersiz. Odeme adimina gecin.");
       }
       if (!res.ok) throw new Error(data?.error ?? "Analiz başarısız.");
-      setJewelryAnalysis(data);
+      const { remauraUnmetered: _unmetered, ...jewelryPayload } = data as JewelryAnalysisResult & {
+        remauraUnmetered?: boolean;
+      };
+      setJewelryAnalysis(jewelryPayload);
       setBillingCheckoutUrl(null);
-      setBillingCredits((prev) => Math.max(0, prev - 1));
+      if (!_unmetered) {
+        setBillingCredits((prev) => Math.max(0, prev - 1));
+      }
     } catch (e) {
-      setJewelryAnalysisError(e instanceof Error ? e.message : "Mücevher analizi başarısız.");
+      setJewelryAnalysisError(e instanceof Error ? e.message : "Ürün hikayesi oluşturulamadı.");
     } finally {
       setIsAnalyzingJewelry(false);
     }
-  }, [generatedImage, prompt, isAnalyzingJewelry, platformFormat, selectedDistributionPlatform, billingUserId]);
+  }, [
+    generatedImage,
+    prompt,
+    isAnalyzingJewelry,
+    platformFormat,
+    selectedDistributionPlatform,
+    billingUserId,
+    applyRingThreeQuarterView,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -379,6 +423,8 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     if (!file?.type.startsWith("image/")) return;
     const reader = new FileReader();
     reader.onload = () => {
+      setStyleAnalysis(null);
+      setGenerateError(null);
       setStyleImages((prev) => {
         const next = [...prev];
         next[index] = reader.result as string;
@@ -572,12 +618,6 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     setPlatformFormat,
     generatedImage,
     setGeneratedImage,
-    lastPromptUsed,
-    showApiCommand,
-    setShowApiCommand,
-    goldenPrompts,
-    setGoldenPrompts,
-    GOLDEN_PROMPTS_KEY,
     imageDimensions,
     lastFormatUsed,
     imageZoomOpen,
@@ -599,6 +639,8 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     setBillingCheckoutUrl,
     bgRemoverError,
     setBgRemoverError,
+    applyRingThreeQuarterView,
+    setApplyRingThreeQuarterView,
     handleOptimize,
     handleAnalyzeStyle,
     handleGenerate,
@@ -707,6 +749,19 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
               >
                 REMURA MESH AI
               </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={remauraCategory === "ringRail"}
+                onClick={() => setRemauraCategory("ringRail")}
+                className={`rounded-full border px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] transition-colors ${
+                  remauraCategory === "ringRail"
+                    ? "border-amber-400 bg-amber-500/15 text-amber-300"
+                    : "border-white/10 bg-white/[0.03] text-muted hover:border-white/20"
+                }`}
+              >
+                RING RAIL RESIZE
+              </button>
             </div>
             <div className="flex items-center gap-4">
               <span className="h-px w-8 bg-foreground/10" aria-hidden />
@@ -734,6 +789,8 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
             <Remaura3DAISection />
           ) : remauraCategory === "meshAI" ? (
             <RemauraMeshAISection />
+          ) : remauraCategory === "ringRail" ? (
+            <RemauraRingRailResizeSection />
           ) : (
             <RemauraPhotoEditSection
               t={{

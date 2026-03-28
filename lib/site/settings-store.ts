@@ -12,7 +12,6 @@ export type SiteSettings = {
     generateEnabled: boolean;
     analyzeJewelryEnabled: boolean;
     analyzeStyleEnabled: boolean;
-    depthEnabled: boolean;
   };
   updatedAt: string;
 };
@@ -38,7 +37,6 @@ function defaults(): SiteSettings {
       generateEnabled: true,
       analyzeJewelryEnabled: true,
       analyzeStyleEnabled: true,
-      depthEnabled: true,
     },
     updatedAt: nowIso(),
   };

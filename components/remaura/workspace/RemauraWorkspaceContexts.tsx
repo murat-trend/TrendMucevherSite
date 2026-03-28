@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, type Dispatch, type SetStateAction } from "react";
 import type { ResponsiveLayouts } from "react-grid-layout";
 import type { useLanguage } from "@/components/i18n/LanguageProvider";
 import type { ChannelTab } from "@/components/remaura/remaura-types";
@@ -15,7 +15,7 @@ export type RemauraAppContextValue = {
   t: ReturnType<typeof useLanguage>["t"];
   locale: ReturnType<typeof useLanguage>["locale"];
   prompt: string;
-  setPrompt: (v: string) => void;
+  setPrompt: Dispatch<SetStateAction<string>>;
   negativePrompt: string;
   setNegativePrompt: (v: string) => void;
   charCount: number;
@@ -65,14 +65,6 @@ export type RemauraAppContextValue = {
   setPlatformFormat: (f: PlatformFormat) => void;
   generatedImage: string | null;
   setGeneratedImage: (v: string | null) => void;
-  lastPromptUsed: string | null;
-  showApiCommand: boolean;
-  setShowApiCommand: (v: boolean | ((p: boolean) => boolean)) => void;
-  goldenPrompts: Array<{ prompt: string; savedAt: string }>;
-  setGoldenPrompts: React.Dispatch<
-    React.SetStateAction<Array<{ prompt: string; savedAt: string }>>
-  >;
-  GOLDEN_PROMPTS_KEY: string;
   imageDimensions: { w: number; h: number } | null;
   lastFormatUsed: PlatformFormat | null;
   imageZoomOpen: boolean;
@@ -94,6 +86,9 @@ export type RemauraAppContextValue = {
   setBillingCheckoutUrl: (url: string | null) => void;
   bgRemoverError: string | null;
   setBgRemoverError: (v: string | null) => void;
+  /** Dahili 3/4 yüzük kuralı (metin kutusunda yok; yalnızca API’de birleştirilir) */
+  applyRingThreeQuarterView: boolean;
+  setApplyRingThreeQuarterView: (v: boolean) => void;
   handleOptimize: () => Promise<void>;
   handleAnalyzeStyle: () => Promise<void>;
   handleGenerate: () => Promise<void>;

@@ -14,7 +14,6 @@ const LOCKED_LEFT_PANEL_IDS = new Set<RemauraPanelId>([
   "prompt",
   "negativeGenerate",
   "style",
-  "imageMaps",
 ]);
 
 function mergeWithDefaults(saved: ResponsiveLayouts): ResponsiveLayouts {

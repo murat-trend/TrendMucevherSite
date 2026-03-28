@@ -53,7 +53,9 @@ export async function POST(req: Request) {
     headers.set("Content-Disposition", 'attachment; filename="remura-mesh-processed.stl"');
     headers.set("X-Mesh-Log", encodeURIComponent(result.log.slice(0, 2000)));
 
-    return new NextResponse(result.buffer, { status: 200, headers });
+    const b = result.buffer;
+    const body = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
+    return new NextResponse(body, { status: 200, headers });
   } catch (error: unknown) {
     const err = error as { message?: string };
     return NextResponse.json(
