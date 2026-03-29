@@ -1,0 +1,30 @@
+---
+description: Yalnızca kullanıcının içinde olduğu sayfa/dosya; başka sayfalara/projelere kod yazma
+alwaysApply: true
+---
+
+# KURAL: Kapsam — sadece içinde olunan sayfa / odak
+
+## Zorunlu
+
+- Kullanıcı **açıkça** başka bir sayfaya, rotaya, projeye veya workspace klasörüne geçtiğini **bildirmedikçe**:
+  - **Başka sayfalara, dosyalara veya rotalara** kod ekleme, silme veya refaktör **yapma**.
+  - Yalnızca kullanıcının **o anda üzerinde çalıştığı** sayfa / dosya / bileşen / özellik ile sınırlı kal.
+
+## İstisna (çok dar)
+
+- Aynı dosyada derlemenin çalışması için **kaçınılmaz** tek satırlık düzeltme.
+- Kullanıcının **doğrudan adını verdiği** ek tek dosya (aynı görev içinde).
+
+## İzin (kapsam genişler)
+
+- Kullanıcı **açıkça** bildirir: örn. "şimdi şu sayfaya geçtim", "X projesini açtım", "tüm şu modülde şunu yap".
+
+## Yasak
+
+- "Yardımcı olsun" diye **bildirilmeden** başka route, panel, API veya projeye dokunmak.
+- Aynı oturumda **varsayılan olarak** çok dosyalı refaktör veya "temizlik" bahanesiyle kapsamı genişletmek.
+
+## Not
+
+- Bu repo (**RemauraAi2**) ile **Clean Mesh Ai** veya başka klasörler **farklı workspace** sayılır; kullanıcı geçişi söylemeden oraya dosya yazma.
