@@ -36,6 +36,7 @@ import type { OptimizedPromptResult } from "@/lib/ai/remaura/prompt-optimizer";
 import { styleAnalysisIsUsable, type StyleAnalysisResult } from "@/lib/ai/remaura/style-analyzer";
 import { styleDataUrlsToPayload } from "@/lib/remaura/data-url";
 import type { JewelryAnalysisResult, JewelryPlatformTarget } from "@/lib/ai/remaura/jewelry-analyzer";
+import { createClient } from "@/utils/supabase/client";
 
 type RemauraCategory = "jewelry" | "background" | "photoEdit" | "mesh3d" | "ringRail";
 
@@ -118,6 +119,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
   const [billingCheckoutUrl, setBillingCheckoutUrl] = useState<string | null>(null);
   const [bgRemoverError, setBgRemoverError] = useState<string | null>(null);
   const [remauraCategory, setRemauraCategory] = useState<RemauraCategory>(initialCategory);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const charCount = prompt.length;
 
@@ -238,6 +240,13 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
   }, []);
 
   const handleGenerate = useCallback(async () => {
+    const {
+      data: { user },
+    } = await createClient().auth.getUser();
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
     const useNormal = prompt.trim() || optimizedResult?.optimizedPrompt;
     if (!useNormal) return;
     setIsGenerating(true);
@@ -659,6 +668,30 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     <RemauraAppContext.Provider value={appValue}>
       <RemauraLayoutContext.Provider value={layoutValue}>
         <div id="remaura-workspace" className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-10">
+          {showAuthModal ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+              <div className="w-full max-w-sm rounded-2xl border border-border/40 bg-card p-8 text-center">
+                <p className="mb-2 text-2xl">🔐</p>
+                <h3 className="mb-2 font-semibold text-foreground">Üye Girişi Gerekli</h3>
+                <p className="mb-6 text-sm text-muted">Bu özelliği kullanmak için önce siteye üye olunuz.</p>
+                <div className="flex gap-3">
+                  <a
+                    href="/uye-giris"
+                    className="flex-1 rounded-xl bg-[#c9a84c] py-2.5 text-sm font-semibold text-black transition-all hover:opacity-90"
+                  >
+                    Giriş Yap / Üye Ol
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setShowAuthModal(false)}
+                    className="flex-1 rounded-xl border border-border/40 py-2.5 text-sm text-muted transition-colors hover:text-foreground"
+                  >
+                    Kapat
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
           <div className="mb-6 flex flex-col items-center justify-center space-y-2 py-6 sm:mb-10 sm:py-8">
             <div className="mb-3 flex items-center justify-center">
               <div className="icon-2-5d">

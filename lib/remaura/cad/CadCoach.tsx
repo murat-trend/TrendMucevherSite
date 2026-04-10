@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { createClient } from "@/utils/supabase/client";
 
 type ViewMode = "construction" | "connection";
 type ViewportName = "Top" | "Front" | "Right" | "Perspective";
@@ -962,6 +963,7 @@ export function CadCoach() {
   const [aiSteps, setAiSteps] = useState<CadCoachAiStep[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const runCadAnalyze = async () => {
     if (!base64DataUrl) {
@@ -1076,7 +1078,16 @@ export function CadCoach() {
             <button
               type="button"
               disabled={aiLoading || !base64DataUrl}
-              onClick={() => void runCadAnalyze()}
+              onClick={async () => {
+                const {
+                  data: { user },
+                } = await createClient().auth.getUser();
+                if (!user) {
+                  setShowAuthModal(true);
+                  return;
+                }
+                void runCadAnalyze();
+              }}
               className="rounded-lg border border-[#c69575]/60 bg-[#c69575]/15 px-4 py-2 text-xs font-semibold text-[#f0d8c9] disabled:opacity-40"
             >
               {aiLoading ? "Analiz çalışıyor…" : "Analizi çalıştır"}
@@ -1216,6 +1227,30 @@ export function CadCoach() {
           </aside>
         </div>
       </div>
+      {showAuthModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-border/40 bg-card p-8 text-center">
+            <p className="mb-2 text-2xl">🔐</p>
+            <h3 className="mb-2 font-semibold text-foreground">Üye Girişi Gerekli</h3>
+            <p className="mb-6 text-sm text-muted">Bu özelliği kullanmak için önce siteye üye olunuz.</p>
+            <div className="flex gap-3">
+              <a
+                href="/uye-giris"
+                className="flex-1 rounded-xl bg-[#c9a84c] py-2.5 text-sm font-semibold text-black transition-all hover:opacity-90"
+              >
+                Giriş Yap / Üye Ol
+              </a>
+              <button
+                type="button"
+                onClick={() => setShowAuthModal(false)}
+                className="flex-1 rounded-xl border border-border/40 py-2.5 text-sm text-muted transition-colors hover:text-foreground"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

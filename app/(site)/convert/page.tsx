@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { createClient } from "@/utils/supabase/client";
 
 type ConvertResponse = {
   originalSize: number;
@@ -21,6 +22,7 @@ export default function ConvertPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ConvertResponse | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const canSubmit = !!file && (draco || stlZip) && !loading;
 
@@ -41,6 +43,13 @@ export default function ConvertPage() {
   }, [result]);
 
   const handleConvert = async () => {
+    const {
+      data: { user },
+    } = await createClient().auth.getUser();
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
     if (!file || (!draco && !stlZip)) return;
     setLoading(true);
     setError(null);
@@ -139,6 +148,30 @@ export default function ConvertPage() {
           </section>
         ) : null}
       </div>
+      {showAuthModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-border/40 bg-card p-8 text-center">
+            <p className="mb-2 text-2xl">🔐</p>
+            <h3 className="mb-2 font-semibold text-foreground">Üye Girişi Gerekli</h3>
+            <p className="mb-6 text-sm text-muted">Bu özelliği kullanmak için önce siteye üye olunuz.</p>
+            <div className="flex gap-3">
+              <a
+                href="/uye-giris"
+                className="flex-1 rounded-xl bg-[#c9a84c] py-2.5 text-sm font-semibold text-black transition-all hover:opacity-90"
+              >
+                Giriş Yap / Üye Ol
+              </a>
+              <button
+                type="button"
+                onClick={() => setShowAuthModal(false)}
+                className="flex-1 rounded-xl border border-border/40 py-2.5 text-sm text-muted transition-colors hover:text-foreground"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
