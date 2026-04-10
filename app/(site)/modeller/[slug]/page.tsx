@@ -536,9 +536,9 @@ export default function ModelDetayPage({
   const fallbackLocalized = localizeDetailProduct(slug, product, locale)
   const localizedProduct = {
     ...product,
-    story: dynamic.story?.trim() ? dynamic.story : fallbackLocalized.story,
-    name: dynamic.name?.trim() ? dynamic.name : fallbackLocalized.name,
-    tags: [jewelryTypeLabel(dynamic.jewelryType, locale)],
+    story: dynamic?.story?.trim() ? dynamic?.story : fallbackLocalized.story,
+    name: dynamic?.name?.trim() ? dynamic?.name : fallbackLocalized.name,
+    tags: [jewelryTypeLabel(dynamic?.jewelryType, locale)],
   }
   const localizedStory = (() => {
     if (locale === 'en' && (dbProduct as any)?.story_en) return (dbProduct as any).story_en
