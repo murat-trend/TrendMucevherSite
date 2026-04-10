@@ -59,3 +59,7 @@ next-env.d.ts
 /data/finance/expenses.json
 /data/finance/backups/*.pdf
 /data/finance/backups/manifest.jsonl
+
+public/models/
+public/convert-output/
+docs/cad/
