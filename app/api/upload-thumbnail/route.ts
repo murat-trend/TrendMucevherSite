@@ -1,39 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import sharp from 'sharp'
-import { mkdir, writeFile } from 'fs/promises'
-import path from 'path'
+
+const s3 = new S3Client({
+  region: 'auto',
+  endpoint: process.env.R2_ENDPOINT!,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+  },
+})
 
 export async function POST(req: NextRequest) {
   const formData = await req.formData()
-  const file = formData.get('file') as File
-  const slug = formData.get('slug') as string
-  const viewRaw = String(formData.get('view') ?? '').trim().toLowerCase()
-  const view = viewRaw === 'on' || viewRaw === 'arka' || viewRaw === 'kenar' || viewRaw === 'ust' ? viewRaw : ''
+  const file = formData.get('file') as File | null
+  const slug = formData.get('slug') as string | null
+  const view = formData.get('view') as string | null
 
   if (!file || !slug) {
     return NextResponse.json({ error: 'Dosya veya slug eksik' }, { status: 400 })
   }
 
   const buffer = Buffer.from(await file.arrayBuffer())
+  const webpBuffer = await sharp(buffer).webp({ quality: 85 }).toBuffer()
 
-  /** Tüm vitrin görselleri aynı kare kanvas (katalogda tutarlı kırpım) */
-  const THUMB_SIZE = 1200
-
-  const webpBuffer = await sharp(buffer)
-    .rotate()
-    .resize(THUMB_SIZE, THUMB_SIZE, { fit: 'cover', position: 'centre' })
-    .webp({ quality: 85 })
-    .toBuffer()
-
-  // Kaydet
-  const thumbnailsDir = path.join(process.cwd(), 'public', 'thumbnails')
-  await mkdir(thumbnailsDir, { recursive: true })
   const filename = view ? `${slug}-${view}.webp` : `${slug}.webp`
-  const filePath = path.join(thumbnailsDir, filename)
-  await writeFile(filePath, webpBuffer)
+  const key = `thumbnails/${filename}`
+
+  await s3.send(new PutObjectCommand({
+    Bucket: process.env.R2_BUCKET_NAME!,
+    Key: key,
+    Body: webpBuffer,
+    ContentType: 'image/webp',
+  }))
+
+  const url = `${process.env.R2_PUBLIC_BASE_URL}/${key}`
 
   return NextResponse.json({
-    url: `/thumbnails/${filename}`,
+    url,
     originalSize: buffer.length,
     webpSize: webpBuffer.length,
   })

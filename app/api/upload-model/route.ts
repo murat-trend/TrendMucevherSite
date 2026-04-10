@@ -1,73 +1,52 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from 'next/server'
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 
-export const runtime = "nodejs";
+export const runtime = 'nodejs'
 
-function safeSlug(input: string): string {
-  return input
-    .toLocaleLowerCase("tr-TR")
-    .replace(/ğ/g, "g")
-    .replace(/ü/g, "u")
-    .replace(/ş/g, "s")
-    .replace(/ı/g, "i")
-    .replace(/ö/g, "o")
-    .replace(/ç/g, "c")
-    .replace(/[^a-z0-9-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
+const s3 = new S3Client({
+  region: 'auto',
+  endpoint: process.env.R2_ENDPOINT!,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+  },
+})
 
 export async function POST(req: NextRequest) {
-  try {
-    const formData = await req.formData();
-    const slugRaw = String(formData.get("slug") ?? "").trim();
-    const slug = safeSlug(slugRaw);
-    const glb = formData.get("glb") ?? formData.get("file");
-    const stlRaw = formData.get("stl");
+  const formData = await req.formData()
+  const slug = formData.get('slug') as string | null
+  const glb = formData.get('glb') as File | null
+  const stl = formData.get('stl') as File | null
 
-    if (!slug) {
-      return NextResponse.json({ error: "Slug gerekli." }, { status: 400 });
-    }
-
-    const hasGlb = glb instanceof File;
-    const hasStl = stlRaw instanceof File;
-
-    if (!hasGlb && !hasStl) {
-      return NextResponse.json({ error: "GLB veya STL dosyası gerekli." }, { status: 400 });
-    }
-
-    if (hasGlb && !glb.name.toLowerCase().endsWith(".glb")) {
-      return NextResponse.json({ error: "GLB dosyası .glb uzantılı olmalı." }, { status: 400 });
-    }
-    if (hasStl && !stlRaw.name.toLowerCase().endsWith(".stl")) {
-      return NextResponse.json({ error: "STL dosyası .stl uzantılı olmalı." }, { status: 400 });
-    }
-
-    const publicDir = path.join(process.cwd(), "public");
-    const modelsDir = path.join(publicDir, "models");
-    await mkdir(modelsDir, { recursive: true });
-
-    const payload: { slug: string; glbUrl?: string; stlUrl?: string } = { slug };
-
-    if (hasGlb) {
-      const glbBuffer = Buffer.from(await glb.arrayBuffer());
-      const glbPath = path.join(modelsDir, `${slug}.glb`);
-      await writeFile(glbPath, glbBuffer);
-      payload.glbUrl = `/models/${slug}.glb`;
-    }
-
-    if (hasStl) {
-      const stlBuffer = Buffer.from(await stlRaw.arrayBuffer());
-      const stlPath = path.join(modelsDir, `${slug}.stl`);
-      await writeFile(stlPath, stlBuffer);
-      payload.stlUrl = `/models/${slug}.stl`;
-    }
-
-    return NextResponse.json(payload);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Yükleme başarısız.";
-    return NextResponse.json({ error: message }, { status: 500 });
+  if (!slug) {
+    return NextResponse.json({ error: 'Slug eksik' }, { status: 400 })
   }
-}
 
+  const payload: { slug: string; glbUrl?: string; stlUrl?: string } = { slug }
+
+  if (glb) {
+    const buffer = Buffer.from(await glb.arrayBuffer())
+    const key = `models/${slug}.glb`
+    await s3.send(new PutObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME!,
+      Key: key,
+      Body: buffer,
+      ContentType: 'model/gltf-binary',
+    }))
+    payload.glbUrl = `${process.env.R2_PUBLIC_BASE_URL}/${key}`
+  }
+
+  if (stl) {
+    const buffer = Buffer.from(await stl.arrayBuffer())
+    const key = `models/${slug}.stl`
+    await s3.send(new PutObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME!,
+      Key: key,
+      Body: buffer,
+      ContentType: 'model/stl',
+    }))
+    payload.stlUrl = `${process.env.R2_PUBLIC_BASE_URL}/${key}`
+  }
+
+  return NextResponse.json(payload)
+}
