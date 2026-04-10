@@ -4,9 +4,12 @@ import { getOpenAIApiKey } from "@/lib/api/openai";
 import { optimizePrompt } from "@/lib/ai/remaura/prompt-optimizer";
 import type { OptimizedPromptResult } from "@/lib/ai/remaura/prompt-optimizer";
 import { appendRemauraJob } from "@/lib/remaura/jobs-store";
-import { appendRingThreeQuarterRule, stripRingThreeQuarterRule } from "@/lib/remaura/internal-visual-rules";
+import { detectJewelryShotFromUserPrompt } from "@/lib/remaura/jewelry-shot-detection";
+import { normalizePromptLocale } from "@/lib/i18n/prompt-locale";
 
 loadEnvConfig(process.cwd());
+
+const DEBUG_MODE = process.env.NODE_ENV !== "production";
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
@@ -24,10 +27,8 @@ export async function POST(req: Request) {
     const body = await req.json();
     userId = (body.userId as string | undefined)?.trim() || "";
     const prompt = (body.prompt as string)?.trim();
-    const localeRaw = (body.locale as string) || "tr";
-    const locale = localeRaw === "en" ? "en" : "tr";
+    const locale = normalizePromptLocale(body.locale);
     const mode3DExport = body.mode3DExport === true;
-    const applyRingThreeQuarterView = body.applyRingThreeQuarterView === true;
     if (!prompt) {
       return NextResponse.json(
         { error: "Prompt gerekli." },
@@ -35,15 +36,26 @@ export async function POST(req: Request) {
       );
     }
 
-    const promptForModel = applyRingThreeQuarterView ? appendRingThreeQuarterRule(prompt) : prompt;
-    const result = await optimizePrompt(apiKey, promptForModel, undefined, locale, mode3DExport);
-    const sanitized: OptimizedPromptResult = {
-      ...result,
-      optimizedPrompt: stripRingThreeQuarterRule(result.optimizedPrompt ?? ""),
-      optimizedPromptTr: result.optimizedPromptTr
-        ? stripRingThreeQuarterRule(result.optimizedPromptTr)
-        : result.optimizedPromptTr,
-    };
+    const shot = detectJewelryShotFromUserPrompt(prompt);
+
+    if (DEBUG_MODE) {
+      console.log("\n╔══════════════════════════════════════════════╗");
+      console.log("║  REMAURA DEBUG — OPTIMIZE                    ║");
+      console.log("╠══════════════════════════════════════════════╣");
+      console.log("║ locale:", locale, "| shot:", shot, "| 3D:", mode3DExport);
+      console.log("║ raw prompt:", prompt);
+      console.log("╚══════════════════════════════════════════════╝");
+    }
+
+    const result = await optimizePrompt(apiKey, prompt, undefined, locale, mode3DExport);
+
+    if (DEBUG_MODE) {
+      console.log("\n--- Optimized result ---");
+      console.log("optimizedPrompt:", result.optimizedPrompt);
+      if (result.optimizedPromptTr) console.log("optimizedPromptTr:", result.optimizedPromptTr);
+      console.log("--- END optimize ---\n");
+    }
+
     await appendRemauraJob({
       type: "optimize",
       status,
@@ -52,7 +64,7 @@ export async function POST(req: Request) {
       estimatedCostUsd: 0.01,
       message: "optimize_ok",
     });
-    return NextResponse.json(sanitized);
+    return NextResponse.json({ ...result, jewelryShot: shot });
   } catch (error: unknown) {
     status = "error";
     console.error("OPTIMIZE ERROR:", error);

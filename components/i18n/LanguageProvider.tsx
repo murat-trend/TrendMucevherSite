@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import type { Locale } from "@/lib/i18n/translations";
-import { translations } from "@/lib/i18n/translations";
+import { SUPPORTED_LOCALES, translations } from "@/lib/i18n/translations";
 
 const STORAGE_KEY = "trendmucevher-locale";
 
@@ -19,9 +19,9 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY) as Locale | null;
-    if (stored === "tr" || stored === "en") {
+    if (stored && (SUPPORTED_LOCALES as readonly string[]).includes(stored)) {
       document.documentElement.lang = stored;
-      queueMicrotask(() => setLocaleState(stored));
+      queueMicrotask(() => setLocaleState(stored as Locale));
     }
   }, []);
 

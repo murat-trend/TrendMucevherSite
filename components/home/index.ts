@@ -3,6 +3,7 @@ export { ValueProposition } from "./ValueProposition";
 export { MainPathways } from "./MainPathways";
 export { PathwaysSection } from "./PathwaysSection";
 export { FeaturedProducts } from "./FeaturedProducts";
+export { FeaturedModels } from "./FeaturedModels";
 export { RemauraSection } from "./RemauraSection";
 export { SellerSection } from "./SellerSection";
 export { HowItWorks } from "./HowItWorks";

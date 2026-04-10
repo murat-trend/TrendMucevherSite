@@ -2,11 +2,8 @@
  * Görsel modeline eklenen dahili kurallar. Yalnızca API route’larından import edin;
  * istemci bundle’ına alınmamalı (kullanıcı arayüzünde gösterilmez).
  *
- * Yüzük kamera standardı = `camera-prompt.ts` içindeki `RING_CAMERA_ANGLE45_BODY` (angle45 soneki ile tek kaynak);
- * dik duruş, kadraj, mesh netliği; yatay flat-lay yok.
+ * Yüzük kamera standardı: referans timsah yüzük fotoğrafı — üst-ön 3/4 perspektif.
  */
-
-import { RING_CAMERA_ANGLE45_BODY } from "@/lib/remaura/camera-prompt";
 
 /** Strip ve teşhis için sabit önek (metal cümlesi değişse bile aynı kalır) */
 export const RING_VIEW_SENTINEL = "<<<REMAURA_INTERNAL_RING_VIEW>>>";
@@ -26,19 +23,22 @@ export function inferRingMetalPhrase(userText: string): string {
 }
 
 /**
- * Yüzük butonu aktifken modele giden kilit paragraf (kullanıcı arayüzünde gösterilmez).
- * `contextPrompt`: görünür kullanıcı promptu + birleşik üretim metni — metal çıkarımı için.
+ * Yüzük tetiklendiğinde modele giden kilit kamera paragrafı (UI'da gizli).
+ * `metalContext`: kullanıcı metni — metal çıkarımı için.
+ *
+ * Referans açı: Timsah başlı altın yüzük referans fotoğrafı — üst-ön 3/4 perspektif.
  */
 export function buildRingThreeQuarterBlock(metalContext: string): string {
   const metal = inferRingMetalPhrase(metalContext);
   return `${RING_VIEW_SENTINEL}
-REMAURA RING CAMERA (camera panel angle45): Professional macro jewelry photography of a ${metal} ring, ${RING_CAMERA_ANGLE45_BODY}
-
-Table and crown must read clearly in frame.
-
-ORIENTATION — CRITICAL: Do NOT show the ring lying flat on the ground plane with the shank fully horizontal like a flat-lay product on a desk. Avoid "ring asleep on the surface". Present the ring upright, steeply banked, or on a minimal slim stand / discreet support so the stone table faces substantially toward the lens; the band may touch a dark base at one point but the hero pose is table-forward, not parallel to the floor.
-
-GEOMETRY: Sharp silhouette lines, zero warping, no barrel distortion; crisp prongs/bezel, inner shank curve visible where the angle allows; high-relief on shank reads with deep shadows. Controlled directional studio lighting, technical reference quality.`.trim();
+CAMERA: Three-quarter high-angle product shot of a ${metal} ring.
+HORIZONTAL ORBIT: Camera orbits 30° to the right of front-center (2 o'clock position). The ring's front face and right side band are both visible.
+VERTICAL TILT: Camera elevated 45° above the ring, looking down. High-angle, NOT eye-level.
+RING POSE: Standing upright on shank, band vertical, decorative head on top. NOT lying flat, NOT on its side.
+MUST SEE: Front face at an angle + side band curving away showing thickness and surface detail + top of crown from above + the finger opening (inner hollow) clearly visible and OPEN at the bottom of the ring, showing empty space through the band — this hole must not be blocked or hidden.
+DO NOT: Frontal straight-on shot, top-down bird's-eye into the opening, ring lying horizontal, eye-level perspective, finger hole hidden or closed.
+FRAMING: Centered, entire ring in frame with margin, ring fills 75% of frame height.
+LIGHTING: Strong upper-left directional light, crisp specular highlights on metal, deep shadows in recesses.`.trim();
 }
 
 /**

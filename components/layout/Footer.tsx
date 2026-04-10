@@ -6,7 +6,7 @@ import { useLanguage } from "@/components/i18n/LanguageProvider";
 const FOOTER_LINKS = {
   main: [
     { href: "/", key: "home" as const },
-    { href: "/urunler", key: "products" as const },
+    { href: "/modeller", key: "modeller" as const },
     { href: "/ozel-siparis", key: "customOrder" as const },
     { href: "/remaura", key: "remaura" as const },
     { href: "/iletisim", key: "contact" as const },

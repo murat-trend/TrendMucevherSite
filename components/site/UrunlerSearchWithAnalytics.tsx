@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { recordZeroResultSearch } from "@/lib/search/zero-result-searches";
+import { useLanguage } from "@/components/i18n/LanguageProvider";
 
 /** Örnek katalog — gerçek API bağlanınca aynı mantık kullanılabilir */
 const MOCK_PRODUCTS = [
@@ -19,6 +20,39 @@ function matches(query: string, product: (typeof MOCK_PRODUCTS)[0]): boolean {
 }
 
 export function UrunlerSearchWithAnalytics() {
+  const { locale } = useLanguage();
+  const copy =
+    locale === "en"
+      ? {
+          placeholder: "Search product or keyword…",
+          ariaLabel: "Search products",
+          noResult: "No results found for",
+          noResultTail: 'This query is saved in admin under "Zero-result searches".',
+          demo: "Demo search — in production this uses real product data.",
+        }
+      : locale === "de"
+        ? {
+            placeholder: "Produkt oder Schlüsselwort suchen…",
+            ariaLabel: "Produkte suchen",
+            noResult: "Keine Ergebnisse für",
+            noResultTail: 'Diese Anfrage wird im Adminbereich unter "Suchanfragen ohne Ergebnis" gespeichert.',
+            demo: "Demo-Suche — in der Live-Version wird mit echten Produktdaten gearbeitet.",
+          }
+        : locale === "ru"
+          ? {
+              placeholder: "Поиск товара или ключевого слова…",
+              ariaLabel: "Поиск товаров",
+              noResult: "Ничего не найдено по запросу",
+              noResultTail: 'Этот запрос сохраняется в админке в разделе "Поиски без результата".',
+              demo: "Демо-поиск — на живом сайте будет использоваться реальный каталог товаров.",
+            }
+          : {
+              placeholder: "Ürün veya anahtar kelime ara…",
+              ariaLabel: "Ürün ara",
+              noResult: "için sonuç bulunamadı.",
+              noResultTail: 'Bu sorgu yönetim panelinde "Sonuç vermeyen aramalar" listesine kaydedilir.',
+              demo: "Demo arama — canlı sitede aynı kayıt, gerçek ürün verisiyle çalışır.",
+            };
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
 
@@ -50,15 +84,22 @@ export function UrunlerSearchWithAnalytics() {
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Ürün veya anahtar kelime ara…"
+          placeholder={copy.placeholder}
           className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] py-3 pl-10 pr-4 text-sm text-[var(--foreground)] outline-none ring-[var(--accent)]/25 focus:ring-2"
-          aria-label="Ürün ara"
+          aria-label={copy.ariaLabel}
         />
       </div>
       {debounced && results.length === 0 ? (
         <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-[var(--foreground)]">
-          &quot;{debounced}&quot; için sonuç bulunamadı. Bu sorgu yönetim panelinde &quot;Sonuç vermeyen aramalar&quot;
-          listesine kaydedilir.
+          {locale === "tr" ? (
+            <>
+              &quot;{debounced}&quot; {copy.noResult} {copy.noResultTail}
+            </>
+          ) : (
+            <>
+              {copy.noResult} &quot;{debounced}&quot;. {copy.noResultTail}
+            </>
+          )}
         </p>
       ) : null}
       <ul className="divide-y divide-[var(--border)] rounded-xl border border-[var(--border)] bg-[var(--card)]">
@@ -69,7 +110,7 @@ export function UrunlerSearchWithAnalytics() {
         ))}
       </ul>
       <p className="text-center text-xs text-[var(--muted)]">
-        Demo arama — canlı sitede aynı kayıt, gerçek ürün verisiyle çalışır.
+        {copy.demo}
       </p>
     </div>
   );

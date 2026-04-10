@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { JEWELRY_CONSTITUTION } from "../constitution/jewelry.constitution";
 import { OPTIMIZER_SYSTEM_PROMPT, OPTIMIZER_SYSTEM_PROMPT_3D_EXPORT } from "./constants";
 
 export type OptimizedPromptResult = {
@@ -25,16 +26,44 @@ export async function optimizePrompt(
   const prompt =
     systemPrompt ??
     (mode3DExport ? OPTIMIZER_SYSTEM_PROMPT_3D_EXPORT : OPTIMIZER_SYSTEM_PROMPT);
-  const langHint = locale === "tr" ? "Kullanıcı Türkçe konuşuyor. optimizedPromptTr MUTLAKA Türkçe olmalı." : "User prefers English. optimizedPromptTr can be in English.";
-  const res = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      { role: "system", content: prompt },
-      { role: "user", content: `${langHint}\n\nKullanıcı fikri: ${userPrompt}` },
-    ],
-    response_format: { type: "json_object" },
-    max_tokens: 1024,
-  });
+  const langHints: Record<string, string> = {
+    tr: "Kullanıcı Türkçe konuşuyor. optimizedPromptTr MUTLAKA Türkçe olmalı.",
+    en: "User prefers English. optimizedPromptTr should be written in English.",
+    de: "Der Nutzer bevorzugt Deutsch. Das Feld optimizedPromptTr MUSS auf Deutsch formuliert sein.",
+    ru: "Пользователь предпочитает русский язык. Поле optimizedPromptTr должно быть на русском.",
+  };
+  const langHint = langHints[locale] ?? langHints.tr;
+
+  const templateSuffixToUse = mode3DExport
+    ? ", " + JEWELRY_CONSTITUTION.mode3DExport.imageQualitySuffix
+    : ", " + JEWELRY_CONSTITUTION.imageQualitySuffix;
+
+  let res: OpenAI.Chat.Completions.ChatCompletion;
+  try {
+    res = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: prompt },
+        { role: "user", content: `${langHint}\n\nKullanıcı fikri: ${userPrompt}` },
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 1536,
+    });
+  } catch (err) {
+    console.error("[prompt-optimizer] OpenAI hatası:", err);
+    return {
+      jewelryType: "",
+      metalMaterial: "",
+      gemstoneLogic: "",
+      designStructure: "",
+      ornamentEngraving: "",
+      craftsmanshipLanguage: "",
+      lighting: "",
+      luxuryQuality: "",
+      optimizedPrompt: userPrompt.trim(),
+      optimizedPromptTr: userPrompt.trim(),
+    };
+  }
 
   const content = res.choices[0]?.message?.content ?? "{}";
   let parsed: OptimizedPromptResult;
@@ -46,11 +75,6 @@ export async function optimizePrompt(
   if (!parsed.optimizedPrompt?.trim()) {
     parsed.optimizedPrompt = userPrompt.trim();
   }
-  const templateSuffix3D =
-    ", plain white or light gray background, shot with 100mm macro lens, product centered with 15% margin, directional studio lighting with hard silhouette edges, crisp micro-contrast between relief planes, short defined shadows, clear geometric separation between elements, distinct relief layers with readable depth, crisp sharp edges, no fuzzy transitions, moderate detail density for 3D conversion, structured composition, tack sharp focus, 8k resolution, optimized for Meshy Image to 3D.";
-  const templateSuffix =
-    ", shot with 100mm macro lens, extreme close-up, sharp focus on intricate textures, high-contrast studio lighting, photorealistic metal reflections, caustic light patterns, deep shadows for depth, 8k resolution, cinematic composition.";
-  const templateSuffixToUse = mode3DExport ? templateSuffix3D : templateSuffix;
   const hasFullTemplate =
     /Hyper-realistic jewelry photography/i.test(parsed.optimizedPrompt) &&
     /100mm macro lens/i.test(parsed.optimizedPrompt);

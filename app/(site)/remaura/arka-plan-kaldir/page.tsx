@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { RemauraWorkspace } from "@/components/remaura/RemauraWorkspace";
-import { RemauraLandingHeader } from "@/components/remaura/RemauraLandingHeader";
+import { RemauraLocalizedLandingHeader } from "@/components/remaura/RemauraLocalizedLandingHeader";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://trendmucevher.com";
 const pageUrl = `${siteUrl}/remaura/arka-plan-kaldir`;
@@ -55,10 +55,7 @@ export default function RemauraBackgroundLandingPage() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <RemauraLandingHeader
-        title="Arka Plan Kaldirma Araci"
-        description="Takı gorsellerini pazar yeri ve e-ticaret standartlarina uygun hale getirmek icin dogrudan bu ekrandan isleme baslayin."
-      />
+      <RemauraLocalizedLandingHeader variant="backgroundRemoval" />
       <RemauraWorkspace initialCategory="background" />
     </>
   );

@@ -22,16 +22,30 @@ Kullanıcının hayal ettiği sahne, tema veya sembolü değiştirme – sadece 
 
 OPTİMİZASYON NE YAPMALI:
 - Kullanıcının belirttiği parça, metal, form, taş vb. ÖĞELERİ KORU
-- Eksik teknik detayları EKLE: görünüm açısı (front view / 3/4 angle), makro fotoğraf, stüdyo ışığı, fotogerçekçi metal yansımaları
+- Eksik teknik detayları EKLE: makro fotoğraf, stüdyo ışığı, fotogerçekçi metal yansımaları
 - Kenarlar ve oyma hatları: her zaman keskin (crisp hard edges, sharp relief definition). Asla yumuşak silüet, bulanık kontur, pudra kenar veya bulanık/muddy metal geçişi önerme veya isteme.
 - Belirsiz ifadeleri NETLEŞTİR: "güzel" → "elegant, refined"; "parlak" → "high polish, reflective"
 - Form/şekil koru: kalp formu → heart-shaped, oval → oval, damla → teardrop
-- Kullanıcı "karşıdan" derse → front view ekle
-- **Yüzük / ring / alyans (Remaura standart — teknik Görüntü A):** optimizedPrompt İngilizceye şunu yansıtmalı: three-quarter isometric ~45° from horizontal; camera elevated above the ring and slightly forward-off-axis (upper front quadrant); gemstone table + crown, setting/gallery, outer band with sharp geometric edges, inner shank visible. Hard edges, no deformation, no mushy silhouette — final technical product reference, not flat front, not top-down only, not perpendicular showcase (kullanıcı açıkça başka açı istemedikçe).
+- KAMERA AÇISI YAZMA: "front view", "3/4 angle", "45 degree", "top-down" gibi açı/kadraj ifadeleri EKLEME — kamera açısı ayrı bir sistem tarafından otomatik eklenir. Sadece tasarım, malzeme ve estetik detayları optimize et.
 
 KONSEPTÜEL İFADELER (yukarıdaki kurala uy):
 - Hayal unsuru, tematik, sembolik ifadeleri anla ve doğrudan çevir – sadeleştirme, değiştirme
 - "…ifade eden", "…anlatan", "…motifli", "…temalı" gibi ifadelerde tema/sahne korunur
+
+FIGURE PRESERVATION RULE:
+Kullanıcının prompt'unda geçen TÜM canlı figürleri, sembolleri ve nesneleri çıktıda koru. Hiçbirini silme, birleştirme veya 'medallion' gibi genel bir kelimeyle özetleme.
+
+Figürler arası her türlü ilişki, pozisyon veya aksiyon ifadesini compositionHints olarak aynen aktar; bunları optimizedPrompt ve optimizedPromptTr metinlerine göm (JSON şemasına yeni alan ekleme).
+Örnek ilişki ifadeleri:
+- sarılmış, dolanmış, kavramış, tutmuş
+- bakıyor, dişleyecek, saldırıyor, koruyor
+- üzerinde, altında, karşısında, yanında
+- coiled, facing, wrapped, holding, striking, protecting, standing over, fighting
+
+Bu tür ifadeler varsa prompt'a şu formatta ekle:
+'Composition: [figür1] [aksiyon] [figür2], [pozisyon detayı]'
+
+Bu kural tüm figür türleri için geçerlidir: hayvanlar, mitolojik figürler, dini figürler, semboller, geometrik formlar, doğa unsurları.
 
 METAL YÜZEY VE IŞIK (referans kalite – Medusa seviyesi):
 - "gümüş oksitli" / "oksitlenmiş gümüş" → "oxidized silver", "antique silver patina", "polished raised surfaces, blackened recesses"
@@ -63,7 +77,7 @@ JSON formatında döndür (sadece JSON):
 
 optimizedPrompt ZORUNLU ŞABLON – ASLA ATLAMA, HER ZAMAN TAM STRING DÖNDÜR:
 optimizedPrompt MUTLAKA şu formatta olmalı (İngilizce, tam hali):
-"Hyper-realistic jewelry photography, [TAKİ DETAYI BURAYA], shot with 100mm macro lens, extreme close-up, sharp focus on intricate textures, high-contrast studio lighting, photorealistic metal reflections, caustic light patterns, deep shadows for depth, 8k resolution, cinematic composition."
+"Hyper-realistic jewelry photography, [TAKİ DETAYI BURAYA], shot with 100mm macro lens, sharp focus on intricate textures, high-contrast studio lighting, photorealistic metal reflections, caustic light patterns, deep shadows for depth, 8k resolution."
 
 [TAKİ DETAYI BURAYA] = Kullanıcının TÜM konseptini İngilizce yaz – hiçbir öğeyi atlama. "meleklerle şeytanların savaşını" → "war of angels and devils"; "azizlerin ruhunu koruyan kanatlar" → "wings protecting the souls of saints". Kısa özet DEĞİL – kullanıcının yazdığı her öğe dahil edilmeli.
 
@@ -72,30 +86,30 @@ REFERANS KALİTE HEDEFİ (HER PROMPT BU SEVİYEDE OLMALI):
 - Metal: Oksitlenmiş gümüş / pewter hissi – kabartma parlak, girintiler siyah (high contrast metal)
 - Yüzey: Yüksek kontrast – chiaroscuro, dramatik directional lighting
 - Rölyef: High-relief, derin kabartma, 3D sculptural depth
-- Detay: İnce oyma, pullar, kumaş kıvrımları – intricate surface detail, extreme close-up
+- Detay: İnce oyma, pullar, kumaş kıvrımları – intricate surface detail, sharp focus
 - Çerçeve: Milgrain kenar, süslü bail (madalyonlarda)
 - Genel: Fotogerçekçi makro, keskin odak, 8K hissi, luxury product shot
 Bu terimler optimizedPrompt'a MUTLAKA dahil edilmeli. Arka plan modelin varsayılanına bırakılabilir.
 
 Örnek – Kullanıcı "14 ayar altın madalyon, kalp formu" yazdı:
-- optimizedPromptTr: "14 ayar altın madalyon, kalp formu, karşıdan görünüm, makro mücevher fotoğrafı, stüdyo ışığı, fotogerçekçi"
-- optimizedPrompt: "Hyper-realistic jewelry photography, 14K gold heart-shaped pendant, front view, shot with 100mm macro lens, extreme close-up, sharp focus on intricate textures, high-contrast studio lighting, photorealistic metal reflections, caustic light patterns, deep shadows for depth, 8k resolution, cinematic composition."
+- optimizedPromptTr: "14 ayar altın madalyon, kalp formu, makro mücevher fotoğrafı, stüdyo ışığı, fotogerçekçi"
+- optimizedPrompt: "Hyper-realistic jewelry photography, 14K gold heart-shaped pendant, shot with 100mm macro lens, sharp focus on intricate textures, high-contrast studio lighting, photorealistic metal reflections, caustic light patterns, deep shadows for depth, 8k resolution."
 
 Örnek – Kullanıcı "gümüş kolye, minimalist" yazdı:
-- optimizedPromptTr: "gümüş kolye ucu, minimalist tasarım, sade hatlar, karşıdan görünüm, makro fotoğraf, stüdyo ışığı"
-- optimizedPrompt: "Hyper-realistic jewelry photography, silver pendant, minimalist design, clean lines, front view, shot with 100mm macro lens, extreme close-up, sharp focus on intricate textures, high-contrast studio lighting, photorealistic metal reflections, caustic light patterns, deep shadows for depth, 8k resolution, cinematic composition."
+- optimizedPromptTr: "gümüş kolye ucu, minimalist tasarım, sade hatlar, makro fotoğraf, stüdyo ışığı"
+- optimizedPrompt: "Hyper-realistic jewelry photography, silver pendant, minimalist design, clean lines, shot with 100mm macro lens, sharp focus on intricate textures, high-contrast studio lighting, photorealistic metal reflections, caustic light patterns, deep shadows for depth, 8k resolution."
 
 Örnek – Kullanıcı "tanrıların savaşını ifade eden gümüş oksitli madalyon. Yüksek detay, yüksek kontrast" yazdı:
-- optimizedPromptTr: "tanrıların savaşını ifade eden gümüş oksitli madalyon, yüksek detay, yüksek kontrast, karşıdan görünüm, makro fotoğraf"
-- optimizedPrompt: "Hyper-realistic jewelry photography, oxidized silver medallion representing the war of the gods, highly detailed bas-relief carving, shot with 100mm macro lens, extreme close-up, sharp focus on intricate textures, high-contrast studio lighting, photorealistic metal reflections, caustic light patterns, deep shadows for depth, 8k resolution, cinematic composition."
+- optimizedPromptTr: "tanrıların savaşını ifade eden gümüş oksitli madalyon, yüksek detay, yüksek kontrast, makro fotoğraf"
+- optimizedPrompt: "Hyper-realistic jewelry photography, oxidized silver medallion representing the war of the gods, highly detailed bas-relief carving, shot with 100mm macro lens, sharp focus on intricate textures, high-contrast studio lighting, photorealistic metal reflections, caustic light patterns, deep shadows for depth, 8k resolution."
 
 Örnek – Kullanıcı "denizlerin hikayesini anlatan altın kolye, efsanevi yaratıklar" yazdı:
-- optimizedPromptTr: "denizlerin hikayesini anlatan altın kolye, efsanevi yaratıklar, karşıdan görünüm, makro fotoğraf"
-- optimizedPrompt: "Hyper-realistic jewelry photography, gold pendant telling the story of the seas, legendary creatures, ocean mythology motifs, bas-relief, shot with 100mm macro lens, extreme close-up, sharp focus on intricate textures, high-contrast studio lighting, photorealistic metal reflections, caustic light patterns, deep shadows for depth, 8k resolution, cinematic composition."
+- optimizedPromptTr: "denizlerin hikayesini anlatan altın kolye, efsanevi yaratıklar, makro fotoğraf"
+- optimizedPrompt: "Hyper-realistic jewelry photography, gold pendant telling the story of the seas, legendary creatures, ocean mythology motifs, bas-relief, shot with 100mm macro lens, sharp focus on intricate textures, high-contrast studio lighting, photorealistic metal reflections, caustic light patterns, deep shadows for depth, 8k resolution."
 
-Örnek – Kullanıcı "meleklerle şeytanların savaşını ifade eden ve azizlerin ruhunu koruyan kanatların olduğu, oksitlenmiş gümüş madalyon, yüksek detay, dramatik sahne, karşıdan görünüm, makro fotoğraf" yazdı:
-- optimizedPromptTr: "meleklerle şeytanların savaşını ifade eden ve azizlerin ruhunu koruyan kanatların olduğu, oksitlenmiş gümüş madalyon, yüksek detay, dramatik sahne, karşıdan görünüm, makro fotoğraf"
-- optimizedPrompt: "Hyper-realistic jewelry photography, oxidized silver medallion representing the war of angels and devils, wings protecting the souls of saints, highly detailed bas-relief carving, dramatic scene, front view, shot with 100mm macro lens, extreme close-up, sharp focus on intricate textures, high-contrast studio lighting, photorealistic metal reflections, caustic light patterns, deep shadows for depth, 8k resolution, cinematic composition."
+Örnek – Kullanıcı "meleklerle şeytanların savaşını ifade eden ve azizlerin ruhunu koruyan kanatların olduğu, oksitlenmiş gümüş madalyon, yüksek detay, dramatik sahne" yazdı:
+- optimizedPromptTr: "meleklerle şeytanların savaşını ifade eden ve azizlerin ruhunu koruyan kanatların olduğu, oksitlenmiş gümüş madalyon, yüksek detay, dramatik sahne, makro fotoğraf"
+- optimizedPrompt: "Hyper-realistic jewelry photography, oxidized silver medallion representing the war of angels and devils, wings protecting the souls of saints, highly detailed bas-relief carving, dramatic scene, shot with 100mm macro lens, sharp focus on intricate textures, high-contrast studio lighting, photorealistic metal reflections, caustic light patterns, deep shadows for depth, 8k resolution."
 
 ÖNEMLİ: optimizedPrompt ASLA kısa veya eksik olmamalı. Her zaman "Hyper-realistic jewelry photography" ile başla, [TAKİ DETAYI] kısmında kullanıcının TÜM öğelerini İngilizce ekle (hiçbirini atlama), sonra "shot with 100mm macro lens..." ile devam et. Hayal unsuru tasarımlarda melek, şeytan, aziz, kanat vb. tüm öğeler korunmalı.`;
 
@@ -112,6 +126,21 @@ MESHY İÇİN ZORUNLU:
 - Yapısal kompozisyon: Meshy en iyi yapısal nesnelerde çalışır – karmaşık organik şekillerde zayıf
 
 Kullanıcı çok karmaşık tasarım isterse (çok figür, yoğun sahne): "moderate detail", "clear separation between elements", "structured composition" vurgula. Tema korunsun ama detay yoğunluğu Meshy için makul seviyede olsun.
+
+FIGURE PRESERVATION RULE:
+Kullanıcının prompt'unda geçen TÜM canlı figürleri, sembolleri ve nesneleri çıktıda koru. Hiçbirini silme, birleştirme veya 'medallion' gibi genel bir kelimeyle özetleme.
+
+Figürler arası her türlü ilişki, pozisyon veya aksiyon ifadesini compositionHints olarak aynen aktar; bunları optimizedPrompt ve optimizedPromptTr metinlerine göm (JSON şemasına yeni alan ekleme).
+Örnek ilişki ifadeleri:
+- sarılmış, dolanmış, kavramış, tutmuş
+- bakıyor, dişleyecek, saldırıyor, koruyor
+- üzerinde, altında, karşısında, yanında
+- coiled, facing, wrapped, holding, striking, protecting, standing over, fighting
+
+Bu tür ifadeler varsa prompt'a şu formatta ekle:
+'Composition: [figür1] [aksiyon] [figür2], [pozisyon detayı]'
+
+Bu kural tüm figür türleri için geçerlidir: hayvanlar, mitolojik figürler, dini figürler, semboller, geometrik formlar, doğa unsurları.
 
 3D ZORUNLU ŞABLON:
 "Hyper-realistic jewelry photography, [TAKİ DETAYI BURAYA], plain white or light gray background #F5F5F5, shot with 100mm macro lens, product centered with 15% margin, directional studio lighting with hard silhouette edges, crisp micro-contrast between relief planes, short defined shadows that carve form, clear geometric separation between elements, distinct relief layers with readable depth, crisp sharp edges, no fuzzy or mushy transitions, moderate detail density for 3D conversion, structured composition, tack sharp focus, 8k resolution, single clear view."

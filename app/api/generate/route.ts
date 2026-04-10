@@ -10,12 +10,24 @@ import type { OptimizedPromptResult } from "@/lib/ai/remaura/prompt-optimizer";
 import type { StyleAnalysisResult } from "@/lib/ai/remaura/style-analyzer";
 import { appendRemauraJob } from "@/lib/remaura/jobs-store";
 import { getAdminSettings } from "@/lib/site/settings-store";
-import { appendRingThreeQuarterRule } from "@/lib/remaura/internal-visual-rules";
+import {
+  buildRingThreeQuarterBlock,
+  RING_VIEW_SENTINEL,
+  stripRingThreeQuarterRule,
+} from "@/lib/remaura/internal-visual-rules";
 import { buildPlatformFormatPromptClause } from "@/lib/remaura/platform-format-prompt";
-import { REMAURA_VISUAL_SET_CLAUSE } from "@/lib/remaura/remaura-visual-dna";
+import { REMAURA_VISUAL_SET_CLAUSE, REMAURA_VISUAL_SET_RING_ADDENDUM } from "@/lib/remaura/remaura-visual-dna";
 import { MAX_STYLE_REFERENCE_SLOTS } from "@/components/remaura/remaura-types";
+import { CAMERA_PANEL_MAIN_PROMPT_SUFFIX } from "@/lib/remaura/camera-prompt";
+import {
+  detectJewelryShotFromUserPrompt,
+  promptTextContainsRingKeyword,
+} from "@/lib/remaura/jewelry-shot-detection";
+import { normalizePromptLocale } from "@/lib/i18n/prompt-locale";
 
 loadEnvConfig(process.cwd());
+
+const DEBUG_MODE = process.env.NODE_ENV !== "production";
 
 /** gpt-image-1.5 desteklenen boyutlar: 1024x1024, 1024x1536, 1536x1024, auto */
 type ValidSize = "1024x1024" | "1024x1536" | "1536x1024" | "auto";
@@ -70,8 +82,7 @@ export async function POST(req: Request) {
     userId = (body.userId as string | undefined)?.trim() || "";
     const rawPrompt = body.prompt as string | undefined;
     const revisedPrompt = body.revisedPrompt as string | undefined;
-    const promptLocale = (body.locale ?? body.revisedPromptLocale) as "tr" | "en" | undefined;
-    const effectiveLocale = promptLocale === "en" ? "en" : "tr";
+    const effectiveLocale = normalizePromptLocale(body.locale ?? body.revisedPromptLocale);
     const customNegative = body.negativePrompt as string | undefined;
     format = (body.format as string | undefined) ?? "";
     const optimizedResult = body.optimizedResult as OptimizedPromptResult | undefined;
@@ -79,7 +90,13 @@ export async function POST(req: Request) {
     const styleImages = body.styleImages as Array<{ base64: string; mimeType?: string }> | undefined;
     const hasStyleRef = styleImages && styleImages.length > 0 && styleImages[0]?.base64;
     const exportMode3D = body.exportMode3D === true;
-    const applyRingThreeQuarterView = body.applyRingThreeQuarterView === true;
+    const jewelryShot = detectJewelryShotFromUserPrompt(
+      rawPrompt,
+      revisedPrompt,
+      optimizedResult?.optimizedPrompt
+    );
+    const useRingAngleRule = jewelryShot === "ring45";
+    const useExplicitFront = jewelryShot === "frontCatalog";
 
     if (!rawPrompt?.trim() && !optimizedResult?.optimizedPrompt && !revisedPrompt?.trim()) {
       return NextResponse.json(
@@ -94,9 +111,12 @@ export async function POST(req: Request) {
     const hasFullTemplate = (p: string) => /Hyper-realistic jewelry photography/i.test(p) && /100mm macro lens/i.test(p);
     const suffix3D =
       " 8K resolution, plain white or light gray background, directional studio lighting with hard silhouette edges, crisp micro-contrast between relief planes, short defined shadows, product centered with 15% margin, clear geometric separation between elements, distinct relief layers with readable depth, crisp sharp edges, no fuzzy transitions, moderate detail density for 3D conversion, structured composition, tack sharp focus.";
-    /** Referans kalite (Medusa madalyon seviyesi) – tüm promptlar bu kalitede çıksın */
+    const suffixReferenceQualityCore = useRingAngleRule
+      ? " 100mm macro lens, sharp focus on textures and relief, photorealistic metal reflections, 8k resolution."
+      : " shot with 100mm macro lens, centered framing, entire jewelry fully visible with safe margin — no cropping at frame edges, sharp focus on intricate textures and relief, high-contrast studio lighting, photorealistic metal reflections, hard-surface precision, specular highlights on facets, deep shadows in recesses, 8k resolution.";
+    /** Varsayılan: otomatik 3/4 ipucu (kamera paneli "genel" iken) */
     const suffixReferenceQuality =
-      " 3/4 isometric perspective from a high-angle where appropriate for the piece, shot with 100mm macro lens, centered framing, entire jewelry fully visible with safe margin — no cropping at frame edges, extreme close-up, sharp focus on intricate textures and relief, high-contrast studio lighting, photorealistic metal reflections, hard-surface precision, specular highlights on facets, deep shadows in recesses, 8k resolution, cinematic composition.";
+      " 3/4 isometric perspective from a high-angle where appropriate for the piece," + suffixReferenceQualityCore;
     const stylePartsLimitMain = 20;
     const stylePartsLimitEdit = 24;
 
@@ -106,7 +126,7 @@ export async function POST(req: Request) {
       negativePrompt = exportMode3D
         ? JEWELRY_CONSTITUTION.mode3DExport.negativeConstraints.join(", ")
         : JEWELRY_CONSTITUTION.defaultNegativeConstraints.join(", ");
-      const styleParts = styleToPromptParts(styleAnalysis);
+      const styleParts = styleToPromptParts(styleAnalysis, { excludeCameraPose: useRingAngleRule });
       if (styleParts.length > 0) {
         designWithStyle = `${designWithStyle} Style: ${styleParts.slice(0, stylePartsLimitMain).join(", ")}.`;
       }
@@ -115,23 +135,41 @@ export async function POST(req: Request) {
       negativePrompt = exportMode3D
         ? JEWELRY_CONSTITUTION.mode3DExport.negativeConstraints.join(", ")
         : JEWELRY_CONSTITUTION.defaultNegativeConstraints.join(", ");
-      const styleParts = styleToPromptParts(styleAnalysis);
+      const styleParts = styleToPromptParts(styleAnalysis, { excludeCameraPose: useRingAngleRule });
       if (styleParts.length > 0) {
         designWithStyle = `${designWithStyle} Style: ${styleParts.slice(0, stylePartsLimitMain).join(", ")}.`;
       }
     } else {
-      const { output } = generatePromptPipeline((rawPrompt ?? "").trim(), effectiveLocale, exportMode3D);
+      const { output } = await generatePromptPipeline(
+        (rawPrompt ?? "").trim(),
+        effectiveLocale,
+        exportMode3D,
+        apiKey
+      );
       designWithStyle = output.imagePromptEn ?? output.finalPromptEn;
       negativePrompt = output.negativePrompt;
       if (styleAnalysis) {
-        const styleParts = styleToPromptParts(styleAnalysis);
+        const styleParts = styleToPromptParts(styleAnalysis, { excludeCameraPose: useRingAngleRule });
         if (styleParts.length > 0) {
           designWithStyle = `${designWithStyle} Style: ${styleParts.slice(0, stylePartsLimitMain).join(", ")}.`;
         }
       }
     }
 
-    const photoSuffix = !hasFullTemplate(designWithStyle) ? (exportMode3D ? suffix3D : suffixReferenceQuality) : "";
+    if (useRingAngleRule) {
+      designWithStyle = designWithStyle
+        .replace(/\b(front view|frontal view|frontal|eye-level|eye level|bird'?s[- ]eye|top[- ]down|straight[- ]on|head[- ]on|direct front|perpendicular view)\b/gi, "")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+    }
+
+    const photoSuffix = !hasFullTemplate(designWithStyle)
+      ? exportMode3D
+        ? suffix3D
+        : useRingAngleRule || useExplicitFront
+          ? suffixReferenceQualityCore
+          : suffixReferenceQuality
+      : "";
     const designAfterExport = exportMode3D
       ? designWithStyle
           .replace(/black background/gi, "plain white background")
@@ -145,13 +183,21 @@ export async function POST(req: Request) {
         .replace(/reflective surface/gi, "matte surface");
     }
 
-    let fullPrompt = mainPrompt;
     const mentionsRing =
-      /\b(yüzük|yuzuk)\b/i.test(mainPrompt) ||
-      /\bring\b/i.test(mainPrompt) ||
-      /\b(wedding band|eternity ring|signet)\b/i.test(mainPrompt);
+      promptTextContainsRingKeyword(mainPrompt) || promptTextContainsRingKeyword(rawPrompt ?? "");
     const wantsFrontKeywords = /\b(front view|frontal|karşıdan|karsidan|direct front)\b/i.test(mainPrompt);
     const wantsFrontView = wantsFrontKeywords && !mentionsRing;
+
+    let ringCameraBlock = "";
+    if (useRingAngleRule) {
+      const rawBlock = buildRingThreeQuarterBlock((rawPrompt ?? "").trim());
+      ringCameraBlock = stripRingThreeQuarterRule(rawBlock) === rawBlock
+        ? rawBlock
+        : rawBlock.slice(rawBlock.indexOf(RING_VIEW_SENTINEL) + RING_VIEW_SENTINEL.length).trim();
+    }
+
+    let fullPrompt = mainPrompt;
+
     if (wantsFrontView) {
       fullPrompt += ` CRITICAL: Strict frontal view — camera directly facing the jewelry, perpendicular, no perspective angle, flat-on product shot.`;
     }
@@ -166,13 +212,14 @@ export async function POST(req: Request) {
         fullPrompt += ` No ${extra.join(", ")}.`;
       }
     }
+    if (useRingAngleRule) {
+      fullPrompt += " Avoid: ring lying flat, frontal eye-level shot, top-down view.";
+    }
 
     const formatKey = typeof format === "string" ? format.toLowerCase().trim() : "";
 
-    if (applyRingThreeQuarterView) {
-      fullPrompt = appendRingThreeQuarterRule(fullPrompt, (rawPrompt ?? "").trim());
-      fullPrompt +=
-        " Avoid: ring lying flat on the surface, shank parallel to the floor, flat-lay jewelry on table, ring asleep on the ground plane.";
+    if (!useRingAngleRule && useExplicitFront) {
+      fullPrompt += CAMERA_PANEL_MAIN_PROMPT_SUFFIX.front;
     }
 
     const platformFormatClause = buildPlatformFormatPromptClause(formatKey);
@@ -182,17 +229,41 @@ export async function POST(req: Request) {
 
     if (!exportMode3D) {
       fullPrompt += ` ${REMAURA_VISUAL_SET_CLAUSE}`;
+      if (useRingAngleRule) {
+        fullPrompt += REMAURA_VISUAL_SET_RING_ADDENDUM;
+      }
     }
 
-    const promptForImageModel = buildLabeledImagePrompt(designAfterExport, fullPrompt);
+    let promptForImageModel: string;
+    if (ringCameraBlock) {
+      const cameraReminder =
+        "\n\nCAMERA REMINDER: Three-quarter view, camera at 2 o'clock elevated 45°, ring turned 30° right. Front face + side band both visible. Finger hole clearly open at bottom. Not frontal.";
+      promptForImageModel = `${ringCameraBlock}\n\n${buildLabeledImagePrompt(designAfterExport, fullPrompt)}${cameraReminder}`;
+    } else {
+      promptForImageModel = buildLabeledImagePrompt(designAfterExport, fullPrompt);
+    }
 
     const size: ValidSize = (formatKey && SIZE_MAP[formatKey]) || "1024x1024";
+
+    if (DEBUG_MODE) {
+      console.log("\n╔══════════════════════════════════════════════╗");
+      console.log("║  REMAURA DEBUG — PROMPT → OpenAI             ║");
+      console.log("╠══════════════════════════════════════════════╣");
+      console.log("║ jewelryShot:", jewelryShot, "| size:", size);
+      console.log("║ hasStyleRef:", !!hasStyleRef, "| exportMode3D:", exportMode3D);
+      console.log("╠══════════════════════════════════════════════╣");
+      console.log(hasStyleRef ? "║ MODE: images.edit (style ref)" : "║ MODE: images.generate");
+      console.log("╚══════════════════════════════════════════════╝");
+      console.log("\n--- promptForImageModel ---\n");
+      console.log(promptForImageModel);
+      console.log("\n--- END ---\n");
+    }
 
     let imageBase64: string | undefined;
 
     if (hasStyleRef) {
       const styleRefs = styleImages!.filter((img) => img?.base64).slice(0, MAX_STYLE_REFERENCE_SLOTS);
-      const styleParts = styleToPromptParts(styleAnalysis);
+      const styleParts = styleToPromptParts(styleAnalysis, { excludeCameraPose: useRingAngleRule });
       const styleGuide = styleParts.length > 0
         ? ` Maintain this exact style (verbatim cues from style analysis): ${styleParts.slice(0, stylePartsLimitEdit).join(", ")}.`
         : "";
@@ -206,6 +277,12 @@ export async function POST(req: Request) {
       const styleLockPreamble =
         "STYLE LOCK: Transfer the reference collection's metal hue, finish, micro-texture, engraving/relief character, and gemstone treatment to a NEW piece. Do not flatten contrast: preserve punchy studio separation, crisp edges, and depth cues required for mesh-friendly imagery — only the jewelry design (silhouette/layout) changes.\n\n";
       const editPrompt = `${styleLockPreamble}${multiRefNote}Use the EXACT same visual language from the reference image(s). Generate a NEW jewelry design (different piece, same style): ${promptForImageModel}.${styleGuide}${outputHint} Do not copy the silhouette or layout of the reference piece — invent a different design that could belong in the same collection.`;
+
+      if (DEBUG_MODE) {
+        console.log("\n--- editPrompt (style ref) ---\n");
+        console.log(editPrompt);
+        console.log("\n--- END editPrompt ---\n");
+      }
 
       const files = await Promise.all(
         styleRefs.map(async (img, i) => {
@@ -256,10 +333,11 @@ export async function POST(req: Request) {
     const promptUsedForClient =
       (rawPrompt ?? "").trim() || (revisedPrompt ?? "").trim() || "";
 
-    return NextResponse.json({
+    const response: Record<string, unknown> = {
       image: `data:image/png;base64,${imageBase64}`,
       promptUsed: promptUsedForClient,
-    });
+    };
+    return NextResponse.json(response);
   } catch (error: unknown) {
     console.error("API ERROR:", error);
     const err = error as { status?: number; code?: string; message?: string; error?: { message?: string } };

@@ -8,6 +8,7 @@ import { createVirtualPosCheckout } from "@/lib/billing/provider";
 import { appendRemauraJob } from "@/lib/remaura/jobs-store";
 import { getAdminSettings } from "@/lib/site/settings-store";
 import { appendRingThreeQuarterRule } from "@/lib/remaura/internal-visual-rules";
+import { detectJewelryShotFromUserPrompt } from "@/lib/remaura/jewelry-shot-detection";
 
 loadEnvConfig(process.cwd());
 
@@ -64,8 +65,8 @@ export async function POST(req: Request) {
     }
 
     let prompt = (body?.prompt as string) || undefined;
-    const applyRingThreeQuarterView = body?.applyRingThreeQuarterView === true;
-    if (applyRingThreeQuarterView && prompt?.trim()) {
+    const shot = detectJewelryShotFromUserPrompt(prompt);
+    if (shot === "ring45" && prompt?.trim()) {
       prompt = appendRingThreeQuarterRule(prompt.trim());
     }
     const userId = (body?.userId as string | undefined)?.trim();

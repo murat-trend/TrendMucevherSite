@@ -92,33 +92,43 @@ export type StyleAnalysisResult = {
 /**
  * Görsel uyumu için en yüksek sinyalli alanlar önce (slice ile kesilince kritikler korunur).
  */
-export function styleToPromptParts(style: StyleAnalysisResult | null | undefined): string[] {
+const CAMERA_POSE_KEYS: ReadonlySet<keyof StyleAnalysisResult> = new Set([
+  "cameraAngle",
+  "composition",
+]);
+
+export function styleToPromptParts(
+  style: StyleAnalysisResult | null | undefined,
+  options?: { excludeCameraPose?: boolean },
+): string[] {
   if (!style) return [];
+  const skip = options?.excludeCameraPose ? CAMERA_POSE_KEYS : new Set<string>();
   const parts: string[] = [];
-  const add = (v: unknown) => {
+  const add = (key: keyof StyleAnalysisResult, v: unknown) => {
+    if (skip.has(key)) return;
     if (typeof v === "string" && v.trim()) parts.push(v.trim());
   };
-  add(style.metalType);
-  add(style.surfaceTexture);
-  add(style.colorPalette);
-  add(style.lightAtmosphere);
-  add(style.lightingDirection);
-  add(style.shadowStyle);
-  add(style.backgroundType);
-  add(style.cameraAngle);
-  add(style.composition);
-  add(style.craftsmanshipQuality);
-  add(style.styleLanguage);
-  add(style.gemstonePlacement);
-  add(style.engravingCharacter);
-  add(style.motifDensity);
-  add(style.ornamentLanguage);
-  add(style.engravingDensity);
-  add(style.motifComplexity);
-  add(style.surfaceCarvingStyle);
-  add(style.reliefDepth);
+  add("metalType", style.metalType);
+  add("surfaceTexture", style.surfaceTexture);
+  add("colorPalette", style.colorPalette);
+  add("lightAtmosphere", style.lightAtmosphere);
+  add("lightingDirection", style.lightingDirection);
+  add("shadowStyle", style.shadowStyle);
+  add("backgroundType", style.backgroundType);
+  add("cameraAngle", style.cameraAngle);
+  add("composition", style.composition);
+  add("craftsmanshipQuality", style.craftsmanshipQuality);
+  add("styleLanguage", style.styleLanguage);
+  add("gemstonePlacement", style.gemstonePlacement);
+  add("engravingCharacter", style.engravingCharacter);
+  add("motifDensity", style.motifDensity);
+  add("ornamentLanguage", style.ornamentLanguage);
+  add("engravingDensity", style.engravingDensity);
+  add("motifComplexity", style.motifComplexity);
+  add("surfaceCarvingStyle", style.surfaceCarvingStyle);
+  add("reliefDepth", style.reliefDepth);
   if (Array.isArray(style.craftsmanshipTypes)) {
-    style.craftsmanshipTypes.forEach(add);
+    style.craftsmanshipTypes.forEach((v) => add("craftsmanshipTypes", v));
   }
   return parts;
 }
@@ -166,7 +176,7 @@ export type StyleImageInput = { base64: string; mimeType: string };
 
 /**
  * Birden fazla referans görselinden koleksiyon stil analizi.
- * En fazla 4 görsel desteklenir.
+ * Kullanılan görsel sayısı üst sınırı `MAX_STYLE_REFERENCE_SLOTS` ile aynıdır (`remaura-types`; UI ve `analyze-style` route ile paylaşılır).
  */
 export async function analyzeStyleReferences(
   apiKey: string,

@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import { RemauraWatermarkOverlay } from "@/components/remaura/RemauraWatermarkOverlay";
+import { applyWatermark } from "@/lib/remaura/apply-rem-watermark";
 
 type RemauraPhotoEditSectionText = {
   title: string;
@@ -455,7 +457,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
           setReflectionReferenceEnabled(true);
           setMetalRealismEnabled(true);
         } catch {
-          setReflectionMapError("EXR dosyasi okunamadi. Lutfen baska bir EXR deneyin.");
+          setReflectionMapError("EXR dosyası okunamadı. Lütfen başka bir EXR deneyin.");
         }
       })();
       return;
@@ -469,7 +471,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
           setReflectionReferenceEnabled(true);
           setMetalRealismEnabled(true);
         } catch {
-          setReflectionMapError("HDR dosyasi okunamadi. Lutfen baska bir HDR deneyin.");
+          setReflectionMapError("HDR dosyası okunamadı. Lütfen başka bir HDR deneyin.");
         }
       })();
       return;
@@ -503,7 +505,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
           setReflectionReferenceEnabled(true);
           setMetalRealismEnabled(true);
         } catch {
-          setReflectionMapError("EXR ortam isigi yansimaya donusturulemedi.");
+          setReflectionMapError("EXR ortam ışığı yansıma haritasına dönüştürülemedi.");
         }
       })();
       return;
@@ -517,7 +519,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
           setReflectionReferenceEnabled(true);
           setMetalRealismEnabled(true);
         } catch {
-          setReflectionMapError("HDR ortam isigi yansimaya donusturulemedi.");
+          setReflectionMapError("HDR ortam ışığı yansıma haritasına dönüştürülemedi.");
         }
       })();
       return;
@@ -613,6 +615,8 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
       ctx.drawImage(img, drawX, drawY, drawW, drawH);
       ctx.restore();
     }
+
+    await applyWatermark(canvas);
 
     const blob = await new Promise<Blob | null>((resolve) => {
       canvas.toBlob((b) => resolve(b), "image/jpeg", 0.92);
@@ -807,7 +811,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
               disabled={controlsDisabled}
               className="min-h-11 rounded-lg border border-[#b76e79]/50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#c4838b] transition-colors hover:border-[#b76e79]/80 hover:bg-[#b76e79]/10 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Otomatik Duzelt
+              Otomatik Düzelt
             </button>
             <button
               type="button"
@@ -815,7 +819,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
               onClick={() => sceneEnvInputRef.current?.click()}
               className="min-h-11 rounded-lg border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-foreground transition-colors hover:border-white/30 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              360 Ortam Isigi Yukle
+              360 Ortam Işığı Yükle
             </button>
             <button
               type="button"
@@ -834,8 +838,8 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
               }`}
             >
               {reflectionMapSrc
-                ? `Yansima Referansi: ${reflectionReferenceEnabled ? "Acik" : "Kapali"}`
-                : "Yansima Referansi"}
+                ? `Yansıma Referansı: ${reflectionReferenceEnabled ? "Açık" : "Kapalı"}`
+                : "Yansıma Referansı"}
             </button>
             <input
               ref={reflectionInputRef}
@@ -860,7 +864,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
                 }}
                 className="min-h-11 rounded-lg border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-foreground transition-colors hover:border-white/30"
               >
-                Referansi Sil
+                Referansı Sil
               </button>
             )}
             {sceneEnvFile && (
@@ -1042,6 +1046,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
                       </div>
                     </>
                   )}
+                  <RemauraWatermarkOverlay />
                 </div>
             ) : (
               <p className="text-center text-xs text-muted">{t.noImage}</p>
@@ -1052,7 +1057,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
             <div className="mt-3 rounded-xl border border-white/10 bg-black/25 p-3">
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">
-                  Once / Sonra Karsilastirma
+                  Önce / Sonra Karşılaştırma
                 </p>
                 <button
                   type="button"
@@ -1064,7 +1069,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
                       : "border-white/15 text-foreground hover:border-white/30"
                   }`}
                 >
-                  {compareEnabled ? "Acik" : "Kapali"}
+                  {compareEnabled ? "Açık" : "Kapalı"}
                 </button>
               </div>
               {compareEnabled ? (
@@ -1084,7 +1089,9 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
                   />
                 </>
               ) : (
-                <p className="text-xs text-muted">Urun uzerindeki duzenleme etkisini bolunmus gorunumde izlemek icin acin.</p>
+                <p className="text-xs text-muted">
+                  Ürün üzerindeki düzenleme etkisini bölünmüş görünümde izlemek için açın.
+                </p>
               )}
             </div>
           )}
@@ -1109,7 +1116,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
                   disabled={controlsDisabled}
                   className="min-h-10 rounded-lg border border-white/15 px-3 py-2 text-left text-xs text-foreground transition-colors hover:border-white/30 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Sosyal Medya Canli
+                  Sosyal Medya Canlı
                 </button>
                 <button
                   type="button"
@@ -1159,7 +1166,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
                 disabled={controlsDisabled}
                 className="h-4 w-4 accent-[#b76e79] disabled:cursor-not-allowed disabled:opacity-40"
               />
-              360 ENV'i Metal Yansimaya Bagla
+              360 ENV&apos;i Metal Yansımayı Bağla
             </label>
             <label className="flex items-center gap-2 rounded-lg border border-white/10 p-2 text-xs text-foreground/90">
               <input
@@ -1180,7 +1187,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
                 disabled={controlsDisabled}
                 className="h-4 w-4 accent-[#b76e79] disabled:cursor-not-allowed disabled:opacity-40"
               />
-              Gercek Metal Yansima Modu
+              Gerçek Metal Yansıma Modu
             </label>
 
             <label className="block">
@@ -1229,7 +1236,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
 
             <label className="block">
               <div className="mb-1 flex items-center justify-between text-xs text-foreground/90">
-                <span>Parlaklik</span>
+                <span>Parlaklık</span>
                 <span>{brightness}%</span>
               </div>
               <input
@@ -1343,7 +1350,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
               <>
                 <label className="block">
                   <div className="mb-1 flex items-center justify-between text-xs text-foreground/90">
-                    <span>Yansima Gucu</span>
+                    <span>Yansıma Gücü</span>
                     <span>{reflectionStrength}%</span>
                   </div>
                   <input

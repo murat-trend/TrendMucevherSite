@@ -195,6 +195,10 @@ export function Remaura3DAISection() {
           throw new Error((err as { error?: string })?.error ?? `İndirme başarısız (${res.status})`);
         }
         const blob = await res.blob();
+        if (blob.size < 1024) {
+          setMesh3DError("Model dosyası indirilemedi veya geçersiz.");
+          return;
+        }
         const objectUrl = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
         anchor.href = objectUrl;
@@ -333,26 +337,16 @@ export function Remaura3DAISection() {
           aria-hidden
         />
         <span className="text-[11px] font-black uppercase tracking-widest text-muted">
-          REMURA 3D AI — Görselden 3D Model
+          REMAURA 3D AI — Görselden 3D Model
         </span>
       </div>
       <p className="mb-3 text-[10px] text-muted/80">
-        Görsel yükleyin, arka planı otomatik temizlenir ve Meshy AI ile 3D modele dönüştürülür.
+        Görsel yükleyin, arka planı otomatik temizlenir ve 3D modele dönüştürülür.
       </p>
       <div className="mb-4 rounded-lg border border-teal-500/20 bg-teal-500/[0.06] px-3 py-2.5">
         <p className="text-[10px] leading-relaxed text-teal-100/85">
-          <span className="font-semibold text-teal-300">Meshy API anahtarı:</span> Sunucuda bu özellik için proje kökünde{" "}
-          <code className="rounded bg-black/35 px-1 py-px font-mono text-[9px]">.env.local</code> dosyasına{" "}
-          <code className="rounded bg-black/35 px-1 py-px font-mono text-[9px]">MESHY_API_KEY=...</code> eklenmelidir. Anahtarı{" "}
-          <a
-            href="https://app.meshy.ai/settings"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-teal-400 underline decoration-teal-500/50 underline-offset-2 hover:text-teal-300"
-          >
-            app.meshy.ai/settings
-          </a>{" "}
-          üzerinden oluşturabilirsiniz.
+          <span className="font-semibold text-teal-300">Not:</span> Bu özellik sunucu tarafı yapılandırmasına bağlıdır.
+          Çalışmıyorsa ortam ayarlarını kontrol edin veya yönetici / destek ile iletişime geçin.
         </p>
       </div>
 

@@ -1,15 +1,14 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { MeshRealtimeViewer, type MeshRealtimeViewerHandle } from "@/components/remaura/MeshRealtimeViewer";
+import { MeshRealtimeViewer } from "@/components/remaura/MeshRealtimeViewer";
 
-type StlAnalysis = {
-  vertices: number;
-  faces: number;
-  triangles: number;
-  polygons: number;
-  components: number;
-  watertight: boolean;
+type OptimizeResult = {
+  url: string;
+  key: string;
+  originalSize: number;
+  optimizedSize: number;
+  reductionPercent: number;
 };
 
 export function RemauraMeshAISection() {
@@ -17,6 +16,7 @@ export function RemauraMeshAISection() {
   const [uploadBlobUrl, setUploadBlobUrl] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Seçenekler — UI'da görünür, ileride route parametresine bağlanacak
   const [meshCleanup, setMeshCleanup] = useState(true);
   const [repairMesh, setRepairMesh] = useState(true);
   const [smoothSurface, setSmoothSurface] = useState(false);
@@ -25,82 +25,27 @@ export function RemauraMeshAISection() {
   const [maxHoleSize, setMaxHoleSize] = useState(1000);
 
   const [isProcessing, setIsProcessing] = useState(false);
-  const [resultBlobUrl, setResultBlobUrl] = useState<string | null>(null);
-  const [resultBlob, setResultBlob] = useState<Blob | null>(null);
+  const [result, setResult] = useState<OptimizeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [processLog, setProcessLog] = useState<string | null>(null);
-  const [inputStats, setInputStats] = useState<StlAnalysis | null>(null);
-  const [outputStats, setOutputStats] = useState<StlAnalysis | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const viewerRef = useRef<MeshRealtimeViewerHandle | null>(null);
 
-  const readStlHeaderLocal = useCallback(async (file: File | Blob): Promise<StlAnalysis | null> => {
-    try {
-      const buf = await file.slice(0, 84).arrayBuffer();
-      if (buf.byteLength < 84) return null;
-      const view = new DataView(buf);
-      const first5 = new Uint8Array(buf, 0, 5);
-      const isSolid = String.fromCharCode(...first5) === "solid";
-      if (isSolid) return null;
-      const triCount = view.getUint32(80, true);
-      const expectedSize = 84 + triCount * 50;
-      if (Math.abs(file.size - expectedSize) > 10) return null;
-      return {
-        vertices: triCount * 3,
-        faces: triCount,
-        triangles: triCount,
-        polygons: triCount,
-        components: -1,
-        watertight: false,
-      };
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const analyzeStl = useCallback(async (file: File | Blob): Promise<StlAnalysis | null> => {
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/remaura/mesh/analyze", { method: "POST", body: formData });
-      if (!res.ok) return null;
-      const data = await res.json();
-      if (data.error) return null;
-      return data as StlAnalysis;
-    } catch {
-      return null;
-    }
-  }, []);
+  // Yüklenen dosya .stl veya .glb ise viewer fileType
+  const uploadedFileType = uploadedModel?.name.toLowerCase().endsWith(".stl") ? "stl" : "glb";
 
   const handleFile = useCallback((file: File) => {
-    if (!file.name.toLowerCase().endsWith(".stl")) {
-      setError("Sadece STL dosyaları kabul edilir.");
+    const name = file.name.toLowerCase();
+    if (!name.endsWith(".glb") && !name.endsWith(".stl")) {
+      setError("Sadece .glb ve .stl dosyaları kabul edilir.");
       return;
     }
     setUploadedModel(file);
     if (uploadBlobUrl) URL.revokeObjectURL(uploadBlobUrl);
     setUploadBlobUrl(URL.createObjectURL(file));
-    if (resultBlobUrl) URL.revokeObjectURL(resultBlobUrl);
-    setResultBlobUrl(null);
-    setResultBlob(null);
+    setResult(null);
     setError(null);
-    setProcessLog(null);
-    setInputStats(null);
-    setOutputStats(null);
-
-    setIsAnalyzing(true);
-    readStlHeaderLocal(file).then((quick) => {
-      if (quick) setInputStats(quick);
-
-      analyzeStl(file).then((full) => {
-        if (full) setInputStats(full);
-        setIsAnalyzing(false);
-      });
-    });
-  }, [resultBlobUrl, uploadBlobUrl, analyzeStl, readStlHeaderLocal]);
+  }, [uploadBlobUrl]);
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -135,211 +80,155 @@ export function RemauraMeshAISection() {
     setUploadedModel(null);
     if (uploadBlobUrl) URL.revokeObjectURL(uploadBlobUrl);
     setUploadBlobUrl(null);
-    if (resultBlobUrl) URL.revokeObjectURL(resultBlobUrl);
-    setResultBlobUrl(null);
-    setResultBlob(null);
+    setResult(null);
     setError(null);
-    setProcessLog(null);
-    setInputStats(null);
-    setOutputStats(null);
-  }, [resultBlobUrl, uploadBlobUrl]);
+  }, [uploadBlobUrl]);
+
+  const handleDownload = useCallback(async () => {
+    if (!result?.url || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      const res = await fetch(result.url);
+      if (!res.ok) throw new Error("İndirme başarısız.");
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      const baseName = uploadedModel?.name.replace(/\.(glb|stl)$/i, "") ?? "model";
+      a.download = `${baseName}-optimized.glb`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "İndirme başarısız.");
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [result, isDownloading, uploadedModel]);
 
   const handleProcess = useCallback(async () => {
     if (!uploadedModel || isProcessing) return;
     setIsProcessing(true);
     setError(null);
-    if (resultBlobUrl) URL.revokeObjectURL(resultBlobUrl);
-    setResultBlobUrl(null);
-    setResultBlob(null);
-    setProcessLog(null);
-    setOutputStats(null);
+    setResult(null);
 
     try {
       const formData = new FormData();
       formData.append("file", uploadedModel);
-      formData.append("cleanup", String(meshCleanup));
-      formData.append("repair", String(repairMesh));
-      formData.append("smooth", String(smoothSurface));
-      formData.append("decimate", String(decimate));
-      formData.append("targetFaces", String(targetFaces));
-      formData.append("maxHoleSize", String(maxHoleSize));
 
-      const res = await fetch("/api/remaura/mesh/process", {
+      const res = await fetch("/api/mesh-optimize", {
         method: "POST",
         body: formData,
       });
 
+      const data = await res.json().catch(() => ({})) as { error?: string } & Partial<OptimizeResult>;
+
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(
-          (errData as { error?: string })?.error ?? `İşlem başarısız (${res.status})`
-        );
+        throw new Error(data?.error ?? `İşlem başarısız (${res.status})`);
       }
 
-      const log = res.headers.get("X-Mesh-Log");
-      if (log) setProcessLog(decodeURIComponent(log));
+      if (!data.url) throw new Error("Sunucudan geçersiz yanıt alındı.");
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      setResultBlob(blob);
-      setResultBlobUrl(url);
-
-      analyzeStl(blob).then((stats) => {
-        if (stats) setOutputStats(stats);
-      });
+      setResult(data as OptimizeResult);
     } catch (e) {
       setError(e instanceof Error ? e.message : "İşlem başarısız.");
     } finally {
       setIsProcessing(false);
     }
-  }, [uploadedModel, isProcessing, meshCleanup, repairMesh, smoothSurface, decimate, targetFaces, resultBlobUrl]);
-
-  const generateMeshFileName = useCallback((): string => {
-    const now = new Date();
-    const dd = String(now.getDate()).padStart(2, "0");
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const yyyy = String(now.getFullYear());
-    const hh = String(now.getHours()).padStart(2, "0");
-    const min = String(now.getMinutes()).padStart(2, "0");
-    const ss = String(now.getSeconds()).padStart(2, "0");
-    const dateKey = `${dd}${mm}${yyyy}`;
-    const storageKey = `remura-mesh-counter-${dateKey}`;
-    const current = parseInt(localStorage.getItem(storageKey) ?? "0", 10);
-    const next = current + 1;
-    localStorage.setItem(storageKey, String(next));
-    return `remaura-mesh-ai-${dateKey}-${hh}${min}${ss}-${String(next).padStart(4, "0")}.stl`;
-  }, []);
-
-  const handleDownload = useCallback(() => {
-    if (!resultBlob || !resultBlobUrl) return;
-    const anchor = document.createElement("a");
-    anchor.href = resultBlobUrl;
-    anchor.download = generateMeshFileName();
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-  }, [resultBlob, resultBlobUrl, generateMeshFileName]);
+  }, [uploadedModel, isProcessing]);
 
   return (
-    <section className="mx-auto w-full max-w-6xl rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-6">
-      <div className="mb-4 flex items-center gap-2 border-b border-border pb-3">
-        <div
-          className="h-2 w-2 shrink-0 rounded-full bg-violet-500"
-          style={{ boxShadow: "0 0 8px #8b5cf6" }}
-          aria-hidden
-        />
-        <span className="text-[11px] font-black uppercase tracking-widest text-muted">
-          REMURA MESH AI — Auto Remesh &amp; Cleanup
-        </span>
-      </div>
-      <p className="mb-4 text-[10px] text-muted/80">
-        STL modelinizi yükleyin. Mesh temizleme, onarım, yüzey düzeltme ve poligon azaltma işlemleri uygulanır.
-      </p>
-
-      <div className="grid w-full gap-4 md:grid-cols-2">
-        {/* Sol: Model yükleme */}
-        <div className="flex flex-col gap-4">
-          {!uploadedModel ? (
-            <label
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              className={`flex h-[480px] w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 transition-colors xl:h-[560px] ${
-                isDragging
-                  ? "border-violet-500 bg-violet-500/10"
-                  : "border-border hover:border-violet-500/50 hover:bg-violet-500/5 dark:border-white/10 dark:hover:border-violet-500/30"
-              }`}
-            >
-              <input
-                ref={inputRef}
-                type="file"
-                accept=".stl"
-                className="hidden"
-                onChange={handleInputChange}
-              />
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-muted"
+    <section className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* Sol: Yükleme + Orijinal Model */}
+        <div className="flex flex-col rounded-xl border border-border bg-black/20 p-3 dark:border-white/10">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
+              Model Yükle
+            </span>
+            {uploadedModel ? (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="text-[10px] text-muted/70 hover:text-foreground"
               >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" x2="12" y1="3" y2="15" />
-              </svg>
-              <span className="text-sm font-medium text-foreground">STL Model Yükle</span>
-              <span className="text-[10px] text-muted">Sadece .stl formatı</span>
-            </label>
-          ) : (
-            <div className="relative h-[480px] overflow-hidden rounded-xl border border-border bg-black/20 dark:border-white/10 xl:h-[560px]">
+                Temizle
+              </button>
+            ) : null}
+          </div>
+
+          <div
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onClick={() => !uploadedModel && inputRef.current?.click()}
+            className={`relative flex h-[480px] flex-col items-center justify-center overflow-hidden rounded-lg border border-dashed transition-colors xl:h-[560px] ${
+              uploadedModel
+                ? "border-border/50 bg-[#0b0f14]"
+                : isDragging
+                ? "cursor-pointer border-violet-400/60 bg-violet-500/5"
+                : "cursor-pointer border-border/70 bg-[#0b0f14] hover:border-white/20"
+            }`}
+          >
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".glb,.stl"
+              className="hidden"
+              onChange={handleInputChange}
+            />
+            {uploadedModel && uploadBlobUrl ? (
               <div className="relative z-[1] h-full w-full">
                 <MeshRealtimeViewer
                   modelUrl={uploadBlobUrl}
                   zScaleMm={1.0}
-                  fileType="stl"
+                  fileType={uploadedFileType}
                 />
               </div>
-              <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-[2] bg-gradient-to-t from-black/80 to-transparent px-3 pb-2.5 pt-10">
-                <p className="truncate text-xs font-semibold text-white">{uploadedModel.name}</p>
-                <p className="text-[10px] text-white/50">
-                  {(uploadedModel.size / (1024 * 1024)).toFixed(2)} MB
-                </p>
-                {inputStats ? (
-                  <div className="mt-1.5 grid grid-cols-3 gap-x-3 gap-y-0.5">
-                    <span className="text-[10px] font-mono text-violet-300">
-                      Polygons: {inputStats.polygons.toLocaleString("tr-TR")}
-                    </span>
-                    <span className="text-[10px] font-mono text-violet-300">
-                      Triangles: {inputStats.triangles.toLocaleString("tr-TR")}
-                    </span>
-                    <span className="text-[10px] font-mono text-violet-300">
-                      Vertices: {inputStats.vertices.toLocaleString("tr-TR")}
-                    </span>
-                    <span className="text-[10px] font-mono text-violet-300">
-                      Parts: {inputStats.components >= 0 ? inputStats.components : (isAnalyzing ? "..." : "—")}
-                    </span>
-                    <span className="text-[10px] font-mono text-violet-300">
-                      {isAnalyzing ? "Analiz..." : inputStats.watertight ? "Watertight" : "Open mesh"}
-                    </span>
-                  </div>
-                ) : isAnalyzing ? (
-                  <p className="mt-1 text-[10px] text-violet-300/70">Analiz ediliyor...</p>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                onClick={handleClear}
-                className="absolute right-2 top-2 z-[2] flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white transition-colors hover:bg-red-600 focus:outline-none"
-                aria-label="Modeli kaldır"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6 6 18" />
-                  <path d="m6 6 12 12" />
+            ) : (
+              <div className="flex flex-col items-center gap-3 p-6 text-center">
+                <svg
+                  className="h-10 w-10 text-muted/40"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
+                  />
                 </svg>
-              </button>
-            </div>
-          )}
+                <p className="text-xs font-semibold text-foreground">
+                  GLB veya STL Yükle
+                </p>
+                <p className="text-[10px] text-muted/60">.glb · .stl</p>
+              </div>
+            )}
+          </div>
+
+          {uploadedModel ? (
+            <p className="mt-2 truncate text-[10px] text-muted/60">
+              {uploadedModel.name} · {(uploadedModel.size / 1024).toFixed(0)} KB
+            </p>
+          ) : null}
         </div>
 
-        {/* Sag: Sonuç / Önizleme */}
+        {/* Sağ: Sonuç / Önizleme — çıktı her zaman GLB */}
         <div className="flex flex-col rounded-xl border border-border bg-black/20 p-3 dark:border-white/10">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Temizlenmiş Model</span>
-            {isProcessing ? <span className="text-[10px] text-violet-400">İşleniyor...</span> : null}
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
+              Temizlenmiş Model
+            </span>
+            {isProcessing ? (
+              <span className="text-[10px] text-violet-400">İşleniyor...</span>
+            ) : null}
           </div>
           <div className="relative h-[480px] overflow-hidden rounded-lg border border-dashed border-border/70 bg-[#0b0f14] xl:h-[560px]">
             <div className="relative z-[1] h-full w-full">
               <MeshRealtimeViewer
-                ref={viewerRef}
-                modelUrl={resultBlobUrl}
+                modelUrl={result?.url ?? null}
                 zScaleMm={1.0}
-                fileType="stl"
+                fileType="glb"
               />
             </div>
             {isProcessing ? (
@@ -351,33 +240,19 @@ export function RemauraMeshAISection() {
                 <span className="text-xs text-muted">Mesh işleniyor...</span>
               </div>
             ) : null}
-            {outputStats ? (
+            {result ? (
               <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-[2] bg-gradient-to-t from-black/80 to-transparent px-3 pb-2.5 pt-10">
                 <div className="grid grid-cols-3 gap-x-3 gap-y-0.5">
                   <span className="text-[10px] font-mono text-emerald-300">
-                    Polygons: {outputStats.polygons.toLocaleString("tr-TR")}
+                    Önce: {(result.originalSize / 1024).toFixed(0)} KB
                   </span>
                   <span className="text-[10px] font-mono text-emerald-300">
-                    Triangles: {outputStats.triangles.toLocaleString("tr-TR")}
+                    Sonra: {(result.optimizedSize / 1024).toFixed(0)} KB
                   </span>
                   <span className="text-[10px] font-mono text-emerald-300">
-                    Vertices: {outputStats.vertices.toLocaleString("tr-TR")}
-                  </span>
-                  <span className="text-[10px] font-mono text-emerald-300">
-                    Parts: {outputStats.components >= 0 ? outputStats.components : "—"}
-                  </span>
-                  <span className="text-[10px] font-mono text-emerald-300">
-                    {outputStats.watertight ? "Watertight" : "Open mesh"}
+                    -%{result.reductionPercent} küçüldü
                   </span>
                 </div>
-                {inputStats && inputStats.triangles > 0 ? (
-                  <p className="mt-1 text-[10px] font-mono text-white/50">
-                    {Math.round(((inputStats.triangles - outputStats.triangles) / inputStats.triangles) * 100)}% azaltma
-                    {inputStats.components >= 0 && outputStats.components >= 0
-                      ? ` · Parts: ${inputStats.components} → ${outputStats.components}`
-                      : ""}
-                  </p>
-                ) : null}
               </div>
             ) : null}
           </div>
@@ -386,10 +261,14 @@ export function RemauraMeshAISection() {
 
       {/* Kontroller */}
       <div className="mt-4 flex flex-col gap-3">
-        {error ? <p className="text-xs text-red-600 dark:text-red-400">{error}</p> : null}
+        {error ? (
+          <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+        ) : null}
 
         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">İşlem Seçenekleri</p>
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">
+            İşlem Seçenekleri
+          </p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <label className="flex flex-col gap-0.5 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
               <span className="flex items-center gap-2 text-xs text-foreground">
@@ -480,22 +359,21 @@ export function RemauraMeshAISection() {
           </div>
         ) : null}
 
-        {processLog ? (
-          <div className="rounded-lg border border-white/5 bg-black/20 p-2">
-            <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-[10px] leading-relaxed text-muted/70">
-              {processLog}
-            </pre>
-          </div>
-        ) : null}
-
-        {resultBlobUrl ? (
+        {result ? (
           <button
             type="button"
-            onClick={handleDownload}
+            onClick={() => void handleDownload()}
             disabled={isDownloading}
             className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-violet-400/50 bg-violet-500/15 px-4 py-2 text-xs font-semibold text-violet-200 transition-colors hover:bg-violet-500/25 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            İşlenmiş Modeli İndir (.stl)
+            {isDownloading ? (
+              <>
+                <span className="h-3 w-3 animate-spin rounded-full border border-white/30 border-t-white" />
+                İndiriliyor...
+              </>
+            ) : (
+              "İşlenmiş Modeli İndir (.glb)"
+            )}
           </button>
         ) : null}
 

@@ -1,6 +1,7 @@
 import { JEWELRY_CONSTITUTION } from "../constitution/jewelry.constitution";
 import { PRODUCT_DEFAULTS } from "../constitution/product.rules";
 import type { JewelryIntent } from "../types/prompt.types";
+import { isOxidationStudioBackgroundOverride } from "./interpreter.service";
 
 function mergeUnique(base: string[], extra: string[]): string[] {
   const seen = new Set(base);
@@ -51,7 +52,9 @@ export class RuleEngineService {
     const backgroundHints =
       intent.backgroundHints.length === 0
         ? [...productDefaults.backgroundHints]
-        : mergeUnique(intent.backgroundHints, productDefaults.backgroundHints);
+        : isOxidationStudioBackgroundOverride(intent.backgroundHints)
+          ? [...intent.backgroundHints]
+          : mergeUnique(intent.backgroundHints, productDefaults.backgroundHints);
     if (intent.backgroundHints.length === 0) {
       inferredFields.push("backgroundHints");
     }

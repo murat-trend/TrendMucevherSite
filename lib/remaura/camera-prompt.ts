@@ -8,12 +8,11 @@ import type { CameraComposition } from "@/components/remaura/remaura-types";
 export const CAMERA_PANEL_MAIN_PROMPT_SUFFIX: Record<Exclude<CameraComposition, "none">, string> = {
   front: " direct frontal view, perpendicular camera, 0-degree tilt, jewelry standing perfectly upright on its shank, symmetrical balance.",
 
-  /** 45° Üç Çeyrek Görünüm - Mesh ve Rölyef Kalitesi İçin Kritik */
   angle45:
-    ", shot in a 'high three-quarter profile perspective' from a 45-degree angle. " +
-    "MANDATORY: The ring MUST be standing perfectly upright on its shank (not lying on its side). " +
-    "CRITICAL: Use centered framing, ensure the entire ring is 100% within the frame with NO cropping. " +
-    "TECHNICAL: Hard-surface precision, sharp geometric lines, clean mesh depth suitable for relief production, ready for CAD integration.",
+    " The ring is photographed from a high three-quarter angle — imagine looking down at a ring on a table from a seated position. " +
+    "The viewer simultaneously sees: the top/crown of the ring, the full decorative front face, the ornamental side of the band curving away, and a glimpse of the hollow inner shank through the opening at the bottom. " +
+    "The ring stands upright on its band (shank vertical, crown on top) and is rotated roughly 10–20° so both the front face and a generous slice of the side band are visible. " +
+    "Entire ring 100% within the frame, no cropping at any edge, generous breathing room around the piece.",
 };
 
 /**

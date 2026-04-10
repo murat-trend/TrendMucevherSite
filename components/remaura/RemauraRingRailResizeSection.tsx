@@ -455,11 +455,13 @@ export function RemauraRingRailResizeSection() {
                 value={euRingSize === "" ? "" : String(euRingSize)}
                 onChange={onEuSizeChange}
                 disabled={!uploadedModel || isMeasuring}
-                className="rounded-lg border border-border bg-black/30 px-2 py-1.5 text-xs text-foreground disabled:opacity-50"
+                className="rounded-lg border border-border bg-black/30 px-2 py-1.5 text-xs text-foreground [color-scheme:light] disabled:opacity-50"
               >
-                <option value="">— Seçin —</option>
+                <option value="" className="bg-white text-zinc-900">
+                  — Seçin —
+                </option>
                 {EU_SIZES.map((s) => (
-                  <option key={s} value={s}>
+                  <option key={s} value={s} className="bg-white text-zinc-900">
                     {s} ({getRingSizeTargetMm(s).toFixed(2)} mm iç çap)
                   </option>
                 ))}

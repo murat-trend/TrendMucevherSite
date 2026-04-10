@@ -34,9 +34,17 @@ export type PlatformRulesData = {
 const RULES_PATH = join(process.cwd(), "data", "platform-algorithm-rules.json");
 
 let cachedRules: PlatformRulesData | null = null;
+let cacheLoadedAt = 0;
+const CACHE_TTL_MS = 1000 * 60 * 60; // 1 saat
 
 export function loadPlatformRules(): PlatformRulesData {
-  if (cachedRules) return cachedRules;
+  const now = Date.now();
+  if (cachedRules && now - cacheLoadedAt < CACHE_TTL_MS) {
+    return cachedRules;
+  }
+
+  cacheLoadedAt = now;
+
   if (!existsSync(RULES_PATH)) {
     cachedRules = {
       lastUpdated: new Date().toISOString().slice(0, 10),
@@ -45,8 +53,14 @@ export function loadPlatformRules(): PlatformRulesData {
     };
     return cachedRules;
   }
+
   const raw = readFileSync(RULES_PATH, "utf-8");
-  cachedRules = JSON.parse(raw) as PlatformRulesData;
+  try {
+    cachedRules = JSON.parse(raw) as PlatformRulesData;
+  } catch {
+    console.error("[platform-rules] JSON parse hatası");
+    cachedRules = { lastUpdated: "", version: 0, platforms: {} };
+  }
   return cachedRules;
 }
 
@@ -66,8 +80,9 @@ export function getRulesForPrompt(): string {
     if (rule.recommendedKeywordCount) parts.push(`  Anahtar kelime: ${rule.recommendedKeywordCount}`);
     if (rule.recommendedTagCount) parts.push(`  Tag sayısı: ${rule.recommendedTagCount}`);
     if (rule.maxTagCount) parts.push(`  Tag max: ${rule.maxTagCount}`);
-    if (rule.formatHints) parts.push(`  Format: ${rule.formatHints}`);
-    if (rule.algorithmNotes) parts.push(`  Algoritma: ${rule.algorithmNotes}`);
+    if (rule.formatHints) parts.push(`  Format: ${rule.formatHints.slice(0, 120)}`);
+    if (rule.algorithmNotes)
+      parts.push(`  Algoritma: ${rule.algorithmNotes.slice(0, 120)}`);
     if (rule.maxBaslikLength) parts.push(`  Başlık max: ${rule.maxBaslikLength} karakter`);
     if (rule.metaTitleMaxLength) parts.push(`  Meta title max: ${rule.metaTitleMaxLength}`);
     if (rule.metaDescMaxLength) parts.push(`  Meta desc max: ${rule.metaDescMaxLength}`);

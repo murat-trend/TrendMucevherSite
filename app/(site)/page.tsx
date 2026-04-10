@@ -2,7 +2,7 @@ import {
   HeroSection,
   PathwaysSection,
   ValueProposition,
-  FeaturedProducts,
+  FeaturedModels,
   RemauraSection,
   SellerSection,
   HowItWorks,
@@ -14,9 +14,9 @@ export default function HomePage() {
   return (
     <>
       <HeroSection />
+      <FeaturedModels />
       <PathwaysSection />
       <ValueProposition />
-      <FeaturedProducts />
       <RemauraSection />
       <SellerSection />
       <HowItWorks />

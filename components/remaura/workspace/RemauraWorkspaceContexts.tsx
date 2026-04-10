@@ -84,11 +84,9 @@ export type RemauraAppContextValue = {
   billingCredits: number;
   billingCheckoutUrl: string | null;
   setBillingCheckoutUrl: (url: string | null) => void;
+  debugPayload: Record<string, unknown> | null;
   bgRemoverError: string | null;
   setBgRemoverError: (v: string | null) => void;
-  /** Dahili 3/4 yüzük kuralı (metin kutusunda yok; yalnızca API’de birleştirilir) */
-  applyRingThreeQuarterView: boolean;
-  setApplyRingThreeQuarterView: (v: boolean) => void;
   handleOptimize: () => Promise<void>;
   handleAnalyzeStyle: () => Promise<void>;
   handleGenerate: () => Promise<void>;

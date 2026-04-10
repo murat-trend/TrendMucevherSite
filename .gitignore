@@ -52,6 +52,9 @@ next-env.d.ts
 /public/uploads/invoices/*
 !/public/uploads/invoices/.gitkeep
 
+/public/uploads/custom-order-requests/*
+!/public/uploads/custom-order-requests/.gitkeep
+
 # Gider satırları (sunucu senkronu) ve gece PDF yedekleri
 /data/finance/expenses.json
 /data/finance/backups/*.pdf

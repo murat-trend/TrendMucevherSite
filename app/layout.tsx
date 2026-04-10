@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, Outfit } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { ThemeScript } from "@/components/theme/ThemeScript";
@@ -38,6 +39,11 @@ export default function RootLayout({
       <body
         className={`${cormorant.variable} ${outfit.variable} font-sans antialiased`}
       >
+        <Script
+          type="module"
+          src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"
+          strategy="lazyOnload"
+        />
         <ThemeScript />
         <ThemeProvider>
           <LanguageProvider>{children}</LanguageProvider>

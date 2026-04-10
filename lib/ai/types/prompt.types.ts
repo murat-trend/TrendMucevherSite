@@ -1,4 +1,4 @@
-export type SupportedLanguage = "tr" | "en";
+export type SupportedLanguage = "tr" | "en" | "de" | "ru";
 
 export type ProductType =
   | "pendant"
@@ -20,6 +20,8 @@ export type RawUserPrompt = {
 
 export type JewelryIntent = {
   rawInput: string;
+  /** Uzun, ilişki/aksiyon içeren tasarım metni — LLM ve Composition scene için */
+  rawNarrative?: string;
   language: SupportedLanguage;
 
   inputQuality: InputQuality;
@@ -40,6 +42,8 @@ export type JewelryIntent = {
   gemstoneHints: string[];
 
   compositionHints: string[];
+  /** Ham anlatıdan çıkarılan sahne ipuçları */
+  narrativeHints?: string[];
   lightingHints: string[];
   cameraHints: string[];
   backgroundHints: string[];

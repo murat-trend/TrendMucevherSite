@@ -1,3 +1,5 @@
+"use client";
+
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -21,6 +23,10 @@ import {
   Timer,
   Zap,
 } from "lucide-react";
+import {
+  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+} from "recharts";
 import Link from "next/link";
 import { AdminEmptyState } from "@/components/admin/ui/AdminEmptyState";
 import { AdminDataScroll, ADMIN_TABLE_TH_STICKY } from "@/components/admin/ui/AdminDataScroll";
@@ -503,6 +509,44 @@ const PENDING_COMPLAINTS: PendingComplaintRow[] = EMPTY_PREVIEW
       },
     ];
 
+const MONTHLY_TARGET = 150_000;
+const MONTHLY_ACTUAL = 124_500;
+const MONTHLY_PROGRESS = Math.round((MONTHLY_ACTUAL / MONTHLY_TARGET) * 100);
+
+const HOURLY_SALES = [
+  { saat: "09", satis: 8 }, { saat: "10", satis: 14 }, { saat: "11", satis: 11 },
+  { saat: "12", satis: 19 }, { saat: "13", satis: 16 }, { saat: "14", satis: 13 },
+  { saat: "15", satis: 22 }, { saat: "16", satis: 28 }, { saat: "17", satis: 35 },
+  { saat: "18", satis: 52 }, { saat: "19", satis: 68 }, { saat: "20", satis: 48 },
+  { saat: "21", satis: 31 }, { saat: "22", satis: 18 },
+];
+
+const CATEGORY_SALES = [
+  { name: "Yüzük",   value: 58, color: "#c69575" },
+  { name: "Kolye",   value: 24, color: "#a07840" },
+  { name: "Bilezik", value: 12, color: "#7a6030" },
+  { name: "Küpe",    value: 6,  color: "#504020" },
+];
+
+const CART_ABANDONED_ADMIN = [
+  { name: "Elmas Yüzük — Aurora",     count: 124, amount: 847_200 },
+  { name: "İnci Kolye — Luna",        count: 89,  amount: 318_000 },
+  { name: "Pırlanta Küpe — Solstice", count: 67,  amount: 412_800 },
+];
+
+const UPCOMING_PAYOUTS = [
+  { store: "Atölye Mara",         amount: 18_400, date: "10 Nis" },
+  { store: "Gümüş İşleri Co.",    amount: 12_200, date: "10 Nis" },
+  { store: "Vintage Koleksiyon",  amount: 9_800,  date: "10 Nis" },
+  { store: "Pırlanta Loft",       amount: 24_600, date: "10 Nis" },
+];
+
+const RECENT_REVIEWS_ADMIN = [
+  { id: "r1", author: "Ayşe K.", product: "Elmas Yüzük — Aurora",     rating: 5, comment: "Muhteşem kalite, çok şık!", seller: "Atölye Mara",        date: "2 Nis", flagged: false },
+  { id: "r2", author: "Mehmet Y.", product: "İnci Kolye — Luna",      rating: 2, comment: "Fotoğrafla uyuşmuyor, hayal kırıklığı.", seller: "Luna İnci", date: "1 Nis", flagged: true },
+  { id: "r3", author: "Fatma D.", product: "Altın Bilezik — Linea",   rating: 5, comment: "Eşime aldım, bayıldı. Teşekkürler!", seller: "Atölye Mara",  date: "31 Mar", flagged: false },
+];
+
 function CardShell({
   title,
   children,
@@ -884,6 +928,157 @@ export function AdminDashboard() {
           </CardShell>
         </div>
       </div>
+
+      {/* Aylık Hedef + Gelecek Ödemeler */}
+      {!EMPTY_PREVIEW && (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:gap-6">
+          {/* Aylık Platform Hedefi */}
+          <section className="rounded-2xl border border-white/[0.09] bg-gradient-to-br from-[#12141a]/95 via-[#0c0d11] to-[#08090c] p-5 sm:p-6">
+            <h2 className="mb-4 font-display text-lg font-semibold tracking-tight text-zinc-100">Aylık Platform Hedefi</h2>
+            <div className="mb-3 flex items-end justify-between">
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-zinc-500">Gerçekleşen</p>
+                <p className="font-display text-2xl font-semibold tabular-nums text-zinc-100">{tryFmt(MONTHLY_ACTUAL)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] uppercase tracking-wider text-zinc-500">Hedef</p>
+                <p className="font-display text-xl font-medium tabular-nums text-zinc-400">{tryFmt(MONTHLY_TARGET)}</p>
+              </div>
+            </div>
+            <div className="mb-2 h-3 overflow-hidden rounded-full bg-white/[0.06]">
+              <div
+                className={`h-full rounded-full transition-all ${MONTHLY_PROGRESS >= 80 ? "bg-emerald-500/80" : MONTHLY_PROGRESS >= 50 ? "bg-amber-500/80" : "bg-rose-500/70"}`}
+                style={{ width: `${Math.min(MONTHLY_PROGRESS, 100)}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className={`tabular-nums font-semibold ${MONTHLY_PROGRESS >= 80 ? "text-emerald-400" : MONTHLY_PROGRESS >= 50 ? "text-amber-400" : "text-rose-400"}`}>%{MONTHLY_PROGRESS}</span>
+              <span className="text-zinc-500">Hedefe kalan: {tryFmt(MONTHLY_TARGET - MONTHLY_ACTUAL)}</span>
+            </div>
+          </section>
+
+          {/* Gelecek Satıcı Ödemeleri */}
+          <section className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-950/20 via-[#0c0d11] to-[#08090c] p-5 sm:p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-display text-lg font-semibold tracking-tight text-zinc-100">Gelecek Satıcı Ödemeleri</h2>
+              <span className="text-xs text-zinc-500">10 Nisan 2026</span>
+            </div>
+            <ul className="space-y-2">
+              {UPCOMING_PAYOUTS.map((p, i) => (
+                <li key={i} className="flex items-center justify-between rounded-lg border border-white/[0.05] bg-white/[0.02] px-3 py-2.5">
+                  <span className="text-sm text-zinc-300">{p.store}</span>
+                  <span className="tabular-nums text-sm font-medium text-emerald-400">{tryFmt(p.amount)}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 flex items-center justify-between border-t border-white/[0.06] pt-3 text-xs">
+              <span className="text-zinc-500">Toplam ödeme</span>
+              <span className="tabular-nums font-semibold text-emerald-300">{tryFmt(UPCOMING_PAYOUTS.reduce((a, p) => a + p.amount, 0))}</span>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* Kategori Dağılımı + Saatlik Satış */}
+      {!EMPTY_PREVIEW && (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:gap-6">
+          {/* Kategori Dağılımı */}
+          <section className="rounded-2xl border border-white/[0.09] bg-gradient-to-br from-[#12141a]/95 via-[#0c0d11] to-[#08090c] p-5 sm:p-6">
+            <h2 className="mb-4 font-display text-lg font-semibold tracking-tight text-zinc-100">Kategori Bazlı Satış Dağılımı</h2>
+            <div className="flex items-center gap-6">
+              <ResponsiveContainer width={140} height={140}>
+                <PieChart>
+                  <Pie data={CATEGORY_SALES} cx="50%" cy="50%" outerRadius={60} dataKey="value">
+                    {CATEGORY_SALES.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => `%${v}`} contentStyle={{ background: "#0c0d11", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex-1 space-y-2.5">
+                {CATEGORY_SALES.map(c => (
+                  <div key={c.name} className="flex items-center gap-2">
+                    <div className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c.color }} />
+                    <span className="flex-1 text-sm text-zinc-400">{c.name}</span>
+                    <span className="tabular-nums text-sm font-medium text-zinc-200">%{c.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* En İyi Satış Saatleri */}
+          <section className="rounded-2xl border border-white/[0.09] bg-gradient-to-br from-[#12141a]/95 via-[#0c0d11] to-[#08090c] p-5 sm:p-6">
+            <h2 className="mb-4 font-display text-lg font-semibold tracking-tight text-zinc-100">En İyi Satış Saatleri</h2>
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart data={HOURLY_SALES} barSize={12}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="saat" tick={{ fontSize: 10, fill: "#52525b" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}:00`} />
+                <YAxis tick={{ fontSize: 10, fill: "#52525b" }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: "#0c0d11", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }} />
+                <Bar dataKey="satis" name="Sipariş" fill="#c69575" radius={[3, 3, 0, 0]} opacity={0.85} />
+              </BarChart>
+            </ResponsiveContainer>
+            <p className="mt-2 text-[11px] text-zinc-600">🔥 En yoğun: <span className="font-medium text-zinc-400">19:00 – 20:00</span> — Kampanya zamanlaması için önerilir</p>
+          </section>
+        </div>
+      )}
+
+      {/* Sepette Terk + Son Değerlendirmeler */}
+      {!EMPTY_PREVIEW && (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:gap-6">
+          {/* Sepette Terk */}
+          <section className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-950/15 via-[#0c0d11] to-[#08090c] p-5 sm:p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-display text-lg font-semibold tracking-tight text-zinc-100">Platform Geneli Sepet Terk</h2>
+              <span className="text-xs text-amber-400/80">Fırsat</span>
+            </div>
+            <ul className="space-y-3">
+              {CART_ABANDONED_ADMIN.map((item, i) => (
+                <li key={i} className="flex items-center justify-between rounded-xl border border-white/[0.05] bg-white/[0.02] px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-200">{item.name}</p>
+                    <p className="text-xs text-zinc-500">{numFmt(item.count)} kişi</p>
+                  </div>
+                  <span className="tabular-nums text-sm font-medium text-[#c69575]">{tryFmt(item.amount)}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-[11px] text-zinc-600">Toplam potansiyel: <span className="font-medium text-zinc-400">{tryFmt(CART_ABANDONED_ADMIN.reduce((a, i) => a + i.amount, 0))}</span></p>
+          </section>
+
+          {/* Son Değerlendirmeler */}
+          <section className="rounded-2xl border border-white/[0.09] bg-gradient-to-br from-[#12141a]/95 via-[#0c0d11] to-[#08090c] p-5 sm:p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-display text-lg font-semibold tracking-tight text-zinc-100">Son Değerlendirmeler</h2>
+              <Link href="/admin/reviews" className="text-xs text-[#c9a88a] hover:text-[#e8d4c4]">Tümü →</Link>
+            </div>
+            <ul className="space-y-3">
+              {RECENT_REVIEWS_ADMIN.map(r => (
+                <li key={r.id} className={`rounded-xl border p-3.5 ${r.flagged ? "border-rose-500/25 bg-rose-500/[0.05]" : "border-white/[0.05] bg-white/[0.02]"}`}>
+                  <div className="mb-1.5 flex items-start justify-between gap-2">
+                    <div>
+                      <span className="text-sm font-medium text-zinc-200">{r.author}</span>
+                      <span className="mx-1.5 text-zinc-600">·</span>
+                      <span className="text-xs text-zinc-500">{r.product}</span>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {r.flagged && <span className="rounded-md border border-rose-500/30 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-rose-400">İnceleme Gerekli</span>}
+                      <span className="text-[11px] text-zinc-600">{r.date}</span>
+                    </div>
+                  </div>
+                  <p className="text-xs leading-relaxed text-zinc-500">{r.comment}</p>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-[11px] text-zinc-600">{r.seller}</span>
+                    {r.flagged && (
+                      <button type="button" className="text-[11px] font-medium text-rose-400 hover:text-rose-300">İncele →</button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+      )}
 
       {/* En alt — onay bekleyen şikâyetler + sonuç vermeyen aramalar (yan yana) */}
       {!EMPTY_PREVIEW && (

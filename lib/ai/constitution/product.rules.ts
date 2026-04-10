@@ -18,7 +18,7 @@ export const PRODUCT_DEFAULTS: Record<
   ring: {
     compositionHints: [
       "centered",
-      "Remaura View A: three-quarter isometric ~45°, elevated forward-off-axis",
+      "three-quarter isometric 45°, slightly elevated",
       "table, crown, gallery, outer band and inner shank readable in one frame",
     ],
     lightingHints: ["top-down key", "controlled fill preserving edge sharpness", "crisp speculars on facets"],
@@ -28,7 +28,16 @@ export const PRODUCT_DEFAULTS: Record<
       "f/8–f/11, full ring tack sharp, zero warping",
     ],
     backgroundHints: ["minimal", "neutral", "clean hard-edge backdrop"],
-    mustHaveElements: ["ring in sharp focus", "stone facets visible", "metal band detail"],
+    mustHaveElements: [
+      "ring in sharp focus",
+      "stone facets visible",
+      "metal band detail",
+      "complete closed band with minimum 1.5mm wall thickness",
+      "full shank visible — no open or broken band",
+      "symmetrical left-right panel construction",
+      "structurally supported stone setting with visible prongs or bezel",
+      "manufacturable jewelry proportions",
+    ],
   },
   earring: {
     compositionHints: ["pair or single", "centered", "symmetry consideration"],

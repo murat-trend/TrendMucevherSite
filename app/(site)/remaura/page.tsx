@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { RemauraWorkspace } from "@/components/remaura/RemauraWorkspace";
-import { RemauraLandingHeader } from "@/components/remaura/RemauraLandingHeader";
+import { RemauraLocalizedLandingHeader } from "@/components/remaura/RemauraLocalizedLandingHeader";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://trendmucevher.com";
 const pageUrl = `${siteUrl}/remaura`;
@@ -80,10 +80,7 @@ export default function RemauraPage() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <RemauraLandingHeader
-        title="Remaura AI ile Taki Gorsellerini Dakikalar Icinde Hazirla"
-        description="Arka plani temizle, metal tonunu duzelt, e-ticaret ve sosyal medya icin tek tikla dogru formatta indir."
-      />
+      <RemauraLocalizedLandingHeader variant="main" />
       <RemauraWorkspace />
     </>
   );

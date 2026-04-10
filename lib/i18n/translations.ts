@@ -1,10 +1,16 @@
-export type Locale = "tr" | "en";
+import { deMessages } from "./locale-de";
+import { ruMessages } from "./locale-ru";
+
+export const SUPPORTED_LOCALES = ["tr", "en", "de", "ru"] as const;
+export type Locale = (typeof SUPPORTED_LOCALES)[number];
 
 export const translations = {
   tr: {
     nav: {
       home: "Ana Sayfa",
       products: "Ürünler",
+      modeller: "Modeller",
+      convert: "Dönüştür",
       customOrder: "Özel Sipariş",
       remaura: "Remaura AI",
       daily: "Günlük",
@@ -126,6 +132,18 @@ export const translations = {
       assistantOptimizing: "Promptunuz optimize ediliyor…",
       assistantReady: "Hazır",
       styleWindow: "Stil Penceresi",
+      styleRefMissingHint:
+        "Form referansı yüklenmedi. Kasa formu için 1. pencereye bir görsel ekleyin.",
+      styleRefSlot1Label: "Form & Açı Referansı",
+      styleRefSlot1Placeholder:
+        "Kasa formu, açı ve oran için bir yüzük veya madalyon görseli yükleyin",
+      styleRefSlot1Tooltip:
+        "Bu görsel takının genel formunu, bakış açısını ve oranlarını belirler",
+      styleRefSlot2Label: "Desen & İşçilik Kalitesi",
+      styleRefSlot2Placeholder:
+        "Hedef desen kalitesini ve işçilik seviyesini gösteren bir görsel yükleyin",
+      styleRefSlot2Tooltip:
+        "Bu görsel kabartma derinliğini, desen yoğunluğunu ve işçilik kalitesini belirler. Farklı desen kullanılır ama aynı kalite yakalanır",
       styleGuideReady: "Stil rehberi hazır — görsel üretimde uygulanacak.",
       styleAnalysisInsufficient:
         "Stil analizi yetersiz veya boş. Daha net mücevher yakın çekimi yükleyin veya stil analizinin bitmesini bekleyin.",
@@ -254,6 +272,8 @@ export const translations = {
     nav: {
       home: "Home",
       products: "Products",
+      modeller: "Models",
+      convert: "Convert",
       customOrder: "Custom Order",
       remaura: "Remaura AI",
       daily: "Daily",
@@ -376,6 +396,16 @@ export const translations = {
       assistantOptimizing: "Your prompt is being optimized…",
       assistantReady: "Ready",
       styleWindow: "Style Window",
+      styleRefMissingHint:
+        "No form reference uploaded. Add an image to slot 1 for consistent ring or medallion shape.",
+      styleRefSlot1Label: "Form & angle reference",
+      styleRefSlot1Placeholder: "Upload a ring or medallion image for case shape, viewing angle, and proportions",
+      styleRefSlot1Tooltip:
+        "This image guides overall form, viewing angle, and proportions of the piece",
+      styleRefSlot2Label: "Pattern & craftsmanship quality",
+      styleRefSlot2Placeholder: "Upload an image showing target pattern quality and craftsmanship level",
+      styleRefSlot2Tooltip:
+        "This image guides relief depth, pattern density, and workmanship quality. A different motif may be used while matching the same quality bar",
       styleGuideReady: "Style guide ready — it will be applied when you generate.",
       styleAnalysisInsufficient:
         "Style analysis returned too little detail. Use clearer jewelry close-ups or wait for analysis to finish.",
@@ -500,4 +530,6 @@ export const translations = {
       login: "Log In",
     },
   },
+  de: deMessages,
+  ru: ruMessages,
 } as const;

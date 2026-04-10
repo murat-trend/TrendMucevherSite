@@ -80,6 +80,12 @@ export async function GET(req: Request) {
     }
 
     const rawBuffer = await fileRes.arrayBuffer();
+    if (rawBuffer.byteLength < 1024) {
+      return NextResponse.json(
+        { error: "İndirilen model dosyası geçersiz veya boş." },
+        { status: 422 }
+      );
+    }
     // Use the requested format as the download extension (not the CDN URL extension)
     const outputExt = format;
 

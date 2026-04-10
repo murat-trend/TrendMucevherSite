@@ -6,41 +6,38 @@ export class PromptValidator {
     const missingFields: string[] = [];
 
     if (intent.productType === "unknown") {
-      warnings.push("Product type could not be confidently detected.");
       missingFields.push("productType");
     }
 
     if (intent.motifs.length === 0) {
-      warnings.push("No motif detected. Prompt may be too generic.");
-      missingFields.push("motifs");
-    }
-
-    if (intent.cameraHints.length === 0) {
-      warnings.push("Camera hints are missing.");
-      missingFields.push("cameraHints");
-    }
-
-    if (intent.lightingHints.length === 0) {
-      warnings.push("Lighting hints are missing.");
-      missingFields.push("lightingHints");
+      warnings.push(
+        intent.language === "tr"
+          ? "Motif belirtilmedi — bir figür veya sembol eklerseniz daha özgün sonuç alırsınız."
+          : "No motif specified — adding a figure or symbol will produce a more distinctive result."
+      );
     }
 
     if (intent.qualityConstraints.length === 0) {
-      warnings.push("Quality constraints are missing.");
       missingFields.push("qualityConstraints");
     }
 
     if (intent.negativeConstraints.length === 0) {
-      warnings.push("Negative constraints are missing.");
       missingFields.push("negativeConstraints");
     }
 
-    const score = Math.max(
+    const motifSoftWarningCount = intent.motifs.length === 0 ? 1 : 0;
+    const penalizedWarningCount = Math.max(
       0,
-      100 - missingFields.length * 12 - warnings.length * 3
+      warnings.length - motifSoftWarningCount
     );
+    const baseScore = Math.max(
+      0,
+      100 - missingFields.length * 10 - penalizedWarningCount * 5
+    );
+    const score = Math.max(0, baseScore * intent.confidence);
 
-    const isValid = missingFields.length <= 2;
+    const isValid =
+      missingFields.length <= 2 && !missingFields.includes("productType");
 
     return {
       isValid,

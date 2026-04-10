@@ -51,7 +51,7 @@ export function AdminSidebar({ collapsed, onToggleCollapse, mobileOpen, onNaviga
             {ADMIN_NAV_ENTRIES.map((entry) => {
               if (isAdminNavGroup(entry)) {
                 const GroupIcon = entry.icon;
-                const title = locale === "en" ? entry.titleEn : entry.titleTr;
+                const title = locale !== "tr" ? entry.titleEn : entry.titleTr;
                 return (
                   <div key={entry.id} className="mt-2 border-t border-white/[0.06] pt-2 first:mt-0 first:border-0 first:pt-0">
                     {!collapsed && (
@@ -69,7 +69,7 @@ export function AdminSidebar({ collapsed, onToggleCollapse, mobileOpen, onNaviga
                       {entry.children.map((child) => {
                         const active = childLinkActive(pathname, child.href);
                         const SubIcon = child.icon;
-                        const label = locale === "en" ? child.labelEn : child.labelTr;
+                        const label = locale !== "tr" ? child.labelEn : child.labelTr;
                         return (
                           <li key={child.id}>
                             <Link
@@ -101,7 +101,7 @@ export function AdminSidebar({ collapsed, onToggleCollapse, mobileOpen, onNaviga
               const item = entry;
               const active = isActive(item.href);
               const Icon = item.icon;
-              const label = locale === "en" ? item.labelEn : item.labelTr;
+              const label = locale !== "tr" ? item.labelEn : item.labelTr;
               return (
                 <Link
                   key={item.id}
@@ -137,7 +137,7 @@ export function AdminSidebar({ collapsed, onToggleCollapse, mobileOpen, onNaviga
               className={`h-4 w-4 transition-transform ${collapsed ? "rotate-180" : ""}`}
               strokeWidth={1.5}
             />
-            {!collapsed && <span className="text-xs">{locale === "en" ? "Collapse" : "Daralt"}</span>}
+            {!collapsed && <span className="text-xs">{locale !== "tr" ? "Collapse" : "Daralt"}</span>}
           </button>
         </div>
       </aside>

@@ -1,10 +1,11 @@
 "use client";
 
-import { forwardRef, useEffect, useRef, useCallback, useImperativeHandle } from "react";
+import { forwardRef, useEffect, useRef, useCallback, useImperativeHandle, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
 import { OBJExporter } from "three/examples/jsm/exporters/OBJExporter.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 
@@ -19,17 +20,38 @@ type MeshRealtimeViewerProps = {
   zScaleMm?: number;
   /** Dosya formatını zorla belirt (blob URL'ler için gerekli) */
   fileType?: "stl" | "glb" | "auto";
+  autoRotate?: boolean;
+  showGrid?: boolean;
+  renderWidth?: number;
+  renderHeight?: number;
   /** Model yüklendiğinde vertex/face istatistiklerini bildir */
   onMeshStats?: (stats: MeshStats) => void;
+  initialRotation?: { x: number; y: number; z: number };
+  onRotationChange?: (rotation: { x: number; y: number; z: number }) => void;
+  showRotationControls?: boolean;
 };
 
 export type MeshRealtimeViewerHandle = {
   downloadSTL: () => boolean;
   downloadOBJ: () => boolean;
+  setGridVisible: (visible: boolean) => void;
+  setRotation: (rotation: { x: number; y: number; z: number }) => void;
 };
 
 export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealtimeViewerProps>(function MeshRealtimeViewer(
-  { modelUrl, zScaleMm = 1.0, fileType = "auto", onMeshStats },
+  {
+    modelUrl,
+    zScaleMm = 1.0,
+    fileType = "auto",
+    autoRotate = false,
+    showGrid = true,
+    renderWidth,
+    renderHeight,
+    onMeshStats,
+    initialRotation,
+    onRotationChange,
+    showRotationControls,
+  },
   ref
 ) {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -38,9 +60,30 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const modelRootRef = useRef<THREE.Object3D | null>(null);
+  const gridMajorRef = useRef<THREE.GridHelper | null>(null);
+  const gridMinorRef = useRef<THREE.GridHelper | null>(null);
+  const renderWidthRef = useRef<number | undefined>(renderWidth);
+  const renderHeightRef = useRef<number | undefined>(renderHeight);
   const uniformScaleRef = useRef<number>(1);
   const stlExporterRef = useRef(new STLExporter());
   const objExporterRef = useRef(new OBJExporter());
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [rotation, setRotation] = useState({ x: 0, y: 0, z: 0 });
+
+  const applyRendererSize = useCallback(() => {
+    const host = mountRef.current;
+    const renderer = rendererRef.current;
+    const camera = cameraRef.current;
+    if (!host || !renderer || !camera) return;
+    const container = host.parentElement ?? host;
+    const width = renderWidthRef.current ?? Math.max(container.clientWidth, 1);
+    const height = renderHeightRef.current ?? Math.max(container.clientHeight, 1);
+    renderer.setSize(width, height, false);
+    renderer.domElement.style.width = "100%";
+    renderer.domElement.style.height = "100%";
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+  }, []);
 
   /**
    * Z eksenini göreli katsayıyla ölçekler.
@@ -124,8 +167,19 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
         triggerDownload(blob, "Remaura_Model.obj");
         return true;
       },
+      setGridVisible: (visible: boolean) => {
+        if (gridMajorRef.current) gridMajorRef.current.visible = visible;
+        if (gridMinorRef.current) gridMinorRef.current.visible = visible;
+      },
+      setRotation: (rot) => {
+        if (modelRootRef.current) {
+          modelRootRef.current.rotation.set(rot.x, rot.y, rot.z);
+          modelRootRef.current.updateMatrixWorld(true);
+        }
+        setRotation({ x: rot.x, y: rot.y, z: rot.z });
+      },
     }),
-    [cloneMeshForExport, exportToSTL, exportToOBJ, triggerDownload]
+    [cloneMeshForExport, exportToSTL, exportToOBJ, triggerDownload, setRotation]
   );
 
   useEffect(() => {
@@ -140,7 +194,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(1); // Boyutu biz kontrol ediyoruz
     renderer.setClearColor(0x000000, 0);
     renderer.domElement.style.position = "absolute";
     renderer.domElement.style.inset = "0";
@@ -153,7 +207,8 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.06;
-    controls.autoRotate = false;
+    controls.autoRotate = autoRotate;
+    controls.autoRotateSpeed = 1.6;
     controls.enablePan = true;
     controls.enableZoom = true;
     controls.screenSpacePanning = true;
@@ -183,24 +238,22 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
 
     const gridMajor = new THREE.GridHelper(10, 20, 0x566174, 0x2f3848);
     gridMajor.position.y = 0;
+    gridMajor.visible = showGrid;
     scene.add(gridMajor);
+    gridMajorRef.current = gridMajor;
     const gridMinor = new THREE.GridHelper(10, 80, 0x253041, 0x253041);
     gridMinor.position.y = 0.001;
+    gridMinor.visible = showGrid;
     scene.add(gridMinor);
+    gridMinorRef.current = gridMinor;
 
     let frameId = 0;
 
-    const setSize = () => {
-      const container = host.parentElement ?? host;
-      const width  = Math.max(container.clientWidth, 1);
-      const height = Math.max(container.clientHeight, 1);
-      renderer.setSize(width, height, false);
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
-    };
-    setSize();
+    applyRendererSize();
 
-    const resizeObserver = new ResizeObserver(setSize);
+    const resizeObserver = new ResizeObserver(() => {
+      applyRendererSize();
+    });
     resizeObserver.observe(host.parentElement ?? host);
 
     const animate = () => {
@@ -235,9 +288,11 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       sceneRef.current = null;
       cameraRef.current = null;
       modelRootRef.current = null;
+      gridMajorRef.current = null;
+      gridMinorRef.current = null;
       host.innerHTML = "";
     };
-  }, []);
+  }, [applyRendererSize]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -248,14 +303,36 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       modelRootRef.current = null;
     }
 
-    if (!modelUrl) return;
+    if (!modelUrl) {
+      setLoadError(null);
+      return;
+    }
+
+    setLoadError(null);
 
     const placeModel = (loadedRoot: THREE.Object3D) => {
+      setLoadError(null);
       modelRootRef.current = loadedRoot;
       loadedRoot.position.set(0, 0, 0);
-      loadedRoot.rotation.set(0, 0, 0);
       loadedRoot.scale.set(1, 1, 1);
+      // Tüm mesh geometry'lerini X ekseninde -90° döndür
+      loadedRoot.traverse((child) => {
+        const mesh = child as THREE.Mesh;
+        if (mesh.isMesh && mesh.geometry) {
+          mesh.geometry.applyMatrix4(
+            new THREE.Matrix4().makeRotationX(-Math.PI / 2),
+          );
+        }
+      });
       scene.add(loadedRoot);
+      if (initialRotation) {
+        loadedRoot.rotation.set(
+          initialRotation.x,
+          initialRotation.y,
+          initialRotation.z,
+        );
+        setRotation(initialRotation);
+      }
       loadedRoot.updateMatrixWorld(true);
 
       const rawBox = new THREE.Box3().setFromObject(loadedRoot);
@@ -299,6 +376,14 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       }
     };
 
+    /** Uzak HTTPS dosyalarını tarayıcı CORS'undan kaçınmak için same-origin proxy. */
+    const remoteLoaderUrl =
+      modelUrl.startsWith("blob:") || modelUrl.startsWith("/")
+        ? modelUrl
+        : /^https?:\/\//i.test(modelUrl)
+          ? `/api/fetch-media?url=${encodeURIComponent(modelUrl)}`
+          : modelUrl;
+
     const isStl =
       fileType === "stl" ||
       (fileType === "auto" && modelUrl.toLowerCase().endsWith(".stl"));
@@ -321,40 +406,146 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
           placeModel(group);
         },
         undefined,
-        () => {}
+        (error) => {
+          console.error("[MeshViewer] STL yüklenemedi:", error);
+          setLoadError("3D model yüklenemedi. Format desteklenmiyor olabilir.");
+        }
       );
     };
 
     const tryLoadGltf = (url: string) => {
+      const dracoLoader = new DRACOLoader();
+      dracoLoader.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.6/");
       const gltfLoader = new GLTFLoader();
+      gltfLoader.setDRACOLoader(dracoLoader);
       gltfLoader.load(
         url,
-        (gltf) => placeModel(gltf.scene),
+        (gltf) => {
+          dracoLoader.dispose();
+          gltf.scene.rotation.x = -Math.PI / 2;
+          placeModel(gltf.scene);
+        },
         undefined,
-        () => {}
+        (error) => {
+          console.error("[MeshViewer] GLB yüklenemedi:", error);
+          dracoLoader.dispose();
+          setLoadError("3D model yüklenemedi. Format desteklenmiyor olabilir.");
+          tryLoadStl(url);
+        }
       );
     };
 
     if (isStl) {
-      tryLoadStl(modelUrl);
-    } else if (modelUrl.startsWith("blob:")) {
-      // blob URL'lerde uzantı olmayabilir, önce GLTF dene, başarısız olursa STL dene
-      const gltfLoader = new GLTFLoader();
-      gltfLoader.load(
-        modelUrl,
-        (gltf) => placeModel(gltf.scene),
-        undefined,
-        () => tryLoadStl(modelUrl)
-      );
+      tryLoadStl(remoteLoaderUrl);
     } else {
-      tryLoadGltf(modelUrl);
+      tryLoadGltf(remoteLoaderUrl);
     }
-  }, [modelUrl, fileType, applyMicronDepth, onMeshStats]);
+  }, [modelUrl, fileType, applyMicronDepth, onMeshStats, initialRotation]);
+
+  useEffect(() => {
+    if (!modelRootRef.current) return;
+    modelRootRef.current.rotation.set(rotation.x, rotation.y, rotation.z);
+  }, [rotation]);
 
   // zScaleMm her değiştiğinde mikron derinliğini yeniden uygula
   useEffect(() => {
     applyMicronDepth();
   }, [zScaleMm, applyMicronDepth]);
 
-  return <div ref={mountRef} className="relative h-full w-full overflow-hidden" />;
+  useEffect(() => {
+    if (!controlsRef.current) return;
+    controlsRef.current.autoRotate = autoRotate;
+    controlsRef.current.autoRotateSpeed = 1.6;
+  }, [autoRotate]);
+
+  useEffect(() => {
+    if (gridMajorRef.current) gridMajorRef.current.visible = showGrid;
+    if (gridMinorRef.current) gridMinorRef.current.visible = showGrid;
+  }, [showGrid]);
+
+  useEffect(() => {
+    renderWidthRef.current = renderWidth;
+    renderHeightRef.current = renderHeight;
+    applyRendererSize();
+  }, [renderWidth, renderHeight, applyRendererSize]);
+
+  return (
+    <div className="relative h-full w-full overflow-hidden">
+      <div ref={mountRef} className="absolute inset-0" />
+      {loadError ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/45 px-3 text-center text-xs leading-snug text-red-300"
+          role="alert"
+        >
+          {loadError}
+        </div>
+      ) : null}
+      {showRotationControls && (
+        <div style={{ position: "absolute", bottom: 8, left: 8, zIndex: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+          {(["x", "y", "z"] as const).map((axis) => (
+            <div key={axis} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ color: "#c9a84c", fontSize: 10, width: 10 }}>{axis.toUpperCase()}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const newRot = { ...rotation, [axis]: rotation[axis] - Math.PI / 12 };
+                  setRotation(newRot);
+                  onRotationChange?.(newRot);
+                }}
+                style={{
+                  background: "rgba(0,0,0,0.5)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  color: "#fff",
+                  borderRadius: 4,
+                  padding: "2px 6px",
+                  fontSize: 11,
+                  cursor: "pointer",
+                }}
+              >
+                −15°
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const newRot = { ...rotation, [axis]: rotation[axis] + Math.PI / 12 };
+                  setRotation(newRot);
+                  onRotationChange?.(newRot);
+                }}
+                style={{
+                  background: "rgba(0,0,0,0.5)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  color: "#fff",
+                  borderRadius: 4,
+                  padding: "2px 6px",
+                  fontSize: 11,
+                  cursor: "pointer",
+                }}
+              >
+                +15°
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const newRot = { ...rotation, [axis]: 0 };
+                  setRotation(newRot);
+                  onRotationChange?.(newRot);
+                }}
+                style={{
+                  background: "rgba(0,0,0,0.5)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  color: "#aaa",
+                  borderRadius: 4,
+                  padding: "2px 6px",
+                  fontSize: 10,
+                  cursor: "pointer",
+                }}
+              >
+                0
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 });

@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * Arka plan kaldırma çıktısı `onRemoved` ile üst bileşene iletilir.
+ * Bu panelde canvas indirme yok; 2D filigran üst akışda (ör. PreviewPanel indirme,
+ * foto düzenleme / arka plan bölümü export) uygulanır.
+ */
 import { useState, useCallback } from "react";
 
 type BackgroundRemoverPanelProps = {

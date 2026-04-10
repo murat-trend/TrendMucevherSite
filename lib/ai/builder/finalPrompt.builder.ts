@@ -16,7 +16,7 @@ const PRODUCT_TR_MAP: Record<JewelryIntent["productType"], string> = {
 
 export class FinalPromptBuilder {
   build(intent: JewelryIntent, mode3DExport: boolean = false): BuiltPrompt {
-    const finalPromptEn = this.buildEn(intent);
+    const finalPromptEn = this.buildEn(intent, mode3DExport);
     const finalPromptTr = this.buildTr(intent);
     const negativePrompt = mode3DExport
       ? joinParts([...JEWELRY_CONSTITUTION.mode3DExport.negativeConstraints])
@@ -38,9 +38,9 @@ export class FinalPromptBuilder {
   private buildImagePromptEn(intent: JewelryIntent, mode3DExport: boolean = false): string {
     const productStr =
       intent.productType === "unknown" ? "jewelry piece" : intent.productType;
-    const styleStr = intent.style.length > 0 ? intent.style[0] : "";
-    const motifStr = intent.motifs.length > 0 ? intent.motifs[0] : "";
-    const shapeStr = intent.shapeHints?.length ? intent.shapeHints[0] : "";
+    const styleStr = intent.style.slice(0, 2).join(" ");
+    const motifStr = intent.motifs.slice(0, 2).join(", ");
+    const shapeStr = intent.shapeHints?.slice(0, 2).join(", ") ?? "";
     const materialStr =
       intent.materialHints.length > 0 ? intent.materialHints[0] : "premium metal";
 
@@ -65,10 +65,14 @@ export class FinalPromptBuilder {
       ? "directional studio lighting with crisp silhouette edges and readable relief separation"
       : dramaticLighting ?? (intent.lightingHints[0] || "high-contrast directional studio lighting, hard edge definition");
     const bgHint = mode3DExport ? " Plain white or light gray background, no strong reflections." : "";
-    return `Professional product photograph of a ${subject} in ${materialStr}. Single jewelry piece as main subject, ${composition}. ${lightingStr}, ${quality}. No blur, no watermark, no distortion.${bgHint}`;
+    const bgFromIntent =
+      !mode3DExport && intent.backgroundHints.length > 0
+        ? ` Background: ${intent.backgroundHints[0]}`
+        : "";
+    return `Professional product photograph of a ${subject} in ${materialStr}. Single jewelry piece as main subject, ${composition}. ${lightingStr}, ${quality}. No blur, no watermark, no distortion.${bgHint}${bgFromIntent}`;
   }
 
-  private buildEn(intent: JewelryIntent): string {
+  private buildEn(intent: JewelryIntent, mode3DExport: boolean = false): string {
     const productStr =
       intent.productType === "unknown" ? "jewelry piece" : intent.productType;
     const subjectParts = [
@@ -82,7 +86,6 @@ export class FinalPromptBuilder {
     const restParts = [
       ...intent.materialHints,
       ...intent.mustHaveElements,
-      ...(intent.shapeHints ?? []),
       ...intent.qualityConstraints,
       ...intent.compositionHints,
       ...intent.cameraHints,
@@ -90,7 +93,11 @@ export class FinalPromptBuilder {
       ...intent.backgroundHints,
     ];
 
-    return joinParts([subject, ...restParts]);
+    let out = joinParts([subject, ...restParts]);
+    if (!mode3DExport && intent.rawNarrative?.trim()) {
+      out = `${out}, Composition scene: ${intent.rawNarrative.trim()}`;
+    }
+    return out;
   }
 
   private buildTr(intent: JewelryIntent): string {
@@ -103,7 +110,6 @@ export class FinalPromptBuilder {
     const restParts = [
       ...intent.materialHints,
       ...intent.mustHaveElements,
-      ...(intent.shapeHints ?? []),
       ...intent.qualityConstraints,
       ...intent.compositionHints,
       ...intent.cameraHints,

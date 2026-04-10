@@ -1,27 +1,41 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import Image from "next/image";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { MAIN_CONTENT_BLOCK_ORDER } from "@/components/remaura/remaura-types";
 import { useRemauraApp } from "@/components/remaura/workspace/RemauraWorkspaceContexts";
 import { BackgroundRemoverPanel } from "@/components/remaura/BackgroundRemoverPanel";
+import { RemauraWatermarkOverlay } from "@/components/remaura/RemauraWatermarkOverlay";
+import { applyWatermark } from "@/lib/remaura/apply-rem-watermark";
 
-/** Üretilen görsel önizlemesinde sağ alt köşe — tıklamayı engellemez */
-function GeneratedImageWatermark() {
+function DebugPromptPanel({ data }: { data: Record<string, unknown> }) {
+  const [open, setOpen] = useState(false);
+  const prompt = (data.promptForImageModel as string) ?? "";
   return (
-    <span
-      className="pointer-events-none absolute bottom-2 right-2 z-[1] flex h-9 w-9 items-end justify-end"
-      aria-hidden
-    >
-      <Image
-        src="/rem-icon-64.png"
-        alt=""
-        width={36}
-        height={36}
-        className="h-9 w-9 opacity-50 drop-shadow-[0_1px_3px_rgba(0,0,0,0.65)]"
-        unoptimized
-      />
-    </span>
+    <div className="mt-4 w-full rounded-lg border border-amber-500/30 bg-amber-500/5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400"
+      >
+        <span>DEBUG — OpenAI Prompt</span>
+        <span className="text-[10px]">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="border-t border-amber-500/20 px-3 py-3 text-[11px] leading-relaxed text-foreground/80">
+          <div className="mb-2 flex flex-wrap gap-2 text-[10px]">
+            <span className="rounded bg-amber-500/10 px-1.5 py-0.5">shot: {String(data.jewelryShot ?? "—")}</span>
+            <span className="rounded bg-amber-500/10 px-1.5 py-0.5">size: {String(data.size ?? "—")}</span>
+            <span className="rounded bg-amber-500/10 px-1.5 py-0.5">styleRef: {String(data.hasStyleRef ?? false)}</span>
+            <span className="rounded bg-amber-500/10 px-1.5 py-0.5">3D: {String(data.exportMode3D ?? false)}</span>
+          </div>
+          <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap break-words rounded bg-black/5 p-2 font-mono text-[10px] dark:bg-white/5">
+            {prompt || "(empty)"}
+          </pre>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -30,6 +44,7 @@ export function PreviewPanel() {
   const app = useRemauraApp();
   const {
     generatedImage,
+    debugPayload,
     platformFormat,
     lastFormatUsed,
     imageDimensions,
@@ -48,6 +63,35 @@ export function PreviewPanel() {
     handleGenerate,
     imageZoomOpen,
   } = app;
+
+  const handleDownloadWatermarkedPng = useCallback(async () => {
+    if (!generatedImage) return;
+    const img = new window.Image();
+    img.src = generatedImage;
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("Görsel yüklenemedi"));
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(img, 0, 0);
+    await applyWatermark(canvas);
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((b) => resolve(b), "image/png");
+    });
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "remaura-jewelry.png";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, [generatedImage]);
 
   return (
     <div className="flex min-h-[200px] flex-col items-center justify-center text-center">
@@ -85,7 +129,7 @@ export function PreviewPanel() {
                       unoptimized
                       sizes="(max-width: 768px) 100vw, 512px"
                     />
-                    <GeneratedImageWatermark />
+                    <RemauraWatermarkOverlay />
                     <span className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white pointer-events-none">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -106,8 +150,11 @@ export function PreviewPanel() {
                     </span>
                   </button>
                   <a
-                    href={generatedImage}
-                    download="remaura-jewelry.png"
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void handleDownloadWatermarkedPng();
+                    }}
                     className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-[#b76e79]/40 bg-[#b76e79]/10 px-4 py-3 text-sm font-bold text-[#b76e79] transition-colors hover:bg-[#b76e79]/20 dark:border-[#b76e79]/35 dark:bg-[#b76e79]/10 dark:text-[#c4838b]"
                   >
                     <svg
@@ -128,6 +175,7 @@ export function PreviewPanel() {
                     </svg>
                     {t.remauraWorkspace.downloadImage}
                   </a>
+                  {debugPayload && <DebugPromptPanel data={debugPayload} />}
                 </div>
               ) : blockId === "bgRemover" ? (
                 <div key="bgRemover" className="mt-4 w-full">
@@ -229,10 +277,13 @@ export function PreviewPanel() {
             >
               <div className="absolute right-4 top-4 flex items-center gap-2">
                 <a
-                  href={generatedImage ?? undefined}
-                  download="remaura-jewelry.png"
+                  href="#"
                   className="flex h-10 items-center gap-2 rounded-full bg-white/10 px-4 text-sm font-medium text-white hover:bg-white/20"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void handleDownloadWatermarkedPng();
+                  }}
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -277,7 +328,7 @@ export function PreviewPanel() {
                   alt=""
                   className="max-h-[75vh] max-w-[min(90vw,1200px)] h-auto w-auto object-contain"
                 />
-                <GeneratedImageWatermark />
+                <RemauraWatermarkOverlay />
               </div>
             </div>
           )}

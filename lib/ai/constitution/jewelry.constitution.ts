@@ -48,6 +48,10 @@ export const JEWELRY_CONSTITUTION = {
     "distorted",
     "cluttered",
     "amateur",
+    "open or incomplete band",
+    "floating unsupported elements",
+    "non-manufacturable thin structures",
+    "broken or missing structural parts",
   ],
   /** Görsel API için kalite ifadesi – Medusa referans seviyesi */
   imageQualitySuffix:

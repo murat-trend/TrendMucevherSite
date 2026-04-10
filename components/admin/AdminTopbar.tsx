@@ -11,6 +11,7 @@ type Props = {
 
 export function AdminTopbar({ onHamburgerClick }: Props) {
   const { locale, setLocale } = useLanguage();
+  const adminEn = locale !== "tr";
   const [avatarOpen, setAvatarOpen] = useState(false);
   const avatarRef = useRef<HTMLDivElement>(null);
 
@@ -36,13 +37,13 @@ export function AdminTopbar({ onHamburgerClick }: Props) {
         <span className="truncate text-sm font-semibold tracking-tight text-zinc-100">Super Admin</span>
         <Link
           href="/"
-          aria-label={locale === "tr" ? "Mağazaya dön — ana sayfa" : "Back to store — home"}
+          aria-label={adminEn ? "Back to store — home" : "Mağazaya dön — ana sayfa"}
           className="ml-1 flex min-w-0 shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.1] bg-white/[0.04] px-2 py-1.5 text-[11px] font-semibold text-[#c9a88a] transition-colors hover:border-[#c69575]/35 hover:bg-[#c69575]/10 hover:text-[#f0dcc8] sm:ml-2 sm:px-2.5 sm:text-xs"
-          title={locale === "tr" ? "Site mağazası ana sayfasına git" : "Go to storefront home"}
+          title={adminEn ? "Go to storefront home" : "Site mağazası ana sayfasına git"}
         >
           <Home className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" strokeWidth={2} aria-hidden />
           <span className="hidden max-w-[9rem] truncate sm:inline">
-            {locale === "tr" ? "Mağazaya dön" : "Back to store"}
+            {adminEn ? "Back to store" : "Mağazaya dön"}
           </span>
         </Link>
       </div>
@@ -66,25 +67,19 @@ export function AdminTopbar({ onHamburgerClick }: Props) {
 
         <div className="mx-1 hidden h-5 w-px bg-white/10 sm:block" />
 
-        <div className="flex items-center rounded-lg border border-white/[0.08] bg-white/[0.03] p-0.5">
-          <button
-            type="button"
-            onClick={() => setLocale("tr")}
-            className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
-              locale === "tr" ? "bg-white/10 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
-            }`}
-          >
-            TR
-          </button>
-          <button
-            type="button"
-            onClick={() => setLocale("en")}
-            className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
-              locale === "en" ? "bg-white/10 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
-            }`}
-          >
-            EN
-          </button>
+        <div className="flex flex-wrap items-center gap-0.5 rounded-lg border border-white/[0.08] bg-white/[0.03] p-0.5">
+          {(["tr", "en", "de", "ru"] as const).map((code) => (
+            <button
+              key={code}
+              type="button"
+              onClick={() => setLocale(code)}
+              className={`rounded-md px-1.5 py-1 text-[10px] font-medium transition-colors sm:px-2 sm:text-[11px] ${
+                locale === code ? "bg-white/10 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              {code.toUpperCase()}
+            </button>
+          ))}
         </div>
         <Globe className="ml-1 hidden h-3.5 w-3.5 text-zinc-600 sm:block" aria-hidden />
 
@@ -113,7 +108,7 @@ export function AdminTopbar({ onHamburgerClick }: Props) {
                 onClick={() => setAvatarOpen(false)}
               >
                 <Home className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
-                {locale === "tr" ? "Mağazaya dön" : "Back to store"}
+                {adminEn ? "Back to store" : "Mağazaya dön"}
               </Link>
               <button
                 type="button"
@@ -121,7 +116,7 @@ export function AdminTopbar({ onHamburgerClick }: Props) {
                 className="block w-full px-3 py-2 text-left text-xs text-zinc-300 hover:bg-white/[0.06]"
                 onClick={() => setAvatarOpen(false)}
               >
-                {locale === "tr" ? "Profil" : "Profile"}
+                {adminEn ? "Profile" : "Profil"}
               </button>
               <button
                 type="button"
@@ -129,7 +124,7 @@ export function AdminTopbar({ onHamburgerClick }: Props) {
                 className="block w-full px-3 py-2 text-left text-xs text-zinc-500 hover:bg-white/[0.06]"
                 onClick={() => setAvatarOpen(false)}
               >
-                {locale === "tr" ? "Çıkış (yakında)" : "Sign out (soon)"}
+                {adminEn ? "Sign out (soon)" : "Çıkış (yakında)"}
               </button>
             </div>
           )}

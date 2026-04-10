@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { RemauraLandingHeader } from "@/components/remaura/RemauraLandingHeader";
+import { RemauraLocalizedLandingHeader } from "@/components/remaura/RemauraLocalizedLandingHeader";
 import { RemauraCadCoachSection } from "@/components/remaura/RemauraCadCoachSection";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://trendmucevher.com";
@@ -23,10 +23,7 @@ export const metadata: Metadata = {
 export default function RemauraCadKocPage() {
   return (
     <>
-      <RemauraLandingHeader
-        title="Rhino Ring Tutor"
-        description="Interactive ring modeling tutor for Rhino and MatrixGold workflows. Learn method, order, and connection logic step by step."
-      />
+      <RemauraLocalizedLandingHeader variant="cadCoach" />
       <RemauraCadCoachSection />
     </>
   );

@@ -100,6 +100,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
   );
   const [platformFormat, setPlatformFormat] = useState<PlatformFormat>("insta-post");
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [debugPayload, setDebugPayload] = useState<Record<string, unknown> | null>(null);
   const [imageDimensions, setImageDimensions] = useState<{ w: number; h: number } | null>(null);
   const [lastFormatUsed, setLastFormatUsed] = useState<PlatformFormat | null>(null);
   const [imageZoomOpen, setImageZoomOpen] = useState(false);
@@ -117,7 +118,6 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
   const [billingCredits, setBillingCredits] = useState<number>(0);
   const [billingCheckoutUrl, setBillingCheckoutUrl] = useState<string | null>(null);
   const [bgRemoverError, setBgRemoverError] = useState<string | null>(null);
-  const [applyRingThreeQuarterView, setApplyRingThreeQuarterView] = useState(false);
   const [remauraCategory, setRemauraCategory] = useState<RemauraCategory>(initialCategory);
 
   const charCount = prompt.length;
@@ -177,7 +177,6 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
           prompt: prompt.trim(),
           locale,
           mode3DExport: platformFormat === "3d-export",
-          applyRingThreeQuarterView,
           userId: billingUserId || undefined,
         }),
       });
@@ -189,7 +188,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     } finally {
       setIsOptimizing(false);
     }
-  }, [prompt, locale, platformFormat, billingUserId, applyRingThreeQuarterView]);
+  }, [prompt, locale, platformFormat, billingUserId]);
 
   const runStyleAnalysis = useCallback(async () => {
     const imagesToSend = styleDataUrlsToPayload(styleImages);
@@ -289,7 +288,6 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
           optimizedResult: optimizedResult ?? undefined,
           styleAnalysis: effectiveStyleAnalysis ?? undefined,
           styleImages: imagesToSend.length > 0 ? imagesToSend : undefined,
-          applyRingThreeQuarterView,
           userId: billingUserId || undefined,
         }),
       });
@@ -299,6 +297,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
         return;
       }
       setGeneratedImage(data.image ?? null);
+      setDebugPayload(data._debug ?? null);
       setLastFormatUsed(platformFormat);
       setImageDimensions(IMAGE_SIZE_MAP[platformFormat]);
     } catch {
@@ -315,7 +314,6 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     styleImages,
     locale,
     billingUserId,
-    applyRingThreeQuarterView,
     t.remauraWorkspace.generateError,
     t.remauraWorkspace.styleAnalysisInsufficient,
   ]);
@@ -373,7 +371,6 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
           image: generatedImage.startsWith("data:") ? generatedImage : `data:image/png;base64,${generatedImage}`,
           prompt: prompt.trim() || undefined,
           selectedPlatform,
-          applyRingThreeQuarterView,
           userId: billingUserId,
         }),
       });
@@ -405,7 +402,6 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     platformFormat,
     selectedDistributionPlatform,
     billingUserId,
-    applyRingThreeQuarterView,
   ]);
 
   const handleKeyDown = useCallback(
@@ -637,10 +633,9 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     billingCredits,
     billingCheckoutUrl,
     setBillingCheckoutUrl,
+    debugPayload,
     bgRemoverError,
     setBgRemoverError,
-    applyRingThreeQuarterView,
-    setApplyRingThreeQuarterView,
     handleOptimize,
     handleAnalyzeStyle,
     handleGenerate,
@@ -734,7 +729,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
                     : "border-white/10 bg-white/[0.03] text-muted hover:border-white/20"
                 }`}
               >
-                REMURA 3D AI
+                REMAURA 3D AI
               </button>
               <button
                 type="button"
@@ -747,7 +742,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
                     : "border-white/10 bg-white/[0.03] text-muted hover:border-white/20"
                 }`}
               >
-                REMURA MESH AI
+                REMAURA MESH AI
               </button>
               <button
                 type="button"

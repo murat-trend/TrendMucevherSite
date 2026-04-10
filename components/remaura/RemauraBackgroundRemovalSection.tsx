@@ -3,7 +3,9 @@
 import { useCallback, useMemo, useState } from "react";
 import Image from "next/image";
 import { BackgroundRemoverPanel } from "@/components/remaura/BackgroundRemoverPanel";
+import { RemauraWatermarkOverlay } from "@/components/remaura/RemauraWatermarkOverlay";
 import { trackEvent } from "@/lib/analytics/track";
+import { applyWatermark } from "@/lib/remaura/apply-rem-watermark";
 
 type MetalToneKey =
   | "none"
@@ -382,6 +384,8 @@ export function RemauraBackgroundRemovalSection({ t }: { t: T }) {
       );
     }
 
+    await applyWatermark(canvas);
+
     const blob = await new Promise<Blob | null>((resolve) => {
       canvas.toBlob((b) => resolve(b), format === "png" ? "image/png" : "image/jpeg", 0.92);
     });
@@ -533,6 +537,7 @@ export function RemauraBackgroundRemovalSection({ t }: { t: T }) {
                     style={{ left: `${comparePos}%` }}
                   />
                 )}
+                <RemauraWatermarkOverlay />
               </div>
               <div className="rounded-xl border border-white/10 bg-black/20 p-3">
                 <button
@@ -551,7 +556,7 @@ export function RemauraBackgroundRemovalSection({ t }: { t: T }) {
                       : ""
                   }`}
                 >
-                  {compareEnabled ? "Karsilastirma Acik" : "Once/Sonra Karsilastir"}
+                  {compareEnabled ? "Karşılaştırma Açık" : "Once/Sonra Karşılaştır"}
                 </button>
                 {compareEnabled && (
                   <label className="mt-3 block text-xs text-muted">
@@ -596,7 +601,7 @@ export function RemauraBackgroundRemovalSection({ t }: { t: T }) {
       </div>
 
       <aside className="rounded-3xl border border-white/10 bg-[#141414] p-5 shadow-2xl xl:sticky xl:top-8 xl:max-h-[calc(100vh-2.5rem)] xl:overflow-y-auto">
-        <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[#b76e79]">Gorsel Ayarlari</p>
+        <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[#b76e79]">Görsel Ayarları</p>
         <div className={`grid grid-cols-1 gap-3 rounded-xl border border-white/10 bg-black/20 p-4 sm:grid-cols-2 ${controlsDisabled ? "opacity-60" : ""}`}>
           <p className="sm:col-span-2 text-xs text-muted">
             Metal tonu secimi soldaki <span className="text-foreground">Referans Panosu</span> uzerinden yapilir.
