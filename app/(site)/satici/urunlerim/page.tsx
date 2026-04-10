@@ -2,8 +2,9 @@
 
 import type React from "react";
 import { useState, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { Plus, Package, X, Upload } from "lucide-react";
+import { Plus, Package, X, Upload, LogOut } from "lucide-react";
 
 type JewelryType = "Yüzük" | "Kolye" | "Bilezik" | "Küpe" | "Pandant" | "Broş";
 
@@ -54,6 +55,8 @@ const inputCls = "w-full rounded-xl border border-border bg-background px-3.5 py
 const fileCls = "block w-full cursor-pointer rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted file:mr-3 file:rounded-lg file:border-0 file:bg-surface-alt file:px-3 file:py-1 file:text-xs file:text-foreground";
 
 export default function SaticiUrunlerimPage() {
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<ProductForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -95,6 +98,14 @@ export default function SaticiUrunlerimPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{ name: string; story: string; personal_price: number } | null>(null);
   const [editSaving, setEditSaving] = useState(false);
+
+  const handleLogout = useCallback(async () => {
+    setLoggingOut(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/");
+    router.refresh();
+  }, [router]);
 
   const loadProfile = useCallback(async () => {
     setProfileLoading(true);
@@ -483,20 +494,32 @@ export default function SaticiUrunlerimPage() {
     <div className="min-h-screen bg-background">
       {/* Üst bar */}
       <div className="border-b border-border/60 bg-card">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div>
             <h1 className="font-display text-xl font-medium tracking-[-0.02em] text-foreground">Ürünlerim</h1>
             <p className="mt-0.5 text-[13px] text-muted">3D modellerinizi yönetin</p>
           </div>
-          <button
-            onClick={() => {
-              setShowForm(true);
-              setError(null);
-            }}
-            className="flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground hover:opacity-90"
-          >
-            <Plus size={15} strokeWidth={2} /> Ürün Ekle
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleLogout()}
+              disabled={loggingOut}
+              className="flex items-center gap-2 rounded-full border border-border/80 bg-transparent px-4 py-2 text-[13px] font-medium text-muted transition-colors hover:border-red-500/30 hover:bg-red-500/[0.06] hover:text-red-400 disabled:opacity-50"
+            >
+              <LogOut size={14} strokeWidth={2} />
+              {loggingOut ? "Çıkılıyor..." : "Çıkış Yap"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowForm(true);
+                setError(null);
+              }}
+              className="flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground hover:opacity-90"
+            >
+              <Plus size={15} strokeWidth={2} /> Ürün Ekle
+            </button>
+          </div>
         </div>
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <nav className="flex gap-6">

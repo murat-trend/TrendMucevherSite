@@ -1,12 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 
+type AccountKind = "buyer" | "seller";
+
 export default function GirisPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectAfterLogin = searchParams.get("redirect");
+  const tip = searchParams.get("tip");
+
+  const [kind, setKind] = useState<AccountKind>("seller");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -17,6 +24,17 @@ export default function GirisPage() {
   const [resetSent, setResetSent] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (tip === "uye") {
+      router.replace("/uye-giris");
+    }
+  }, [tip, router]);
+
+  useEffect(() => {
+    if (tip === "alici" || tip === "buyer") setKind("buyer");
+    else if (tip === "satici" || tip === "seller") setKind("seller");
+  }, [tip]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +56,14 @@ export default function GirisPage() {
         return;
       }
 
-      router.push("/satici/dashboard");
+      if (kind === "buyer") {
+        const r = redirectAfterLogin;
+        const safe =
+          r && r.startsWith("/") && !r.startsWith("//") ? r : "/hesabim";
+        router.push(safe);
+      } else {
+        router.push("/satici/dashboard");
+      }
     } catch {
       setError("Beklenmeyen bir hata oluştu.");
     } finally {
@@ -51,12 +76,18 @@ export default function GirisPage() {
     setResetLoading(true);
     setResetError(null);
     const supabase = createClient();
+    const resetPath = kind === "buyer" ? "/hesabim" : "/satici/hesabim";
     await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
-      redirectTo: `${window.location.origin}/satici/hesabim`,
+      redirectTo: `${window.location.origin}${resetPath}`,
     });
     setResetSent(true);
     setResetLoading(false);
   };
+
+  const uyeKayitHref =
+    redirectAfterLogin && redirectAfterLogin.startsWith("/")
+      ? `/uye-giris?redirect=${encodeURIComponent(redirectAfterLogin)}`
+      : "/uye-giris";
 
   return (
     <main className="flex min-h-[80vh] items-center justify-center px-4 py-16 sm:px-6 lg:px-8">
@@ -73,15 +104,43 @@ export default function GirisPage() {
             </div>
           </div>
           <h1 className="font-display text-3xl font-medium tracking-[-0.03em] text-foreground">
-            Satıcı Girişi
+            {kind === "buyer" ? "Giriş" : "Satıcı Girişi"}
           </h1>
           <p className="mt-3 text-[14px] leading-relaxed text-muted">
-            Platformumuza hoş geldiniz. Hesabınıza giriş yapın.
+            {kind === "buyer"
+              ? "Modelleri satın almak ve hesabınızı yönetmek için giriş yapın."
+              : "Satıcı panelinize giriş yapın."}
           </p>
         </div>
 
         {/* Form kartı */}
         <div className="rounded-2xl border border-border/80 bg-card p-8 shadow-[0_4px_24px_rgba(30,28,26,0.06)] dark:border-border dark:shadow-[0_4px_24px_rgba(0,0,0,0.2)]">
+          <div className="mb-6 flex rounded-xl border border-border/40 p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setKind("buyer");
+                setError(null);
+              }}
+              className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors ${
+                kind === "buyer" ? "bg-[#c9a84c] text-black" : "text-muted hover:text-foreground"
+              }`}
+            >
+              Giriş
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setKind("seller");
+                setError(null);
+              }}
+              className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors ${
+                kind === "seller" ? "bg-[#c9a84c] text-black" : "text-muted hover:text-foreground"
+              }`}
+            >
+              Satıcı
+            </button>
+          </div>
           {resetMode && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
               <div className="w-full max-w-sm rounded-2xl border border-border/40 bg-card p-6">
@@ -204,13 +263,16 @@ export default function GirisPage() {
           </form>
 
           {/* Alt linkler */}
-          <div className="mt-6 flex items-center justify-between border-t border-border/60 pt-6">
-            <Link
-              href="/satici-ol"
-              className="text-[13px] text-muted transition-colors hover:text-accent"
-            >
-              Satıcı hesabı oluştur →
-            </Link>
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-6">
+            {kind === "buyer" ? (
+              <Link href={uyeKayitHref} className="text-[13px] text-muted transition-colors hover:text-accent">
+                Hesabınız yok mu? Üye olun →
+              </Link>
+            ) : (
+              <Link href="/satici-ol" className="text-[13px] text-muted transition-colors hover:text-accent">
+                Satıcı hesabı oluştur →
+              </Link>
+            )}
             <button
               type="button"
               className="text-[13px] text-muted transition-colors hover:text-accent"

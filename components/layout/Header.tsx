@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef } from "react";
 import { LanguageMenu } from "@/components/i18n/LanguageMenu";
 import { UtilityCluster } from "@/components/layout/UtilityCluster";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
+import { createClient } from "@/utils/supabase/client";
 
 const NAV_ITEMS = [
   { href: "/", key: "home" as const },
@@ -18,9 +20,80 @@ const NAV_ITEMS = [
   { href: "/admin", key: "superAdmin" as const },
 ];
 
+type HeaderSession = {
+  email: string | null;
+  role: "seller" | "buyer";
+  isSuperAdmin: boolean;
+};
+
 export function Header() {
+  const router = useRouter();
   const { t } = useLanguage();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [session, setSession] = useState<HeaderSession | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+
+  const handleSignOut = async () => {
+    setLoggingOut(true);
+    setAccountMenuOpen(false);
+    setMobileMenuOpen(false);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setSession(null);
+    router.push("/");
+    router.refresh();
+    setLoggingOut(false);
+  };
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    const syncSession = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          setSession(null);
+          setAccountMenuOpen(false);
+          return;
+        }
+        const res = await fetch("/api/auth/header-context", { credentials: "same-origin", cache: "no-store" });
+        const ctx = (await res.json()) as
+          | { signedIn: false }
+          | { signedIn: true; email: string | null; role: "seller" | "buyer"; isSuperAdmin: boolean };
+        if (ctx.signedIn) {
+          setSession({
+            email: ctx.email,
+            role: ctx.role,
+            isSuperAdmin: ctx.isSuperAdmin,
+          });
+        } else {
+          setSession({
+            email: user.email ?? null,
+            role: "buyer",
+            isSuperAdmin: false,
+          });
+        }
+        setAccountMenuOpen(false);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+
+    void syncSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      void syncSession();
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (mobileMenuOpen) document.body.style.overflow = "hidden";
@@ -29,6 +102,17 @@ export function Header() {
       document.body.style.overflow = "";
     };
   }, [mobileMenuOpen]);
+
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(e.target as Node)) {
+        setAccountMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [accountMenuOpen]);
 
   return (
     <>
@@ -115,17 +199,155 @@ export function Header() {
               )}
             </nav>
 
-            {/* Satıcı Girişi butonu */}
-            <Link
-              href="/giris"
-              className="flex h-9 items-center gap-1.5 rounded-[999px] border border-border bg-card px-4 text-[13px] font-medium text-foreground/80 transition-all duration-200 hover:border-accent/40 hover:text-foreground"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-              Satıcı Girişi
-            </Link>
+            {/* Hesap: giriş yok → Giriş menüsü; oturum var → e-posta + profil menüsü (Etsy tarzı) */}
+            {!authLoading &&
+              (session ? (
+                <div className="relative" ref={accountMenuRef}>
+                  <button
+                    type="button"
+                    aria-label="Hesap menüsü"
+                    aria-expanded={accountMenuOpen}
+                    aria-haspopup="true"
+                    onClick={() => setAccountMenuOpen((o) => !o)}
+                    className={`flex h-9 max-w-[min(100vw-10rem,260px)] items-center gap-2 rounded-[999px] border border-border bg-card py-1 pl-1 pr-2 text-left text-[12px] font-medium text-foreground/85 transition-all hover:border-accent/40 hover:text-foreground ${accountMenuOpen ? "border-accent/40" : ""}`}
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#c9a84c]/18 text-[11px] font-semibold uppercase text-[#b8923a]">
+                      {(session.email?.trim().charAt(0) || "?").toUpperCase()}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{session.email ?? "Hesap"}</span>
+                    <svg
+                      className={`h-3 w-3 shrink-0 opacity-60 transition-transform ${accountMenuOpen ? "rotate-180" : ""}`}
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  {accountMenuOpen && (
+                    <div className="absolute right-0 top-full z-[200] mt-2 w-64 rounded-xl border border-border/40 bg-card py-1 shadow-xl">
+                      <div className="border-b border-border/40 px-4 py-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Oturum</p>
+                        <p className="mt-1 break-all text-sm font-medium leading-snug text-foreground">{session.email ?? "—"}</p>
+                      </div>
+                      <Link
+                        href="/hesabim"
+                        onClick={() => setAccountMenuOpen(false)}
+                        className="flex items-center gap-2 px-4 py-2.5 text-sm text-foreground/80 transition-colors hover:bg-white/[0.04] hover:text-foreground"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
+                        </svg>
+                        Hesabım
+                      </Link>
+                      {session.role === "seller" && (
+                        <>
+                          <Link
+                            href="/satici/dashboard"
+                            onClick={() => setAccountMenuOpen(false)}
+                            className="flex items-center gap-2 px-4 py-2.5 text-sm text-foreground/80 transition-colors hover:bg-white/[0.04] hover:text-foreground"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                              <polyline points="9 22 9 12 15 12 15 22" />
+                            </svg>
+                            Satıcı paneli
+                          </Link>
+                          <Link
+                            href="/satici/hesabim"
+                            onClick={() => setAccountMenuOpen(false)}
+                            className="flex items-center gap-2 px-4 py-2.5 text-sm text-foreground/80 transition-colors hover:bg-white/[0.04] hover:text-foreground"
+                          >
+                            Mağaza hesabım
+                          </Link>
+                        </>
+                      )}
+                      {session.isSuperAdmin && (
+                        <Link
+                          href="/admin"
+                          onClick={() => setAccountMenuOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2.5 text-sm text-foreground/80 transition-colors hover:bg-white/[0.04] hover:text-foreground"
+                        >
+                          Super Admin
+                        </Link>
+                      )}
+                      {session.role === "buyer" && (
+                        <Link
+                          href="/giris?tip=satici"
+                          onClick={() => setAccountMenuOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2.5 text-sm text-foreground/80 transition-colors hover:bg-white/[0.04] hover:text-foreground"
+                        >
+                          Satıcı girişi
+                        </Link>
+                      )}
+                      <div className="border-t border-border/40 pt-1">
+                        <button
+                          type="button"
+                          disabled={loggingOut}
+                          className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-red-500/90 transition-colors hover:bg-red-500/[0.06] disabled:opacity-50"
+                          onClick={() => void handleSignOut()}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
+                            <polyline points="16 17 21 12 16 7" strokeLinecap="round" strokeLinejoin="round" />
+                            <line x1="21" y1="12" x2="9" y2="12" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                          {loggingOut ? "Çıkılıyor…" : "Çıkış Yap"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="relative" ref={accountMenuRef}>
+                  <button
+                    type="button"
+                    aria-label="Giriş seçenekleri"
+                    aria-expanded={accountMenuOpen}
+                    aria-haspopup="true"
+                    onClick={() => setAccountMenuOpen((o) => !o)}
+                    className={`flex h-9 items-center gap-2 rounded-[999px] border border-border bg-card pl-3 pr-2 text-[13px] font-medium text-foreground/80 transition-all hover:border-accent/40 hover:text-foreground ${accountMenuOpen ? "border-accent/40" : ""}`}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
+                    Giriş
+                    <svg className={`h-3 w-3 shrink-0 opacity-70 transition-transform ${accountMenuOpen ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  {accountMenuOpen && (
+                    <div className="absolute right-0 top-full z-[200] mt-2 w-56 rounded-xl border border-border/40 bg-card py-1 shadow-xl">
+                      <Link
+                        href="/giris?tip=uye"
+                        onClick={() => setAccountMenuOpen(false)}
+                        className="flex items-center gap-2 px-4 py-3 text-sm text-foreground/80 transition-colors hover:bg-white/[0.04] hover:text-foreground"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
+                        </svg>
+                        Giriş
+                      </Link>
+                      <Link
+                        href="/giris"
+                        onClick={() => setAccountMenuOpen(false)}
+                        className="flex items-center gap-2 border-t border-border/20 px-4 py-3 text-sm text-foreground/80 transition-colors hover:bg-white/[0.04] hover:text-foreground"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                          <polyline points="9 22 9 12 15 12 15 22" />
+                        </svg>
+                        Satıcı Girişi
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              ))}
 
             <UtilityCluster languageLayout="menu" languageMenuAlign="end" />
           </div>
@@ -176,20 +398,101 @@ export function Header() {
             </div>
           </div>
 
-          {/* Satıcı Girişi — mobile */}
-          <div className="shrink-0 px-6 pb-4">
-            <Link
-              href="/giris"
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-card py-3 text-[14px] font-medium text-foreground/80 transition-all hover:border-accent/40 hover:text-foreground"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-              Satıcı Girişi
-            </Link>
-          </div>
+          {/* Hesap / giriş — mobil */}
+          {!authLoading && (
+            <div className="shrink-0 border-b border-border/40 px-6 pb-4">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">Hesap</p>
+              {session ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/40 px-4 py-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#c9a84c]/18 text-sm font-semibold uppercase text-[#b8923a]">
+                      {(session.email?.trim().charAt(0) || "?").toUpperCase()}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Oturum</p>
+                      <p className="break-all text-[13px] font-medium leading-snug text-foreground">{session.email ?? "—"}</p>
+                    </div>
+                  </div>
+                  <Link
+                    href="/hesabim"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-card py-3 text-[14px] font-medium text-foreground/80 transition-all hover:border-accent/40 hover:text-foreground"
+                  >
+                    Hesabım
+                  </Link>
+                  {session.role === "seller" && (
+                    <>
+                      <Link
+                        href="/satici/dashboard"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-card py-3 text-[14px] font-medium text-foreground/80 transition-all hover:border-accent/40 hover:text-foreground"
+                      >
+                        Satıcı paneli
+                      </Link>
+                      <Link
+                        href="/satici/hesabim"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="flex w-full items-center justify-center rounded-xl border border-border/50 py-2.5 text-[13px] font-medium text-muted transition-all hover:border-accent/30 hover:text-foreground"
+                      >
+                        Mağaza hesabım
+                      </Link>
+                    </>
+                  )}
+                  {session.isSuperAdmin && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex w-full items-center justify-center rounded-xl border border-border/50 py-2.5 text-[13px] font-medium text-muted transition-all hover:border-accent/30 hover:text-foreground"
+                    >
+                      Super Admin
+                    </Link>
+                  )}
+                  {session.role === "buyer" && (
+                    <Link
+                      href="/giris?tip=satici"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex w-full items-center justify-center rounded-xl border border-border/50 py-2.5 text-[13px] font-medium text-muted transition-all hover:border-accent/30 hover:text-foreground"
+                    >
+                      Satıcı girişi
+                    </Link>
+                  )}
+                  <button
+                    type="button"
+                    disabled={loggingOut}
+                    onClick={() => void handleSignOut()}
+                    className="w-full rounded-xl border border-red-500/25 bg-red-500/[0.06] py-3 text-[14px] font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+                  >
+                    {loggingOut ? "Çıkılıyor…" : "Çıkış Yap"}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <Link
+                    href="/giris?tip=uye"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-card py-3 text-[14px] font-medium text-foreground/80 transition-all hover:border-accent/40 hover:text-foreground"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
+                    Giriş
+                  </Link>
+                  <Link
+                    href="/giris"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-card py-3 text-[14px] font-medium text-foreground/80 transition-all hover:border-accent/40 hover:text-foreground"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                      <polyline points="9 22 9 12 15 12 15 22" />
+                    </svg>
+                    Satıcı Girişi
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Dil + Tema */}
           <div className="shrink-0 border-t border-border/60 px-6 py-6">

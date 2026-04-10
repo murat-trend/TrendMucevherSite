@@ -3,13 +3,14 @@
 import { createClient } from "@/utils/supabase/client";
 import type React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell,
 } from "recharts";
 import {
-  TrendingUp, ShoppingCart, Star, Package, Plus, Clock,
+  TrendingUp, ShoppingCart, Star, Package, Plus, Clock, LogOut,
   CheckCircle, Truck, AlertCircle, ShoppingBag, ArrowUpRight,
   ArrowDownRight, Megaphone, Users, RotateCcw, Target, Bell,
   Wallet, Calendar, ChevronRight, ThumbsUp, ThumbsDown, Minus,
@@ -121,17 +122,41 @@ const numFmt = (n: number) => new Intl.NumberFormat("tr-TR").format(n);
 // ── Küçük bileşenler ──────────────────────────────────────────────────────
 
 export function SaticiNav({ active }: { active: string }) {
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/");
+    router.refresh();
+  };
+
   return (
     <div className="border-b border-border/60 bg-card">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
         <div>
           <h1 className="font-display text-xl font-medium tracking-[-0.02em] text-foreground">Satıcı Paneli</h1>
           <p className="mt-0.5 text-[13px] text-muted">Hoş geldiniz — Nisan 2026</p>
         </div>
-        <Link href="/satici/urunlerim"
-          className="flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground hover:opacity-90">
-          <Plus size={14} strokeWidth={2} /> Ürün Ekle
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void handleLogout()}
+            disabled={loggingOut}
+            className="flex items-center gap-2 rounded-full border border-border/80 bg-transparent px-4 py-2 text-[13px] font-medium text-muted transition-colors hover:border-red-500/30 hover:bg-red-500/[0.06] hover:text-red-400 disabled:opacity-50"
+          >
+            <LogOut size={14} strokeWidth={2} />
+            {loggingOut ? "Çıkılıyor..." : "Çıkış Yap"}
+          </button>
+          <Link
+            href="/satici/urunlerim"
+            className="flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground hover:opacity-90"
+          >
+            <Plus size={14} strokeWidth={2} /> Ürün Ekle
+          </Link>
+        </div>
       </div>
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <nav className="flex gap-6 overflow-x-auto">

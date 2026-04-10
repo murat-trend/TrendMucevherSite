@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { use, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { getThumbnailViewUrl } from "@/lib/modeller/model-store";
 import { createClient } from "@/utils/supabase/client";
@@ -22,6 +22,7 @@ export default function CheckoutSlugPage({
   params: Promise<{ slug: string }>;
 }) {
   const { locale } = useLanguage();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { slug } = use(params);
   const requested = searchParams.get("license");
@@ -131,18 +132,24 @@ export default function CheckoutSlugPage({
     getThumbnailViewUrl(slug, "on");
 
   const handleOrder = async () => {
-    if (!fullName.trim() || !email.trim()) return;
-    setOrdering(true);
-    setOrderError(null);
+    // Giriş kontrolü
     const supabase = createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
+    if (!user) {
+      router.push(`/giris?tip=uye&redirect=${encodeURIComponent(`/checkout/${slug}`)}`);
+      return;
+    }
+
+    if (!fullName.trim() || !email.trim()) return;
+    setOrdering(true);
+    setOrderError(null);
     const dbRow = await supabase.from("products_3d").select("id, seller_id").eq("slug", slug).maybeSingle();
     const productId = dbRow.data?.id ?? null;
     const sellerId = dbRow.data?.seller_id ?? null;
     const { error } = await supabase.from("orders").insert({
-      buyer_id: user?.id ?? null,
+      buyer_id: user.id,
       seller_id: sellerId,
       product_id: productId,
       product_name: model?.name ?? slug,
@@ -151,6 +158,8 @@ export default function CheckoutSlugPage({
       license_type: selectedLicense,
       amount: selectedPrice,
       payment_status: "pending",
+      ip_address: (await fetch("https://api.ipify.org?format=json").then((r) => r.json()).catch(() => ({ ip: null }))).ip,
+      user_agent: navigator.userAgent,
     });
     if (error) {
       setOrderError("Sipariş oluşturulamadı. Lütfen tekrar deneyin.");
@@ -159,7 +168,7 @@ export default function CheckoutSlugPage({
     }
     if (sellerId) {
       await supabase.from("messages").insert({
-        sender_id: user?.id ?? null,
+        sender_id: user.id,
         receiver_id: sellerId,
         product_id: productId,
         message: `Yeni sipariş: ${model?.name ?? slug} — ${selectedLicense === "commercial" ? "Ticari" : "Kişisel"} lisans — ₺${selectedPrice} — ${fullName} (${email})`,

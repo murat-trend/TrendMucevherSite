@@ -2,18 +2,31 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bell, ChevronDown, Globe, Home, Menu, Search, User } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Bell, ChevronDown, Globe, Home, LogOut, Menu, Search, User } from "lucide-react";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
+import { createClient } from "@/utils/supabase/client";
 
 type Props = {
   onHamburgerClick: () => void;
 };
 
 export function AdminTopbar({ onHamburgerClick }: Props) {
+  const router = useRouter();
   const { locale, setLocale } = useLanguage();
   const adminEn = locale !== "tr";
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const avatarRef = useRef<HTMLDivElement>(null);
+
+  const handleSignOut = async () => {
+    setLoggingOut(true);
+    setAvatarOpen(false);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/");
+    router.refresh();
+  };
 
   useEffect(() => {
     const close = (e: MouseEvent) => {
@@ -121,10 +134,12 @@ export function AdminTopbar({ onHamburgerClick }: Props) {
               <button
                 type="button"
                 role="menuitem"
-                className="block w-full px-3 py-2 text-left text-xs text-zinc-500 hover:bg-white/[0.06]"
-                onClick={() => setAvatarOpen(false)}
+                disabled={loggingOut}
+                className="flex w-full items-center gap-2 border-t border-white/[0.08] px-3 py-2 text-left text-xs text-red-400/90 transition-colors hover:bg-red-500/[0.08] disabled:opacity-50"
+                onClick={() => void handleSignOut()}
               >
-                {adminEn ? "Sign out (soon)" : "Çıkış (yakında)"}
+                <LogOut className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
+                {loggingOut ? (adminEn ? "Signing out…" : "Çıkılıyor…") : adminEn ? "Sign out" : "Çıkış Yap"}
               </button>
             </div>
           )}
