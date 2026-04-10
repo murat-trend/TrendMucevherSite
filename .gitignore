@@ -63,3 +63,5 @@ next-env.d.ts
 public/models/
 public/convert-output/
 docs/cad/
+
+data/
