@@ -538,7 +538,7 @@ export default function ModelDetayPage({
     ...product,
     story: dynamic?.story?.trim() ? dynamic?.story : fallbackLocalized.story,
     name: dynamic?.name?.trim() ? dynamic?.name : fallbackLocalized.name,
-    tags: [jewelryTypeLabel(dynamic?.jewelryType, locale)],
+    tags: [jewelryTypeLabel(dynamic?.jewelryType ?? 'Pandant', locale)],
   }
   const localizedStory = (() => {
     if (locale === 'en' && (dbProduct as any)?.story_en) return (dbProduct as any).story_en
