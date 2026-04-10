@@ -47,7 +47,7 @@ async function convertGlbToStl(input: Buffer): Promise<Buffer> {
   loader.setDRACOLoader(dracoLoader);
   const gltf = await new Promise<THREE.Group>((resolve, reject) => {
     loader.parse(
-      input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength),
+      input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength) as ArrayBuffer,
       "",
       (parsed) => resolve(parsed.scene),
       (err) => reject(err),
@@ -59,7 +59,8 @@ async function convertGlbToStl(input: Buffer): Promise<Buffer> {
 
   if (typeof stl === "string") return Buffer.from(stl, "utf8");
   if (stl instanceof DataView) return Buffer.from(stl.buffer, stl.byteOffset, stl.byteLength);
-  if (stl instanceof ArrayBuffer) return Buffer.from(stl);
+  const stlRest = stl as unknown;
+  if (stlRest instanceof ArrayBuffer) return Buffer.from(stlRest);
   return Buffer.from(stl as ArrayLike<number>);
 }
 

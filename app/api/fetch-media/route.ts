@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const { buffer, contentType } = await fetchWithNodeHttp(url)
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         "Content-Type": contentType,

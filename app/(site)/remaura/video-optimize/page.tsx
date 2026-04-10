@@ -189,7 +189,7 @@ export default function VideoOptimizePage() {
       ]);
 
       const data = await ffmpeg.readFile("output.mp4");
-      const blob = new Blob([data], { type: "video/mp4" });
+      const blob = new Blob([data as BlobPart], { type: "video/mp4" });
       const url = URL.createObjectURL(blob);
       setMp4Url(url);
       const a = document.createElement("a");

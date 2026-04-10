@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 
 type AccountKind = "buyer" | "seller";
 
-export default function GirisPage() {
+function GirisPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectAfterLogin = searchParams.get("redirect");
@@ -293,5 +293,19 @@ export default function GirisPage() {
 
       </div>
     </main>
+  );
+}
+
+export default function GirisPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-[80vh] items-center justify-center px-4 py-16 sm:px-6 lg:px-8">
+          <div className="h-8 w-8 animate-pulse rounded-full bg-muted/30" aria-hidden />
+        </main>
+      }
+    >
+      <GirisPageContent />
+    </Suspense>
   );
 }

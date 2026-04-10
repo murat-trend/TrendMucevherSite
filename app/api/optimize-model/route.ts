@@ -53,7 +53,7 @@ export async function POST(request: Request) {
 
     const document = await io.readBinary(sourceBytes)
     await document.transform(dedup(), prune(), draco())
-    const optimizedBytes = io.writeBinary(document)
+    const optimizedBytes = await io.writeBinary(document)
 
     const accountId = getRequiredEnv('R2_ACCOUNT_ID')
     const accessKeyId = getRequiredEnv('R2_ACCESS_KEY_ID')

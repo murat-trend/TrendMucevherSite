@@ -865,7 +865,9 @@ export default function ModelDetayPage({
               { key: 'kenar', label: copy.viewLabels.kenar },
               { key: 'ust', label: copy.viewLabels.ust },
             ].map((view) => {
-              const src = dynamic ? dynamicViewImages[view.key] : `/thumbnails/${slug}-${view.key}.jpg`
+              const src = dynamic
+                ? dynamicViewImages[view.key as keyof typeof dynamicViewImages]
+                : `/thumbnails/${slug}-${view.key}.jpg`
               return (
                 <div
                   key={view.key}

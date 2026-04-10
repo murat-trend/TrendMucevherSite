@@ -464,37 +464,45 @@ export default function SaticiDashboardPage() {
   const unreadCount = notifications.filter((n) => !n.is_read).length;
   const monthlyProgress = Math.round((STATS.monthlySales / STATS.monthlyTarget) * 100);
 
-  const categoryChartData = categoryDistribution.reduce((acc, item) => {
-    const label = item.jewelry_type ?? "Diğer";
-    const existing = acc.find((a: any) => a.name === label);
-    if (existing) existing.value++;
-    else acc.push({ name: label, value: 1 });
-    return acc;
-  }, [] as { name: string; value: number }[]);
+  const categoryChartData: { name: string; value: number }[] = categoryDistribution.reduce(
+    (acc, item) => {
+      const label = item.jewelry_type ?? "Diğer";
+      const existing = acc.find((a: { name: string; value: number }) => a.name === label);
+      if (existing) existing.value++;
+      else acc.push({ name: label, value: 1 });
+      return acc;
+    },
+    [] as { name: string; value: number }[],
+  );
   const categoryTotal = categoryChartData.reduce((s, c) => s + c.value, 0);
   const categoryPieColors = ["#c9a84c", "#a07840", "#7a6030", "#504020", "#6b6b6b"];
 
-  const topProductsData = Object.values(
-    productPerformance.reduce((acc, order) => {
-      const key = order.product_name ?? "Bilinmeyen";
-      if (!acc[key]) acc[key] = { name: key, revenue: 0, orderCount: 0 };
-      acc[key].revenue += order.amount ?? 0;
-      acc[key].orderCount++;
-      return acc;
-    }, {} as Record<string, { name: string; revenue: number; orderCount: number }>),
+  const topProductsData = (
+    Object.values(
+      productPerformance.reduce((acc, order) => {
+        const key = order.product_name ?? "Bilinmeyen";
+        if (!acc[key]) acc[key] = { name: key, revenue: 0, orderCount: 0 };
+        acc[key].revenue += order.amount ?? 0;
+        acc[key].orderCount++;
+        return acc;
+      }, {} as Record<string, { name: string; revenue: number; orderCount: number }>),
+    ) as { name: string; revenue: number; orderCount: number }[]
   ).slice(0, 4);
 
   const totalAdSpend = adCampaigns.reduce((s, c) => s + (c.spent ?? 0), 0);
   const totalAdRevenue = adCampaigns.reduce((s, c) => s + (c.revenue ?? 0), 0);
   const roas = totalAdSpend > 0 ? (totalAdRevenue / totalAdSpend).toFixed(1) : "0";
 
-  const trafficChartData = trafficSources.reduce((acc, item) => {
-    const key = item.source ?? "Doğrudan";
-    const existing = acc.find((a: any) => a.name === key);
-    if (existing) existing.value++;
-    else acc.push({ name: key, value: 1 });
-    return acc;
-  }, [] as { name: string; value: number }[]);
+  const trafficChartData: { name: string; value: number }[] = trafficSources.reduce(
+    (acc, item) => {
+      const key = item.source ?? "Doğrudan";
+      const existing = acc.find((a: { name: string; value: number }) => a.name === key);
+      if (existing) existing.value++;
+      else acc.push({ name: key, value: 1 });
+      return acc;
+    },
+    [] as { name: string; value: number }[],
+  );
   const trafficTotal = trafficChartData.reduce((s, t) => s + t.value, 0);
 
   const weekDays = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
@@ -691,9 +699,10 @@ export default function SaticiDashboardPage() {
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(v: number) =>
-                    (categoryTotal ? `%${Math.round((v / categoryTotal) * 100)}` : `%${v}`)
-                  }
+                  formatter={(v) => {
+                    const n = typeof v === "number" ? v : 0
+                    return categoryTotal ? `%${Math.round((n / categoryTotal) * 100)}` : `%${n}`
+                  }}
                 />
               </PieChart>
             </ResponsiveContainer>

@@ -1233,7 +1233,7 @@ export function ProductsModerationPage() {
             </button>
           </div>
           {modelRows.length === 0 ? (
-            <AdminEmptyState message="Henüz 3D model yok" hint="İlk modeli ekleyerek başlayın." variant="cube" />
+            <AdminEmptyState message="Henüz 3D model yok" hint="İlk modeli ekleyerek başlayın." />
           ) : (
             <AdminDataScroll>
               <table className="w-full min-w-[980px] border-collapse text-left text-sm">

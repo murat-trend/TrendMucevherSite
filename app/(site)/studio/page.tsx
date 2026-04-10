@@ -24,7 +24,7 @@ function safeFfmpegExt(filename: string): string {
 
 function blobFromFileData(data: Uint8Array | string, type: string): Blob {
   if (typeof data === "string") return new Blob([data], { type })
-  return new Blob([data], { type })
+  return new Blob([data as BlobPart], { type })
 }
 
 async function ffmpegDeleteQuiet(ffmpeg: FFmpeg, name: string) {
