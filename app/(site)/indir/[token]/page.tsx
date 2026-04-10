@@ -44,7 +44,7 @@ export default function IndirPage({ params }: { params: Promise<{ token: string 
           .eq("download_token", token)
           .eq("payment_status", "paid")
           .maybeSingle();
-        data = retry.data;
+        data = retry.data as any;
         qError = retry.error;
       }
 
