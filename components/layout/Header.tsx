@@ -158,9 +158,6 @@ export function Header() {
                       <Link href="/remaura?category=mesh3d" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
                         Remaura AI 3D <span className="text-[10px] font-normal text-muted">(görüntüden 3D)</span>
                       </Link>
-                      <Link href="/remaura?category=meshAI" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                        Remaura Mesh AI <span className="text-[10px] font-normal text-muted">(GLB/STL)</span>
-                      </Link>
                       <Link href="/remaura?category=ring-rail" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
                         Ring Rail Resize
                       </Link>
@@ -524,7 +521,6 @@ export function Header() {
                         { href: "/remaura/arka-plan-kaldir", label: t.remauraWorkspace.categoryBackgroundRemoval },
                         { href: "/remaura/foto-edit", label: t.remauraWorkspace.categoryPhotoEdit },
                         { href: "/remaura?category=mesh3d", label: "Remaura AI 3D (görüntüden 3D)" },
-                        { href: "/remaura?category=meshAI", label: "Remaura Mesh AI (GLB/STL)" },
                         { href: "/remaura?category=ring-rail", label: "Ring Rail Resize" },
                         { href: "/convert", label: "3D Dönüştürücü" },
                         { href: "/cad-kocu", label: "CAD Koçu" },

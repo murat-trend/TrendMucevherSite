@@ -23,7 +23,6 @@ import {
 import { RemauraBackgroundRemovalSection } from "@/components/remaura/RemauraBackgroundRemovalSection";
 import { RemauraPhotoEditSection } from "@/components/remaura/RemauraPhotoEditSection";
 import { Remaura3DAISection } from "@/components/remaura/Remaura3DAISection";
-import { RemauraMeshAISection } from "@/components/remaura/RemauraMeshAISection";
 import { RemauraRingRailResizeSection } from "@/components/remaura/RemauraRingRailResizeSection";
 import { RemauraPanelWorkspace } from "@/components/remaura/workspace/RemauraPanelWorkspace";
 import type { ChannelTab } from "@/components/remaura/remaura-types";
@@ -38,7 +37,7 @@ import { styleAnalysisIsUsable, type StyleAnalysisResult } from "@/lib/ai/remaur
 import { styleDataUrlsToPayload } from "@/lib/remaura/data-url";
 import type { JewelryAnalysisResult, JewelryPlatformTarget } from "@/lib/ai/remaura/jewelry-analyzer";
 
-type RemauraCategory = "jewelry" | "background" | "photoEdit" | "mesh3d" | "meshAI" | "ringRail";
+type RemauraCategory = "jewelry" | "background" | "photoEdit" | "mesh3d" | "ringRail";
 
 type RemauraWorkspaceProps = {
   initialCategory?: RemauraCategory;
@@ -333,6 +332,17 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
   useEffect(() => {
     if (typeof window === "undefined") return;
     const requested = new URLSearchParams(window.location.search).get("category");
+    if (requested === "mesh-ai" || requested === "meshAI") {
+      setRemauraCategory("jewelry");
+      try {
+        const u = new URL(window.location.href);
+        u.searchParams.delete("category");
+        window.history.replaceState({}, "", u.pathname + u.search + u.hash);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
     if (requested === "background") {
       setRemauraCategory("background");
       return;
@@ -347,10 +357,6 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     }
     if (requested === "mesh3d") {
       setRemauraCategory("mesh3d");
-      return;
-    }
-    if (requested === "mesh-ai") {
-      setRemauraCategory("meshAI");
       return;
     }
     if (requested === "ring-rail") {
@@ -734,19 +740,6 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
               <button
                 type="button"
                 role="tab"
-                aria-selected={remauraCategory === "meshAI"}
-                onClick={() => setRemauraCategory("meshAI")}
-                className={`rounded-full border px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] transition-colors ${
-                  remauraCategory === "meshAI"
-                    ? "border-violet-400 bg-violet-500/15 text-violet-300"
-                    : "border-white/10 bg-white/[0.03] text-muted hover:border-white/20"
-                }`}
-              >
-                REMAURA MESH AI
-              </button>
-              <button
-                type="button"
-                role="tab"
                 aria-selected={remauraCategory === "ringRail"}
                 onClick={() => setRemauraCategory("ringRail")}
                 className={`rounded-full border px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] transition-colors ${
@@ -782,8 +775,6 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
             />
           ) : remauraCategory === "mesh3d" ? (
             <Remaura3DAISection />
-          ) : remauraCategory === "meshAI" ? (
-            <RemauraMeshAISection />
           ) : remauraCategory === "ringRail" ? (
             <RemauraRingRailResizeSection />
           ) : (
