@@ -31,25 +31,33 @@ export function useRemauraBillingModalOptional(): RemauraBillingModalContextValu
   return useContext(RemauraBillingModalContext);
 }
 
-/** API yanıtı 401/402 ve bilinen code ise modal açar; true döner (gövde clone ile okunur). */
+/** API yanıtı 401/402 ve bilinen code ise modal açar; true döner. Orijinal `res` gövdesi okunmaz (yalnızca clone). */
 export async function remauraHandleBillingApiResponse(
   res: Response,
   ctx: RemauraBillingModalContextValue
 ): Promise<boolean> {
-  if (res.status === 401) {
-    const data = (await res.clone().json().catch(() => ({}))) as { code?: string };
-    if (data?.code === "UNAUTHORIZED") {
-      ctx.openUnauthorized();
-      return true;
-    }
+  if (res.ok) return false;
+
+  const cloned = res.clone();
+  let data: { code?: string };
+  try {
+    data = (await cloned.json()) as { code?: string };
+  } catch {
+    return false;
   }
-  if (res.status === 402) {
-    const data = (await res.clone().json().catch(() => ({}))) as { code?: string };
-    if (data?.code === "INSUFFICIENT_CREDITS" || data?.code === "INSUFFICIENT_CREDIT") {
-      ctx.openInsufficientCredits();
-      return true;
-    }
+
+  if (res.status === 401 && data?.code === "UNAUTHORIZED") {
+    ctx.openUnauthorized();
+    return true;
   }
+  if (
+    res.status === 402 &&
+    (data?.code === "INSUFFICIENT_CREDITS" || data?.code === "INSUFFICIENT_CREDIT")
+  ) {
+    ctx.openInsufficientCredits();
+    return true;
+  }
+
   return false;
 }
 
