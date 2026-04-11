@@ -7,6 +7,7 @@ import {
   remauraHandleBillingApiResponse,
   useRemauraBillingModal,
 } from "@/components/remaura/RemauraBillingModalProvider";
+import { useRemauraCreditsCheck } from "@/hooks/useRemauraCreditsCheck";
 
 type ConvertResponse = {
   originalSize: number;
@@ -30,6 +31,7 @@ export default function ConvertPage() {
 
 function ConvertPageInner() {
   const billingUi = useRemauraBillingModal();
+  const { checkCredits } = useRemauraCreditsCheck();
   const [file, setFile] = useState<File | null>(null);
   const [draco, setDraco] = useState(true);
   const [stlZip, setStlZip] = useState(false);
@@ -55,14 +57,15 @@ function ConvertPageInner() {
   }, [result]);
 
   const handleConvert = async () => {
+    if (!file || (!draco && !stlZip)) return;
+    if (!(await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits))) return;
     const {
       data: { user },
     } = await createClient().auth.getUser();
-    if (!user) {
+    if (!user?.id) {
       billingUi.openUnauthorized();
       return;
     }
-    if (!file || (!draco && !stlZip)) return;
     setLoading(true);
     setError(null);
     setResult(null);

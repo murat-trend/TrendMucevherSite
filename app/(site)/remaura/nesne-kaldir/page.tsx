@@ -6,6 +6,7 @@ import {
   RemauraBillingModalProvider,
   useRemauraBillingModal,
 } from "@/components/remaura/RemauraBillingModalProvider";
+import { useRemauraCreditsCheck } from "@/hooks/useRemauraCreditsCheck";
 
 const BRUSH_MIN = 2;
 const BRUSH_MAX = 80;
@@ -139,6 +140,7 @@ function paintDot(
 
 function NesneKaldirPageContent() {
   const billingUi = useRemauraBillingModal();
+  const { checkCredits } = useRemauraCreditsCheck();
   const [activeTab, setActiveTab] = useState<TabId>("remove");
 
   const [image, setImage] = useState<File | null>(null);
@@ -350,6 +352,18 @@ function NesneKaldirPageContent() {
     initMaskAndOverlay(layoutSize.w, layoutSize.h);
   };
 
+  const openRemoveFilePicker = useCallback(async () => {
+    const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+    if (!ok) return;
+    inputRef.current?.click();
+  }, [billingUi, checkCredits]);
+
+  const openSharpFilePicker = useCallback(async () => {
+    const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+    if (!ok) return;
+    sharpInputRef.current?.click();
+  }, [billingUi, checkCredits]);
+
   const handleSubmit = async () => {
     if (!image) {
       setError("Görsel gerekli");
@@ -360,6 +374,9 @@ function NesneKaldirPageContent() {
       setError("Kaldırmak istediğiniz bölgeyi kırmızı fırçayla işaretleyin");
       return;
     }
+
+    const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+    if (!ok) return;
 
     setLoading(true);
     setError(null);
@@ -418,6 +435,8 @@ function NesneKaldirPageContent() {
       setSharpError("Önce bir görsel yükleyin");
       return;
     }
+    const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+    if (!ok) return;
     setSharpLoading(true);
     setSharpError(null);
     setSharpResult(null);
@@ -512,7 +531,7 @@ function NesneKaldirPageContent() {
 
             {!preview ? (
               <div
-                onClick={() => inputRef.current?.click()}
+                onClick={() => void openRemoveFilePicker()}
                 className="mb-6 cursor-pointer rounded-xl border-2 border-dashed border-gray-700 p-8 text-center transition hover:border-gray-500"
               >
                 <p className="text-gray-500">Görsel yüklemek için tıklayın (JPG, PNG, WEBP)</p>
@@ -596,7 +615,7 @@ function NesneKaldirPageContent() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => inputRef.current?.click()}
+                    onClick={() => void openRemoveFilePicker()}
                     className="rounded-lg border border-gray-600 px-4 py-2 text-sm transition hover:border-gray-400"
                   >
                     Başka görsel
@@ -656,7 +675,7 @@ function NesneKaldirPageContent() {
 
             {!sharpPreview ? (
               <div
-                onClick={() => sharpInputRef.current?.click()}
+                onClick={() => void openSharpFilePicker()}
                 className="mb-6 cursor-pointer rounded-xl border-2 border-dashed border-sky-900/60 p-8 text-center transition hover:border-sky-600/50"
               >
                 <p className="text-gray-500">Netleştirilecek görseli seçin (JPG, PNG, WEBP)</p>
@@ -680,7 +699,7 @@ function NesneKaldirPageContent() {
                 <div className="flex flex-wrap justify-center gap-2">
                   <button
                     type="button"
-                    onClick={() => sharpInputRef.current?.click()}
+                    onClick={() => void openSharpFilePicker()}
                     className="rounded-lg border border-gray-600 px-4 py-2 text-sm transition hover:border-gray-400"
                   >
                     Başka görsel

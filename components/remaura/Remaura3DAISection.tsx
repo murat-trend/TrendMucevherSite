@@ -8,6 +8,7 @@ import {
   remauraHandleBillingApiResponse,
   useRemauraBillingModal,
 } from "@/components/remaura/RemauraBillingModalProvider";
+import { useRemauraCreditsCheck } from "@/hooks/useRemauraCreditsCheck";
 
 type DownloadModelFormat = "glb" | "stl";
 type MeshGenerationMode = "production" | "visual";
@@ -28,6 +29,7 @@ function generateMeshFileCode(): string {
 
 export function Remaura3DAISection() {
   const billingUi = useRemauraBillingModal();
+  const { checkCredits } = useRemauraCreditsCheck();
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isCreating3D, setIsCreating3D] = useState(false);
@@ -96,14 +98,22 @@ export function Remaura3DAISection() {
     [handleFile]
   );
 
+  const openFilePickerAfterGuard = useCallback(async () => {
+    const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+    if (!ok) return;
+    inputRef.current?.click();
+  }, [checkCredits, billingUi]);
+
   const handleDrop = useCallback(
-    (e: React.DragEvent) => {
+    async (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
+      const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+      if (!ok) return;
       const file = e.dataTransfer.files?.[0];
       if (file) handleFile(file);
     },
-    [handleFile]
+    [checkCredits, billingUi, handleFile]
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -365,7 +375,20 @@ export function Remaura3DAISection() {
         {/* Sol: Görsel yükleme */}
         <div className="flex flex-col gap-4">
           {!uploadedImage ? (
-            <label
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label="Görsel yükle"
+              onClick={(e) => {
+                e.preventDefault();
+                void openFilePickerAfterGuard();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  void openFilePickerAfterGuard();
+                }
+              }}
               onDrop={handleDrop}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -381,6 +404,8 @@ export function Remaura3DAISection() {
                 accept="image/*"
                 className="hidden"
                 onChange={handleInputChange}
+                aria-hidden
+                tabIndex={-1}
               />
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -400,7 +425,7 @@ export function Remaura3DAISection() {
               </svg>
               <span className="text-sm font-medium text-foreground">Görsel Yükle</span>
               <span className="text-[10px] text-muted">PNG, JPG veya WebP</span>
-            </label>
+            </div>
           ) : (
             <div className="relative h-[480px] overflow-hidden rounded-xl border border-border bg-black/20 dark:border-white/10 xl:h-[560px]">
               <Image

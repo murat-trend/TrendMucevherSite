@@ -1,9 +1,12 @@
 "use client";
 
 import Image from "next/image";
+import { useCallback, useRef } from "react";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
+import { useRemauraBillingModal } from "@/components/remaura/RemauraBillingModalProvider";
 import { MAX_STYLE_REFERENCE_SLOTS } from "@/components/remaura/remaura-types";
 import { useRemauraApp } from "@/components/remaura/workspace/RemauraWorkspaceContexts";
+import { useRemauraCreditsCheck } from "@/hooks/useRemauraCreditsCheck";
 import { styleAnalysisIsUsable } from "@/lib/ai/remaura/style-analyzer";
 
 const STYLE_BTN_SURFACE = "rgba(124, 58, 237, 0.42)";
@@ -11,6 +14,19 @@ const STYLE_BTN_SURFACE_HOVER = "rgba(124, 58, 237, 0.52)";
 
 export function StylePanel() {
   const { t } = useLanguage();
+  const billingUi = useRemauraBillingModal();
+  const { checkCredits } = useRemauraCreditsCheck();
+  const styleFileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const openStyleSlotPicker = useCallback(
+    async (slotIndex: number) => {
+      const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+      if (!ok) return;
+      styleFileInputRefs.current[slotIndex]?.click();
+    },
+    [billingUi, checkCredits],
+  );
+
   const {
     styleImages,
     styleAnalysis,
@@ -153,8 +169,22 @@ export function StylePanel() {
                     </button>
                   </>
                 ) : (
-                  <label className="flex h-full w-full cursor-pointer flex-col items-center justify-center gap-1.5 transition-colors hover:text-foreground">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    className="flex h-full w-full cursor-pointer flex-col items-center justify-center gap-1.5 transition-colors hover:text-foreground"
+                    onClick={() => void openStyleSlotPicker(i)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        void openStyleSlotPicker(i);
+                      }
+                    }}
+                  >
                     <input
+                      ref={(el) => {
+                        styleFileInputRefs.current[i] = el;
+                      }}
                       type="file"
                       accept="image/*"
                       className="hidden"
@@ -165,7 +195,7 @@ export function StylePanel() {
                     </span>
                     <span className="text-xs opacity-80">↑</span>
                     <span className="text-[10px] uppercase">{t.remauraWorkspace.upload}</span>
-                  </label>
+                  </div>
                 )}
               </div>
             </div>

@@ -42,6 +42,7 @@ import {
   remauraHandleBillingApiResponse,
   useRemauraBillingModal,
 } from "@/components/remaura/RemauraBillingModalProvider";
+import { useRemauraCreditsCheck } from "@/hooks/useRemauraCreditsCheck";
 
 type RemauraCategory = "jewelry" | "background" | "photoEdit" | "mesh3d" | "ringRail";
 
@@ -68,6 +69,7 @@ function mapFormatToAnalysisPlatform(format: PlatformFormat): JewelryPlatformTar
 function RemauraWorkspaceInner({ initialCategory = "jewelry" }: RemauraWorkspaceProps) {
   const { t, locale } = useLanguage();
   const billingUi = useRemauraBillingModal();
+  const { checkCredits } = useRemauraCreditsCheck();
 
   const [prompt, setPrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
@@ -186,6 +188,11 @@ function RemauraWorkspaceInner({ initialCategory = "jewelry" }: RemauraWorkspace
 
   const handleOptimize = useCallback(async () => {
     if (!prompt.trim()) return;
+    if (
+      !(await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits))
+    ) {
+      return;
+    }
     setIsOptimizing(true);
     setGenerateError(null);
     try {
@@ -208,11 +215,17 @@ function RemauraWorkspaceInner({ initialCategory = "jewelry" }: RemauraWorkspace
     } finally {
       setIsOptimizing(false);
     }
-  }, [prompt, locale, platformFormat, billingUserId, billingUi]);
+  }, [prompt, locale, platformFormat, billingUserId, billingUi, checkCredits]);
 
   const runStyleAnalysis = useCallback(async () => {
     const imagesToSend = styleDataUrlsToPayload(styleImages);
     if (imagesToSend.length === 0) return;
+
+    if (
+      !(await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits))
+    ) {
+      return;
+    }
 
     styleAnalyzeAbortRef.current?.abort();
     const ac = new AbortController();
@@ -238,7 +251,7 @@ function RemauraWorkspaceInner({ initialCategory = "jewelry" }: RemauraWorkspace
     } finally {
       setIsAnalyzing(false);
     }
-  }, [styleImages, billingUserId, billingUi]);
+  }, [styleImages, billingUserId, billingUi, checkCredits]);
 
   const handleAnalyzeStyle = useCallback(() => runStyleAnalysis(), [runStyleAnalysis]);
 
@@ -262,11 +275,26 @@ function RemauraWorkspaceInner({ initialCategory = "jewelry" }: RemauraWorkspace
   const handleGenerate = useCallback(async () => {
     const useNormal = prompt.trim() || optimizedResult?.optimizedPrompt;
     if (!useNormal) return;
+
+    const imagesToSendPre = styleDataUrlsToPayload(styleImages);
+    const needsStyleFirst =
+      imagesToSendPre.length > 0 && !styleAnalysisIsUsable(styleAnalysis);
+    const minCreditsForGenerate = needsStyleFirst ? 6 : 5;
+    if (
+      !(await checkCredits(
+        minCreditsForGenerate,
+        billingUi.openUnauthorized,
+        billingUi.openInsufficientCredits
+      ))
+    ) {
+      return;
+    }
+
     setIsGenerating(true);
     setGenerateError(null);
     try {
       let effectiveStyleAnalysis = styleAnalysis;
-      const imagesToSend = styleDataUrlsToPayload(styleImages);
+      const imagesToSend = imagesToSendPre;
 
       if (imagesToSend.length > 0 && !effectiveStyleAnalysis) {
         setIsAnalyzing(true);
@@ -346,6 +374,7 @@ function RemauraWorkspaceInner({ initialCategory = "jewelry" }: RemauraWorkspace
     t.remauraWorkspace.generateError,
     t.remauraWorkspace.styleAnalysisInsufficient,
     billingUi,
+    checkCredits,
   ]);
 
   useEffect(() => {
@@ -397,6 +426,11 @@ function RemauraWorkspaceInner({ initialCategory = "jewelry" }: RemauraWorkspace
 
   const handleAnalyzeJewelry = useCallback(async () => {
     if (!generatedImage || isAnalyzingJewelry) return;
+    if (
+      !(await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits))
+    ) {
+      return;
+    }
     setIsAnalyzingJewelry(true);
     setJewelryAnalysisError(null);
     try {
@@ -450,6 +484,7 @@ function RemauraWorkspaceInner({ initialCategory = "jewelry" }: RemauraWorkspace
     billingUserId,
     relaxedProductClaims,
     billingUi,
+    checkCredits,
   ]);
 
   const handleKeyDown = useCallback(
