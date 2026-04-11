@@ -480,7 +480,11 @@ export default function ModelDetayPage({
   const [viewerReady, setViewerReady] = useState(false)
   const viewerRef = useRef<HTMLDivElement>(null)
   const visibleActiveImage =
-    activeImage && activeImage.startsWith(`/thumbnails/${slug}`) ? activeImage : null
+    activeImage &&
+    (activeImage.startsWith(`/thumbnails/${slug}`) ||
+      activeImage.includes('/thumbnails/'))
+      ? activeImage
+      : null
   useEffect(() => {
     let cancelled = false
     const markReady = () => {
