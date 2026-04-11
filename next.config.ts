@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   experimental: {
     middlewareClientMaxBodySize: "200mb",
     optimizePackageImports: ["framer-motion"],
+    serverActions: {
+      bodySizeLimit: "100mb",
+    },
   },
   turbopack: {},
   serverExternalPackages: ["draco3dgltf"],

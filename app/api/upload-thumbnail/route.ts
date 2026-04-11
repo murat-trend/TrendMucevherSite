@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import sharp from 'sharp'
 
+export const runtime = 'nodejs'
+export const maxDuration = 60 // büyük dosyalar için timeout
+
 const s3 = new S3Client({
   region: 'auto',
   endpoint: process.env.R2_ENDPOINT!,
