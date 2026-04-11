@@ -37,6 +37,11 @@ import { styleAnalysisIsUsable, type StyleAnalysisResult } from "@/lib/ai/remaur
 import { styleDataUrlsToPayload } from "@/lib/remaura/data-url";
 import type { JewelryAnalysisResult, JewelryPlatformTarget } from "@/lib/ai/remaura/jewelry-analyzer";
 import { createClient } from "@/utils/supabase/client";
+import {
+  RemauraBillingModalProvider,
+  remauraHandleBillingApiResponse,
+  useRemauraBillingModal,
+} from "@/components/remaura/RemauraBillingModalProvider";
 
 type RemauraCategory = "jewelry" | "background" | "photoEdit" | "mesh3d" | "ringRail";
 
@@ -44,13 +49,12 @@ type RemauraWorkspaceProps = {
   initialCategory?: RemauraCategory;
 };
 
-function getOrCreateBillingUserId(): string {
-  const key = "remaura-billing-user-id";
-  const existing = localStorage.getItem(key);
-  if (existing?.trim()) return existing;
-  const created = crypto.randomUUID();
-  localStorage.setItem(key, created);
-  return created;
+export function RemauraWorkspace(props: RemauraWorkspaceProps) {
+  return (
+    <RemauraBillingModalProvider>
+      <RemauraWorkspaceInner {...props} />
+    </RemauraBillingModalProvider>
+  );
 }
 
 function mapFormatToAnalysisPlatform(format: PlatformFormat): JewelryPlatformTarget {
@@ -61,8 +65,9 @@ function mapFormatToAnalysisPlatform(format: PlatformFormat): JewelryPlatformTar
   return "instagram";
 }
 
-export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspaceProps) {
+function RemauraWorkspaceInner({ initialCategory = "jewelry" }: RemauraWorkspaceProps) {
   const { t, locale } = useLanguage();
+  const billingUi = useRemauraBillingModal();
 
   const [prompt, setPrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
@@ -120,7 +125,6 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
   const [billingCheckoutUrl, setBillingCheckoutUrl] = useState<string | null>(null);
   const [bgRemoverError, setBgRemoverError] = useState<string | null>(null);
   const [remauraCategory, setRemauraCategory] = useState<RemauraCategory>(initialCategory);
-  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const charCount = prompt.length;
 
@@ -141,16 +145,29 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const id = getOrCreateBillingUserId();
-    setBillingUserId(id);
-    void fetch(`/api/billing/wallet?userId=${encodeURIComponent(id)}`)
-      .then((r) => r.json())
-      .then((data) => {
-        const credits = Number(data?.wallet?.balanceCredits ?? 0);
-        if (Number.isFinite(credits)) setBillingCredits(credits);
-      })
-      .catch(() => {});
+    const supabase = createClient();
+    const syncWallet = () => {
+      void supabase.auth.getUser().then(({ data: { user } }) => {
+        const id = user?.id ?? "";
+        setBillingUserId(id);
+        if (!id) {
+          setBillingCredits(0);
+          return;
+        }
+        void fetch(`/api/billing/wallet?userId=${encodeURIComponent(id)}`)
+          .then((r) => r.json())
+          .then((data) => {
+            const credits = Number(data?.wallet?.balanceCredits ?? 0);
+            if (Number.isFinite(credits)) setBillingCredits(credits);
+          })
+          .catch(() => {});
+      });
+    };
+    syncWallet();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => syncWallet());
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -182,6 +199,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
           userId: billingUserId || undefined,
         }),
       });
+      if (await remauraHandleBillingApiResponse(res, billingUi)) return;
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Hata");
       setOptimizedResult(data);
@@ -190,7 +208,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     } finally {
       setIsOptimizing(false);
     }
-  }, [prompt, locale, platformFormat, billingUserId]);
+  }, [prompt, locale, platformFormat, billingUserId, billingUi]);
 
   const runStyleAnalysis = useCallback(async () => {
     const imagesToSend = styleDataUrlsToPayload(styleImages);
@@ -209,6 +227,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
         body: JSON.stringify({ images: imagesToSend, userId: billingUserId || undefined }),
         signal: ac.signal,
       });
+      if (await remauraHandleBillingApiResponse(res, billingUi)) return;
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Hata");
       setStyleAnalysis(data);
@@ -219,7 +238,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     } finally {
       setIsAnalyzing(false);
     }
-  }, [styleImages, billingUserId]);
+  }, [styleImages, billingUserId, billingUi]);
 
   const handleAnalyzeStyle = useCallback(() => runStyleAnalysis(), [runStyleAnalysis]);
 
@@ -241,13 +260,6 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
   }, []);
 
   const handleGenerate = useCallback(async () => {
-    const {
-      data: { user },
-    } = await createClient().auth.getUser();
-    if (!user) {
-      setShowAuthModal(true);
-      return;
-    }
     const useNormal = prompt.trim() || optimizedResult?.optimizedPrompt;
     if (!useNormal) return;
     setIsGenerating(true);
@@ -264,6 +276,10 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ images: imagesToSend, userId: billingUserId || undefined }),
           });
+          if (await remauraHandleBillingApiResponse(analyzeRes, billingUi)) {
+            setIsGenerating(false);
+            return;
+          }
           const analyzeData = await analyzeRes.json();
           if (!analyzeRes.ok) {
             throw new Error(analyzeData?.error ?? "Stil analizi başarısız.");
@@ -300,6 +316,10 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
           userId: billingUserId || undefined,
         }),
       });
+      if (await remauraHandleBillingApiResponse(res, billingUi)) {
+        setIsGenerating(false);
+        return;
+      }
       const data = await res.json();
       if (!res.ok) {
         setGenerateError(data.error || t.remauraWorkspace.generateError);
@@ -325,6 +345,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     billingUserId,
     t.remauraWorkspace.generateError,
     t.remauraWorkspace.styleAnalysisInsufficient,
+    billingUi,
   ]);
 
   useEffect(() => {
@@ -392,6 +413,14 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
         }),
       });
       const data = await res.json();
+      if (res.status === 401 && data?.code === "UNAUTHORIZED") {
+        billingUi.openUnauthorized();
+        throw new Error("Giriş gerekli.");
+      }
+      if (res.status === 402 && data?.code === "INSUFFICIENT_CREDITS") {
+        billingUi.openInsufficientCredits();
+        throw new Error("Yetersiz kredi.");
+      }
       if (res.status === 402 && data?.checkoutUrl) {
         setBillingCheckoutUrl(data.checkoutUrl);
         const credits = Number(data?.wallet?.balanceCredits ?? 0);
@@ -420,6 +449,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     selectedDistributionPlatform,
     billingUserId,
     relaxedProductClaims,
+    billingUi,
   ]);
 
   const handleKeyDown = useCallback(
@@ -669,30 +699,6 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     <RemauraAppContext.Provider value={appValue}>
       <RemauraLayoutContext.Provider value={layoutValue}>
         <div id="remaura-workspace" className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-10">
-          {showAuthModal ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-              <div className="w-full max-w-sm rounded-2xl border border-border/40 bg-card p-8 text-center">
-                <p className="mb-2 text-2xl">🔐</p>
-                <h3 className="mb-2 font-semibold text-foreground">Üye Girişi Gerekli</h3>
-                <p className="mb-6 text-sm text-muted">Bu özelliği kullanmak için önce siteye üye olunuz.</p>
-                <div className="flex gap-3">
-                  <a
-                    href="/uye-giris"
-                    className="flex-1 rounded-xl bg-[#c9a84c] py-2.5 text-sm font-semibold text-black transition-all hover:opacity-90"
-                  >
-                    Giriş Yap / Üye Ol
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => setShowAuthModal(false)}
-                    className="flex-1 rounded-xl border border-border/40 py-2.5 text-sm text-muted transition-colors hover:text-foreground"
-                  >
-                    Kapat
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : null}
           <div className="mb-6 flex flex-col items-center justify-center space-y-2 py-6 sm:mb-10 sm:py-8">
             <div className="mb-3 flex items-center justify-center">
               <div className="icon-2-5d">

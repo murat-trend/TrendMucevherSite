@@ -9,6 +9,8 @@ import { styleToPromptParts } from "@/lib/ai/remaura/style-analyzer";
 import type { OptimizedPromptResult } from "@/lib/ai/remaura/prompt-optimizer";
 import type { StyleAnalysisResult } from "@/lib/ai/remaura/style-analyzer";
 import { appendRemauraJob } from "@/lib/remaura/jobs-store";
+import { debitCredits } from "@/lib/billing/store";
+import { requireRemauraUserAndCredits } from "@/lib/remaura/api-billing-guard";
 import { getAdminSettings } from "@/lib/site/settings-store";
 import {
   buildRingThreeQuarterBlock,
@@ -76,10 +78,13 @@ export async function POST(req: Request) {
       );
     }
 
+    const body = await req.json();
+    const guard = await requireRemauraUserAndCredits(body.userId as string | undefined, { minCredits: 5 });
+    if (!guard.ok) return guard.response;
+    userId = guard.userId;
+
     const client = new OpenAI({ apiKey });
 
-    const body = await req.json();
-    userId = (body.userId as string | undefined)?.trim() || "";
     const rawPrompt = body.prompt as string | undefined;
     const revisedPrompt = body.revisedPrompt as string | undefined;
     const effectiveLocale = normalizePromptLocale(body.locale ?? body.revisedPromptLocale);
@@ -316,6 +321,14 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: "Görsel üretilemedi." },
         { status: 500 }
+      );
+    }
+
+    const debit = await debitCredits(userId, 5, "Mücevher tasarımı");
+    if (!debit.ok) {
+      return NextResponse.json(
+        { error: "Yetersiz kredi", code: "INSUFFICIENT_CREDITS" },
+        { status: 402 }
       );
     }
 

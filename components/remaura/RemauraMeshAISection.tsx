@@ -2,6 +2,11 @@
 
 import { useState, useCallback, useRef } from "react";
 import { MeshRealtimeViewer } from "@/components/remaura/MeshRealtimeViewer";
+import { createClient } from "@/utils/supabase/client";
+import {
+  remauraHandleBillingApiResponse,
+  useRemauraBillingModalOptional,
+} from "@/components/remaura/RemauraBillingModalProvider";
 
 type OptimizeResult = {
   url: string;
@@ -12,6 +17,7 @@ type OptimizeResult = {
 };
 
 export function RemauraMeshAISection() {
+  const billingUi = useRemauraBillingModalOptional();
   const [uploadedModel, setUploadedModel] = useState<File | null>(null);
   const [uploadBlobUrl, setUploadBlobUrl] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -111,15 +117,21 @@ export function RemauraMeshAISection() {
     setResult(null);
 
     try {
+      const {
+        data: { user },
+      } = await createClient().auth.getUser();
       const formData = new FormData();
       formData.append("file", uploadedModel);
+      formData.append("userId", user?.id ?? "");
 
       const res = await fetch("/api/mesh-optimize", {
         method: "POST",
         body: formData,
       });
 
-      const data = await res.json().catch(() => ({})) as { error?: string } & Partial<OptimizeResult>;
+      if (billingUi && (await remauraHandleBillingApiResponse(res, billingUi))) return;
+
+      const data = (await res.json().catch(() => ({}))) as { error?: string } & Partial<OptimizeResult>;
 
       if (!res.ok) {
         throw new Error(data?.error ?? `İşlem başarısız (${res.status})`);
@@ -133,7 +145,7 @@ export function RemauraMeshAISection() {
     } finally {
       setIsProcessing(false);
     }
-  }, [uploadedModel, isProcessing]);
+  }, [uploadedModel, isProcessing, billingUi]);
 
   return (
     <section className="flex flex-col gap-4">

@@ -1,6 +1,7 @@
 import { loadEnvConfig } from "@next/env";
 import { NextResponse } from "next/server";
 import { getMeshyApiKey } from "@/lib/api/meshy";
+import { requireRemauraUserAndCredits } from "@/lib/remaura/api-billing-guard";
 
 loadEnvConfig(process.cwd());
 
@@ -67,6 +68,9 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
+    const billing = await requireRemauraUserAndCredits(body?.userId as string | undefined);
+    if (!billing.ok) return billing.response;
+
     const overrideFields = hasLockedFieldOverride(body);
     if (overrideFields.length > 0) {
       return NextResponse.json(

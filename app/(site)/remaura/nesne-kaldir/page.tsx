@@ -1,6 +1,11 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { createClient } from "@/utils/supabase/client";
+import {
+  RemauraBillingModalProvider,
+  useRemauraBillingModal,
+} from "@/components/remaura/RemauraBillingModalProvider";
 
 const BRUSH_MIN = 2;
 const BRUSH_MAX = 80;
@@ -132,7 +137,8 @@ function paintDot(
   }
 }
 
-export default function NesneKaldirPage() {
+function NesneKaldirPageContent() {
+  const billingUi = useRemauraBillingModal();
   const [activeTab, setActiveTab] = useState<TabId>("remove");
 
   const [image, setImage] = useState<File | null>(null);
@@ -367,6 +373,10 @@ export default function NesneKaldirPage() {
       const fd = new FormData();
       fd.append("image", image);
       fd.append("mask_image", maskBlob, "mask.png");
+      const {
+        data: { user },
+      } = await createClient().auth.getUser();
+      fd.append("userId", user?.id ?? "");
 
       const res = await fetch("/api/remaura/nesne-kaldir", {
         method: "POST",
@@ -374,7 +384,15 @@ export default function NesneKaldirPage() {
       });
 
       if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
+        const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+        if (res.status === 401 && data?.code === "UNAUTHORIZED") {
+          billingUi.openUnauthorized();
+          return;
+        }
+        if (res.status === 402 && data?.code === "INSUFFICIENT_CREDITS") {
+          billingUi.openInsufficientCredits();
+          return;
+        }
         throw new Error(data.error || "Hata oluştu");
       }
 
@@ -406,12 +424,24 @@ export default function NesneKaldirPage() {
     try {
       const fd = new FormData();
       fd.append("image", sharpFile);
+      const {
+        data: { user },
+      } = await createClient().auth.getUser();
+      fd.append("userId", user?.id ?? "");
       const res = await fetch("/api/remaura/gorseli-netlestir", {
         method: "POST",
         body: fd,
       });
       if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
+        const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+        if (res.status === 401 && data?.code === "UNAUTHORIZED") {
+          billingUi.openUnauthorized();
+          return;
+        }
+        if (res.status === 402 && data?.code === "INSUFFICIENT_CREDITS") {
+          billingUi.openInsufficientCredits();
+          return;
+        }
         throw new Error(data.error || "Netleştirme başarısız");
       }
       const blob = await res.blob();
@@ -700,5 +730,13 @@ export default function NesneKaldirPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function NesneKaldirPage() {
+  return (
+    <RemauraBillingModalProvider>
+      <NesneKaldirPageContent />
+    </RemauraBillingModalProvider>
   );
 }

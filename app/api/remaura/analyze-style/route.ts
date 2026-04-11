@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getOpenAIApiKey } from "@/lib/api/openai";
 import { analyzeStyleReferences } from "@/lib/ai/remaura/style-analyzer";
 import { appendRemauraJob } from "@/lib/remaura/jobs-store";
+import { requireRemauraUserAndCredits } from "@/lib/remaura/api-billing-guard";
 import { getAdminSettings } from "@/lib/site/settings-store";
 import { MAX_STYLE_REFERENCE_SLOTS } from "@/components/remaura/remaura-types";
 
@@ -29,7 +30,9 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    userId = (body.userId as string | undefined)?.trim() || "";
+    const billing = await requireRemauraUserAndCredits(body.userId as string | undefined);
+    if (!billing.ok) return billing.response;
+    userId = billing.userId;
 
     // Tek görsel (eski format) veya çoklu görsel
     const images = body.images as Array<{ base64: string; mimeType?: string }> | undefined;

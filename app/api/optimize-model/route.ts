@@ -6,6 +6,7 @@ import { KHRONOS_EXTENSIONS } from '@gltf-transform/extensions'
 import { dedup, draco, prune } from '@gltf-transform/functions'
 import draco3d from 'draco3dgltf'
 import { NextResponse } from 'next/server'
+import { requireRemauraUserAndCredits } from '@/lib/remaura/api-billing-guard'
 
 export const runtime = 'nodejs'
 
@@ -29,6 +30,9 @@ function sanitizeFileName(fileName: string): string {
 export async function POST(request: Request) {
   try {
     const formData = await request.formData()
+    const billing = await requireRemauraUserAndCredits(String(formData.get('userId') ?? ''))
+    if (!billing.ok) return billing.response
+
     const file = formData.get('file')
 
     if (!(file instanceof File)) {

@@ -4,6 +4,7 @@ import { getOpenAIApiKey } from "@/lib/api/openai";
 import { optimizePrompt } from "@/lib/ai/remaura/prompt-optimizer";
 import type { OptimizedPromptResult } from "@/lib/ai/remaura/prompt-optimizer";
 import { appendRemauraJob } from "@/lib/remaura/jobs-store";
+import { requireRemauraUserAndCredits } from "@/lib/remaura/api-billing-guard";
 import { detectJewelryShotFromUserPrompt } from "@/lib/remaura/jewelry-shot-detection";
 import { normalizePromptLocale } from "@/lib/i18n/prompt-locale";
 
@@ -25,7 +26,9 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    userId = (body.userId as string | undefined)?.trim() || "";
+    const billing = await requireRemauraUserAndCredits(body.userId as string | undefined);
+    if (!billing.ok) return billing.response;
+    userId = billing.userId;
     const prompt = (body.prompt as string)?.trim();
     const locale = normalizePromptLocale(body.locale);
     const mode3DExport = body.mode3DExport === true;

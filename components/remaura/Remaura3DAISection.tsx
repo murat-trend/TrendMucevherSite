@@ -3,6 +3,11 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import Image from "next/image";
 import { MeshRealtimeViewer, type MeshRealtimeViewerHandle } from "@/components/remaura/MeshRealtimeViewer";
+import { createClient } from "@/utils/supabase/client";
+import {
+  remauraHandleBillingApiResponse,
+  useRemauraBillingModal,
+} from "@/components/remaura/RemauraBillingModalProvider";
 
 type DownloadModelFormat = "glb" | "stl";
 type MeshGenerationMode = "production" | "visual";
@@ -22,6 +27,7 @@ function generateMeshFileCode(): string {
 }
 
 export function Remaura3DAISection() {
+  const billingUi = useRemauraBillingModal();
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isCreating3D, setIsCreating3D] = useState(false);
@@ -292,14 +298,19 @@ export function Remaura3DAISection() {
         throw new Error("Meshy gonderimi icin alfa PNG olusturulamadi.");
       }
 
+      const {
+        data: { user },
+      } = await createClient().auth.getUser();
       const res = await fetch("/api/remaura/mesh3d/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           image: transparentPngDataUrl,
           mode: generationMode,
+          userId: user?.id ?? "",
         }),
       });
+      if (await remauraHandleBillingApiResponse(res, billingUi)) return;
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "3D olusturma basarisiz.");
 
@@ -326,7 +337,7 @@ export function Remaura3DAISection() {
     } finally {
       setIsCreating3D(false);
     }
-  }, [uploadedImage, isCreating3D, toDataUrl, dataUrlToPngBlob, pollMeshStatus, generationMode, remainingAttempts]);
+  }, [uploadedImage, isCreating3D, toDataUrl, dataUrlToPngBlob, pollMeshStatus, generationMode, remainingAttempts, billingUi]);
 
   return (
     <section className="mx-auto w-full max-w-6xl rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-6">

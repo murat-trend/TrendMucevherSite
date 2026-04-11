@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
 import { NextRequest, NextResponse } from "next/server";
+import { requireRemauraUserAndCredits } from "@/lib/remaura/api-billing-guard";
 import * as THREE from "three";
 import { NodeIO } from "@gltf-transform/core";
 import { KHRDracoMeshCompression } from "@gltf-transform/extensions";
@@ -67,6 +68,9 @@ async function convertGlbToStl(input: Buffer): Promise<Buffer> {
 export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
+    const billing = await requireRemauraUserAndCredits(String(form.get("userId") ?? ""));
+    if (!billing.ok) return billing.response;
+
     const file = form.get("file");
     const doDraco = String(form.get("draco") ?? "false") === "true";
     const doStl = String(form.get("stl") ?? "false") === "true";

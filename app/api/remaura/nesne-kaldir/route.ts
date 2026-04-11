@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireRemauraUserAndCredits } from "@/lib/remaura/api-billing-guard";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -6,6 +7,9 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
+    const billing = await requireRemauraUserAndCredits(String(formData.get("userId") ?? ""));
+    if (!billing.ok) return billing.response;
+
     const image = formData.get("image") as File | null;
     const maskImage = formData.get("mask_image") as File | null;
 

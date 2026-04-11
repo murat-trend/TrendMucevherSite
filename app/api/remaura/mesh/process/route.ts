@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { runMeshProcess } from "@/lib/remaura/mesh-process-runner";
+import { requireRemauraUserAndCredits } from "@/lib/remaura/api-billing-guard";
 
 export const maxDuration = 120;
 
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
+    const billing = await requireRemauraUserAndCredits(String(formData.get("userId") ?? ""));
+    if (!billing.ok) return billing.response;
+
     const file = formData.get("file");
 
     if (!file || !(file instanceof Blob)) {

@@ -6,6 +6,7 @@ import type { JewelryPlatformTarget } from "@/lib/ai/remaura/jewelry-analyzer";
 import { createPaymentSession, creditCredits, debitCredits, getWallet, setCheckoutInfo } from "@/lib/billing/store";
 import { createVirtualPosCheckout } from "@/lib/billing/provider";
 import { appendRemauraJob } from "@/lib/remaura/jobs-store";
+import { requireRemauraUserAndCredits } from "@/lib/remaura/api-billing-guard";
 import { getAdminSettings } from "@/lib/site/settings-store";
 import { appendRingThreeQuarterRule } from "@/lib/remaura/internal-visual-rules";
 import { detectJewelryShotFromUserPrompt } from "@/lib/remaura/jewelry-shot-detection";
@@ -70,14 +71,10 @@ export async function POST(req: Request) {
     if (shot === "ring45" && prompt?.trim()) {
       prompt = appendRingThreeQuarterRule(prompt.trim());
     }
-    const userId = (body?.userId as string | undefined)?.trim();
     selectedPlatform = (body?.selectedPlatform as JewelryPlatformTarget | undefined) ?? undefined;
-    if (!userId) {
-      return NextResponse.json(
-        { error: "userId gerekli." },
-        { status: 400 }
-      );
-    }
+    const billing = await requireRemauraUserAndCredits(body?.userId as string | undefined, { minCredits: 1 });
+    if (!billing.ok) return billing.response;
+    const userId = billing.userId;
 
     const debitResult = await debitCredits(
       userId,

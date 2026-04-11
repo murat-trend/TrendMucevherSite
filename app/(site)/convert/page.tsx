@@ -2,6 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
+import {
+  RemauraBillingModalProvider,
+  remauraHandleBillingApiResponse,
+  useRemauraBillingModal,
+} from "@/components/remaura/RemauraBillingModalProvider";
 
 type ConvertResponse = {
   originalSize: number;
@@ -16,14 +21,21 @@ function bytesToMb(size: number): string {
 }
 
 export default function ConvertPage() {
+  return (
+    <RemauraBillingModalProvider>
+      <ConvertPageInner />
+    </RemauraBillingModalProvider>
+  );
+}
+
+function ConvertPageInner() {
+  const billingUi = useRemauraBillingModal();
   const [file, setFile] = useState<File | null>(null);
   const [draco, setDraco] = useState(true);
   const [stlZip, setStlZip] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ConvertResponse | null>(null);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-
   const canSubmit = !!file && (draco || stlZip) && !loading;
 
   const rows = useMemo(() => {
@@ -47,7 +59,7 @@ export default function ConvertPage() {
       data: { user },
     } = await createClient().auth.getUser();
     if (!user) {
-      setShowAuthModal(true);
+      billingUi.openUnauthorized();
       return;
     }
     if (!file || (!draco && !stlZip)) return;
@@ -59,7 +71,9 @@ export default function ConvertPage() {
       form.set("file", file);
       form.set("draco", String(draco));
       form.set("stl", String(stlZip));
+      form.set("userId", user.id);
       const res = await fetch("/api/convert", { method: "POST", body: form });
+      if (await remauraHandleBillingApiResponse(res, billingUi)) return;
       const data = (await res.json()) as ConvertResponse & { error?: string };
       if (!res.ok) throw new Error(data.error || "Dönüşüm başarısız");
       setResult(data);
@@ -148,30 +162,6 @@ export default function ConvertPage() {
           </section>
         ) : null}
       </div>
-      {showAuthModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="w-full max-w-sm rounded-2xl border border-border/40 bg-card p-8 text-center">
-            <p className="mb-2 text-2xl">🔐</p>
-            <h3 className="mb-2 font-semibold text-foreground">Üye Girişi Gerekli</h3>
-            <p className="mb-6 text-sm text-muted">Bu özelliği kullanmak için önce siteye üye olunuz.</p>
-            <div className="flex gap-3">
-              <a
-                href="/uye-giris"
-                className="flex-1 rounded-xl bg-[#c9a84c] py-2.5 text-sm font-semibold text-black transition-all hover:opacity-90"
-              >
-                Giriş Yap / Üye Ol
-              </a>
-              <button
-                type="button"
-                onClick={() => setShowAuthModal(false)}
-                className="flex-1 rounded-xl border border-border/40 py-2.5 text-sm text-muted transition-colors hover:text-foreground"
-              >
-                Kapat
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </main>
   );
 }
