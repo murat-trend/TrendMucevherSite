@@ -7,10 +7,9 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const image = formData.get("image") as File | null;
-    const maskImage = formData.get("mask_image") as File | null;
 
-    if (!image || !maskImage) {
-      return NextResponse.json({ error: "Görsel veya maske eksik" }, { status: 400 });
+    if (!image) {
+      return NextResponse.json({ error: "Görsel eksik" }, { status: 400 });
     }
 
     const apiKey = process.env.STABILITY_API_KEY;
@@ -20,14 +19,10 @@ export async function POST(req: NextRequest) {
 
     const outForm = new FormData();
     outForm.append("image", new Blob([await image.arrayBuffer()], { type: image.type }), image.name);
-    outForm.append(
-      "mask",
-      new Blob([await maskImage.arrayBuffer()], { type: maskImage.type || "image/png" }),
-      "mask.png",
-    );
+    outForm.append("prompt", "jewelry product photo, high detail, sharp focus, professional photography");
     outForm.append("output_format", "png");
 
-    const response = await fetch("https://api.stability.ai/v2beta/stable-image/edit/erase", {
+    const response = await fetch("https://api.stability.ai/v2beta/stable-image/upscale/conservative", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -45,11 +40,11 @@ export async function POST(req: NextRequest) {
     return new NextResponse(buffer, {
       headers: {
         "Content-Type": "image/png",
-        "Content-Disposition": 'inline; filename="result.png"',
+        "Content-Disposition": 'inline; filename="netlestirild.png"',
       },
     });
   } catch (err) {
-    console.error("nesne-kaldir error:", err);
+    console.error("gorseli-netlestir error:", err);
     return NextResponse.json({ error: "Sunucu hatası" }, { status: 500 });
   }
 }
