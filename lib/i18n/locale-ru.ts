@@ -7,6 +7,7 @@ export const ruMessages = {
     convert: "Конвертер",
     customOrder: "Индивидуальный заказ",
     remaura: "Remaura AI",
+    nesneKaldir: "Удаление объекта",
     daily: "Ежедневно",
     contact: "Контакты",
     login: "Войти",
