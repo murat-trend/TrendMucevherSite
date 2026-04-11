@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile, copyFile } from "node:fs/promises";
-import path from "node:path";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 /** Site geneli fiyat ve özellik bayrakları (admin paneli olmadan dosyadan yönetilir) */
 export type SiteSettings = {
@@ -18,9 +17,7 @@ export type SiteSettings = {
 
 export type AdminSettings = SiteSettings;
 
-const SITE_DIR = path.join(process.cwd(), "data", "site");
-const SETTINGS_PATH = path.join(SITE_DIR, "settings.json");
-const LEGACY_SETTINGS_PATH = path.join(process.cwd(), "data", "admin", "settings.json");
+const SITE_SETTINGS_ID = "main";
 
 function nowIso() {
   return new Date().toISOString();
@@ -42,35 +39,46 @@ function defaults(): SiteSettings {
   };
 }
 
-async function ensureFile(): Promise<void> {
-  await mkdir(SITE_DIR, { recursive: true });
-  try {
-    await readFile(SETTINGS_PATH, "utf8");
-  } catch {
-    try {
-      await copyFile(LEGACY_SETTINGS_PATH, SETTINGS_PATH);
-    } catch {
-      await writeFile(SETTINGS_PATH, JSON.stringify(defaults(), null, 2), "utf8");
-    }
-  }
+function getSupabaseAdmin(): SupabaseClient | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) return null;
+  return createClient(url, key);
+}
+
+function mergeSettings(parsed: Partial<SiteSettings> | null | undefined): SiteSettings {
+  const d = defaults();
+  if (!parsed || typeof parsed !== "object") return d;
+  return {
+    ...d,
+    ...parsed,
+    features: {
+      ...d.features,
+      ...(parsed.features ?? {}),
+    },
+  };
 }
 
 export async function getSiteSettings(): Promise<SiteSettings> {
-  await ensureFile();
-  const raw = await readFile(SETTINGS_PATH, "utf8");
-  try {
-    const parsed = JSON.parse(raw) as SiteSettings;
-    return {
-      ...defaults(),
-      ...parsed,
-      features: {
-        ...defaults().features,
-        ...(parsed.features ?? {}),
-      },
-    };
-  } catch {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    console.error("[site settings] Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
     return defaults();
   }
+
+  const { data, error } = await supabase
+    .from("site_settings")
+    .select("data")
+    .eq("id", SITE_SETTINGS_ID)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[site settings] read failed:", error);
+    return defaults();
+  }
+
+  const raw = data?.data as Partial<SiteSettings> | null | undefined;
+  return mergeSettings(raw);
 }
 
 export async function getAdminSettings(): Promise<SiteSettings> {
@@ -80,6 +88,11 @@ export async function getAdminSettings(): Promise<SiteSettings> {
 export async function updateSiteSettings(
   patch: Partial<Omit<SiteSettings, "updatedAt">>
 ): Promise<SiteSettings> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    throw new Error("Site ayarları için NEXT_PUBLIC_SUPABASE_URL ve SUPABASE_SERVICE_ROLE_KEY gerekli.");
+  }
+
   const current = await getSiteSettings();
   const next: SiteSettings = {
     ...current,
@@ -90,7 +103,17 @@ export async function updateSiteSettings(
     },
     updatedAt: nowIso(),
   };
-  await writeFile(SETTINGS_PATH, JSON.stringify(next, null, 2), "utf8");
+
+  const { error } = await supabase.from("site_settings").upsert(
+    { id: SITE_SETTINGS_ID, data: next },
+    { onConflict: "id" }
+  );
+
+  if (error) {
+    console.error("[site settings] upsert failed:", error);
+    throw new Error(error.message || "Site ayarları kaydedilemedi.");
+  }
+
   return next;
 }
 
