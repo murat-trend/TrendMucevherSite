@@ -55,6 +55,8 @@ export function PreviewPanel() {
     jewelryAnalysisError,
     handleAnalyzeJewelry,
     isAnalyzingJewelry,
+    relaxedProductClaims,
+    setRelaxedProductClaims,
     jewelryAnalysis,
     billingCredits,
     billingCheckoutUrl,
@@ -204,6 +206,22 @@ export function PreviewPanel() {
                     {jewelryAnalysisError && (
                       <p className="mb-2 text-xs text-red-600 dark:text-red-400">{jewelryAnalysisError}</p>
                     )}
+                    <label className="mb-3 flex cursor-pointer items-start gap-2 rounded-lg border border-border/50 bg-white/[0.02] px-3 py-2.5 text-left text-[11px] leading-snug text-muted">
+                      <input
+                        type="checkbox"
+                        checked={relaxedProductClaims}
+                        onChange={(e) => setRelaxedProductClaims(e.target.checked)}
+                        className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-border accent-amber-600"
+                      />
+                      <span>
+                        <span className="font-semibold text-foreground/90">Daha ifadeli metin</span>
+                        <span className="block text-[10px] text-muted/90">
+                          Varsayılan: Etsy benzeri dürüst dil (kanıtsız “harika pırlanta”, ayar, karat, netlik
+                          iddiası yok). İşaretlersen ton biraz daha duygusal olur; yanıltıcı teknik iddia kuralları
+                          yine geçerlidir.
+                        </span>
+                      </span>
+                    </label>
                     <button
                       type="button"
                       onClick={() => void handleAnalyzeJewelry()}

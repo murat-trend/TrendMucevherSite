@@ -80,6 +80,8 @@ export type RemauraAppContextValue = {
   jewelryAnalysis: JewelryAnalysisResult | null;
   jewelryAnalysisError: string | null;
   isAnalyzingJewelry: boolean;
+  relaxedProductClaims: boolean;
+  setRelaxedProductClaims: Dispatch<SetStateAction<boolean>>;
   billingUserId: string;
   billingCredits: number;
   billingCheckoutUrl: string | null;

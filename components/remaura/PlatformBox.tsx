@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
+import { useRemauraApp } from "@/components/remaura/workspace/RemauraWorkspaceContexts";
 import { PlatformIcon, getPlatformHex } from "./PlatformIcons";
 import type { ChannelTab } from "./remaura-types";
 
@@ -39,6 +40,15 @@ export function PlatformBox({
   contentToCopy,
 }: PlatformBoxProps) {
   const { t } = useLanguage();
+  const { jewelryAnalysis } = useRemauraApp();
+  const tabPlaceholder =
+    tab === "desc"
+      ? t.remauraWorkspace.channelDescPlaceholder
+      : tab === "tags"
+        ? t.remauraWorkspace.channelTagsPlaceholder
+        : t.remauraWorkspace.channelHashtagsPlaceholder;
+  const displayContent =
+    jewelryAnalysis != null ? contentToCopy : (contentToCopy || tabPlaceholder);
   const btnBase =
     "rounded px-2.5 py-1.5 text-[10px] font-bold uppercase transition sm:px-3 sm:py-1 sm:text-[9px]";
   const btnInactive = "bg-white/5 text-muted hover:text-foreground";
@@ -123,7 +133,7 @@ export function PlatformBox({
             </span>
             <button
               type="button"
-              onClick={() => handleCopy(copyId, contentToCopy)}
+              onClick={() => handleCopy(copyId, displayContent)}
               className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors ${copiedId === copyId ? copyIconCopied : copyIconDefault}`}
               aria-label={t.remauraWorkspace.copySection}
             >
@@ -149,18 +159,14 @@ export function PlatformBox({
               <p
                 className={`whitespace-pre-wrap pl-4 text-xs leading-relaxed text-foreground/90 ${descBorder || "border-l-2 border-border"}`}
               >
-                {contentToCopy || t.remauraWorkspace.channelDescPlaceholder}
+                {displayContent}
               </p>
             )}
             {tab === "tags" && (
-              <p className="whitespace-pre-wrap text-xs leading-relaxed text-foreground/90">
-                {contentToCopy || t.remauraWorkspace.channelTagsPlaceholder}
-              </p>
+              <p className="whitespace-pre-wrap text-xs leading-relaxed text-foreground/90">{displayContent}</p>
             )}
             {tab === "hash" && (
-              <p className="whitespace-pre-wrap text-xs leading-relaxed text-foreground/90">
-                {contentToCopy || t.remauraWorkspace.channelHashtagsPlaceholder}
-              </p>
+              <p className="whitespace-pre-wrap text-xs leading-relaxed text-foreground/90">{displayContent}</p>
             )}
           </div>
           <p className="mt-auto border-t border-border px-4 py-2.5 text-[10px] text-muted/70 dark:border-white/5 dark:bg-white/[0.02] sm:px-6">

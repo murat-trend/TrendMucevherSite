@@ -1,6 +1,17 @@
 import type { JewelryAnalysisResult } from "@/lib/ai/remaura/jewelry-analyzer";
 import type { ChannelTab } from "@/components/remaura/remaura-types";
 
+/** Virgüllü metni #etiket listesine çevirir; eksik alanlarda .map hatası olmaması için güvenli */
+function commaSeparatedToHashtags(s: string | undefined | null): string {
+  if (s == null || !String(s).trim()) return "";
+  return String(s)
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((x) => (x.startsWith("#") ? x : `#${x}`))
+    .join(" ");
+}
+
 type TR = {
   remauraWorkspace: {
     channelDescPlaceholder: string;
@@ -81,23 +92,23 @@ export function getChannelContentForPlatform(
       threads: j.threads?.hashtags ?? "",
       facebook: j.facebook?.hashtags ?? "",
       linkedin: j.linkedin?.hashtags ?? "",
-      pinterest: j.pinterest?.tags?.split(",").map((s) => `#${s.trim()}`).join(" ") ?? "",
+      pinterest: commaSeparatedToHashtags(j.pinterest?.tags),
       x: j.x?.hashtags ?? "",
-      youtube: j.youtube?.tags?.split(",").map((s) => `#${s.trim()}`).join(" ") ?? "",
-      etsy: j.etsy?.tagler?.split(",").map((s) => `#${s.trim()}`).join(" ") ?? "",
-      amazon: j.amazon?.keywords?.split(",").map((s) => `#${s.trim()}`).join(" ") ?? "",
+      youtube: commaSeparatedToHashtags(j.youtube?.tags),
+      etsy: commaSeparatedToHashtags(j.etsy?.tagler),
+      amazon: commaSeparatedToHashtags(j.amazon?.keywords),
       shopier: "#mücevher #elişçiliği",
       gumroad: "#handmade #jewelry",
-      adobeStock: j.adobeStock?.keywords?.split(",").map((s) => `#${s.trim()}`).join(" ") ?? "",
-      shutterstock: j.shutterstock?.keywords?.split(",").map((s) => `#${s.trim()}`).join(" ") ?? "",
+      adobeStock: commaSeparatedToHashtags(j.adobeStock?.keywords),
+      shutterstock: commaSeparatedToHashtags(j.shutterstock?.keywords),
       creativeMarket: "#jewelry #handmade",
-      trendyol: j.trendyol?.etiketler?.split(",").map((s) => `#${s.trim()}`).join(" ") ?? "",
-      ciceksepeti: j.ciceksepeti?.etiketler?.split(",").map((s) => `#${s.trim()}`).join(" ") ?? "",
+      trendyol: commaSeparatedToHashtags(j.trendyol?.etiketler),
+      ciceksepeti: commaSeparatedToHashtags(j.ciceksepeti?.etiketler),
       next: j.next?.hashtags ?? "#mücevher #elişçiliği",
     };
-    if (tab === "desc") return descFromJ[copyId] || r.channelDescPlaceholder;
-    if (tab === "tags") return tagsFromJ[copyId] || r.channelTagsPlaceholder;
-    return hashFromJ[copyId] || r.channelHashtagsPlaceholder;
+    if (tab === "desc") return descFromJ[copyId] ?? r.channelDescPlaceholder;
+    if (tab === "tags") return tagsFromJ[copyId] ?? r.channelTagsPlaceholder;
+    return hashFromJ[copyId] ?? r.channelHashtagsPlaceholder;
   }
 
   const descMap: Record<string, string> = {

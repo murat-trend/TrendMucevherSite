@@ -65,6 +65,7 @@ export async function POST(req: Request) {
     }
 
     let prompt = (body?.prompt as string) || undefined;
+    const relaxedProductClaims = Boolean(body?.relaxedProductClaims);
     const shot = detectJewelryShotFromUserPrompt(prompt);
     if (shot === "ring45" && prompt?.trim()) {
       prompt = appendRingThreeQuarterRule(prompt.trim());
@@ -122,7 +123,8 @@ export async function POST(req: Request) {
       parsed.base64,
       parsed.mimeType,
       prompt,
-      selectedPlatform
+      selectedPlatform,
+      { relaxedProductClaims }
     );
 
     await appendRemauraJob({

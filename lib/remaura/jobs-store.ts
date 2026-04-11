@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile, copyFile } from "node:fs/promises";
-import path from "node:path";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 
 export type RemauraJobType = "generate" | "optimize" | "analyze_style" | "analyze_jewelry";
@@ -17,58 +16,93 @@ export type RemauraJobEntry = {
   createdAt: string;
 };
 
-const REMAURA_DATA_DIR = path.join(process.cwd(), "data", "remaura");
-const JOBS_PATH = path.join(REMAURA_DATA_DIR, "remaura-jobs.json");
-const LEGACY_JOBS_PATH = path.join(process.cwd(), "data", "admin", "remaura-jobs.json");
+type RemauraJobRow = {
+  id: string;
+  type: string;
+  status: string;
+  user_id: string | null;
+  platform: string | null;
+  estimated_cost_usd: number | string | null;
+  message: string | null;
+  duration_ms: number;
+  created_at: string;
+};
 
-function nowIso() {
-  return new Date().toISOString();
+function getSupabaseAdmin(): SupabaseClient | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) return null;
+  return createClient(url, key);
 }
 
-async function ensureJobsFile(): Promise<void> {
-  await mkdir(REMAURA_DATA_DIR, { recursive: true });
-  try {
-    await readFile(JOBS_PATH, "utf8");
-  } catch {
-    try {
-      await copyFile(LEGACY_JOBS_PATH, JOBS_PATH);
-    } catch {
-      await writeFile(JOBS_PATH, JSON.stringify([], null, 2), "utf8");
-    }
-  }
-}
-
-async function readJobs(): Promise<RemauraJobEntry[]> {
-  await ensureJobsFile();
-  const raw = await readFile(JOBS_PATH, "utf8");
-  try {
-    const parsed = JSON.parse(raw) as RemauraJobEntry[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-async function writeJobs(entries: RemauraJobEntry[]): Promise<void> {
-  await ensureJobsFile();
-  await writeFile(JOBS_PATH, JSON.stringify(entries, null, 2), "utf8");
+function rowToEntry(row: RemauraJobRow): RemauraJobEntry {
+  const est = row.estimated_cost_usd;
+  return {
+    id: row.id,
+    type: row.type as RemauraJobType,
+    status: row.status as RemauraJobStatus,
+    userId: row.user_id ?? undefined,
+    platform: row.platform ?? undefined,
+    durationMs: row.duration_ms,
+    estimatedCostUsd: est != null && est !== "" ? Number(est) : undefined,
+    message: row.message ?? undefined,
+    createdAt: row.created_at,
+  };
 }
 
 export async function appendRemauraJob(
   input: Omit<RemauraJobEntry, "id" | "createdAt">
 ): Promise<RemauraJobEntry> {
-  const jobs = await readJobs();
-  const next: RemauraJobEntry = {
-    id: randomUUID(),
-    createdAt: nowIso(),
-    ...input,
-  };
-  jobs.unshift(next);
-  await writeJobs(jobs.slice(0, 2000));
-  return next;
+  const id = randomUUID();
+  const createdAt = new Date().toISOString();
+  const fallback: RemauraJobEntry = { id, createdAt, ...input };
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    console.error("[remaura jobs] Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+    return fallback;
+  }
+
+  const { data, error } = await supabase
+    .from("remaura_jobs")
+    .insert({
+      id,
+      type: input.type,
+      status: input.status,
+      user_id: input.userId ?? null,
+      platform: input.platform ?? null,
+      estimated_cost_usd: input.estimatedCostUsd ?? null,
+      message: input.message ?? null,
+      duration_ms: input.durationMs,
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    console.error("[remaura jobs] insert failed:", error);
+    return fallback;
+  }
+
+  return rowToEntry(data as RemauraJobRow);
 }
 
 export async function listRemauraJobs(limit = 200): Promise<RemauraJobEntry[]> {
-  const jobs = await readJobs();
-  return jobs.slice(0, Math.max(1, limit));
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    console.error("[remaura jobs] Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("remaura_jobs")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(Math.max(1, limit));
+
+  if (error) {
+    console.error("[remaura jobs] list failed:", error);
+    return [];
+  }
+
+  return ((data ?? []) as RemauraJobRow[]).map(rowToEntry);
 }

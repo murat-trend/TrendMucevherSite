@@ -114,6 +114,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
   const [jewelryAnalysis, setJewelryAnalysis] = useState<JewelryAnalysisResult | null>(null);
   const [isAnalyzingJewelry, setIsAnalyzingJewelry] = useState(false);
   const [jewelryAnalysisError, setJewelryAnalysisError] = useState<string | null>(null);
+  const [relaxedProductClaims, setRelaxedProductClaims] = useState(false);
   const [billingUserId, setBillingUserId] = useState<string>("");
   const [billingCredits, setBillingCredits] = useState<number>(0);
   const [billingCheckoutUrl, setBillingCheckoutUrl] = useState<string | null>(null);
@@ -387,6 +388,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
           prompt: prompt.trim() || undefined,
           selectedPlatform,
           userId: billingUserId,
+          relaxedProductClaims,
         }),
       });
       const data = await res.json();
@@ -417,6 +419,7 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     platformFormat,
     selectedDistributionPlatform,
     billingUserId,
+    relaxedProductClaims,
   ]);
 
   const handleKeyDown = useCallback(
@@ -455,19 +458,15 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     setStyleAnalysis(null);
   }, []);
 
-  const handleCopy = useCallback(
-    (id: string, content: string) => {
-      const text = content || t.remauraWorkspace.channelDescPlaceholder;
-      navigator.clipboard
-        .writeText(text)
-        .then(() => {
-          setCopiedId(id);
-          setTimeout(() => setCopiedId(null), 2000);
-        })
-        .catch(() => {});
-    },
-    [t.remauraWorkspace.channelDescPlaceholder]
-  );
+  const handleCopy = useCallback((id: string, content: string) => {
+    void navigator.clipboard
+      .writeText(content)
+      .then(() => {
+        setCopiedId(id);
+        setTimeout(() => setCopiedId(null), 2000);
+      })
+      .catch(() => {});
+  }, []);
 
   const copyIconDefault =
     "text-[#b76e79] hover:text-[#a65f69] dark:text-[#c4838b] dark:hover:text-[#b76e79]";
@@ -644,6 +643,8 @@ export function RemauraWorkspace({ initialCategory = "jewelry" }: RemauraWorkspa
     jewelryAnalysis,
     jewelryAnalysisError,
     isAnalyzingJewelry,
+    relaxedProductClaims,
+    setRelaxedProductClaims,
     billingUserId,
     billingCredits,
     billingCheckoutUrl,
