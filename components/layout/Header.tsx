@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: "/modeller", key: "modeller" as const },
   { href: "/ozel-siparis", key: "customOrder" as const },
   { href: "/remaura", key: "remaura" as const },
+  { href: "/remaura/nedir", key: "remauraNedir" as const },
   { href: "/gunluk", key: "daily" as const },
   { href: "/iletisim", key: "contact" as const },
   { href: "/admin", key: "superAdmin" as const },
@@ -25,6 +26,10 @@ type HeaderSession = {
   role: "seller" | "buyer";
   isSuperAdmin: boolean;
 };
+
+/** Mücevher tasarımı «Görsel Üret» butonu (NegativePromptPanel) ile aynı renk ve glow */
+const REMAURA_NEDIR_LINK_CLASS =
+  "inline-flex items-center rounded-[999px] bg-[#10b981] px-3 py-1.5 text-[14px] font-bold tracking-[0.02em] text-white shadow-[0_0_0_1px_rgba(16,185,129,0.3),0_0_10px_rgba(16,185,129,0.18)] transition-all hover:shadow-[0_0_0_1px_rgba(16,185,129,0.4),0_0_14px_rgba(16,185,129,0.25)]";
 
 export function Header() {
   const router = useRouter();
@@ -180,6 +185,10 @@ export function Header() {
                       </Link>
                     </div>
                   </div>
+                ) : item.key === "remauraNedir" ? (
+                  <Link key={item.href} href={item.href} className={REMAURA_NEDIR_LINK_CLASS}>
+                    {t.nav[item.key]}
+                  </Link>
                 ) : (
                   <Link
                     key={item.href}
@@ -533,6 +542,12 @@ export function Header() {
                         </Link>
                       ))}
                     </div>
+                  </div>
+                ) : item.key === "remauraNedir" ? (
+                  <div key={item.href} className="border-b border-border/60 py-4 last:border-b-0">
+                    <Link href={item.href} onClick={() => setMobileMenuOpen(false)} className={REMAURA_NEDIR_LINK_CLASS}>
+                      {t.nav[item.key]}
+                    </Link>
                   </div>
                 ) : (
                   <Link

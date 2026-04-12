@@ -7,6 +7,7 @@ export const deMessages = {
     convert: "Konvertieren",
     customOrder: "Sonderanfertigung",
     remaura: "Remaura AI",
+    remauraNedir: "Was ist REMAURA AI?",
     nesneKaldir: "Objekt entfernen",
     daily: "Täglich",
     contact: "Kontakt",

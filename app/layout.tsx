@@ -18,14 +18,69 @@ const outfit = Outfit({
   weight: ["300", "400", "500", "600"],
 });
 
+const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://trendmucevher.com").replace(/\/$/, "");
+
+/**
+ * Open Graph görseli: `public/og-image.jpg` — 1200×630 px önerilir; paylaşım önizlemeleri için bu dosyayı ekleyin.
+ */
 export const metadata: Metadata = {
-  title: "Trend Mücevher | Murat Kaynaroğlu | Remaura AI",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "Trend Mücevher | Yapay Zeka ile Mücevher Tasarımı ve 3D Model",
+    template: "%s | Trend Mücevher",
+  },
   description:
-    "Trend Mücevher - Özel tasarım mücevherler, sipariş üzerine üretim ve Remaura AI ile tasarım araçları. Premium kalite, güvenilir hizmet.",
-  keywords: ["mücevher", "takı", "özel sipariş", "Remaura AI", "trendmucevher"],
+    "REMAURA AI ile yapay zeka destekli mücevher tasarımı, 3D model üretimi ve dijital satış platformu. Türkiye'nin ilk AI mücevher ekosistemi.",
+  keywords: [
+    "mücevher tasarımı",
+    "yapay zeka takı",
+    "3D mücevher modeli",
+    "REMAURA AI",
+    "dijital mücevher",
+    "takı tasarım platformu",
+  ],
+  authors: [{ name: "Murat Kaynaroğlu", url: siteUrl }],
+  creator: "Murat Kaynaroğlu",
+  publisher: "Trend Mücevher",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
   openGraph: {
-    title: "Trend Mücevher by Murat Kaynaroğlu",
-    description: "Premium mücevher, özel sipariş ve AI tasarım araçları.",
+    type: "website",
+    locale: "tr_TR",
+    alternateLocale: ["en_US", "de_DE", "ru_RU"],
+    url: siteUrl,
+    siteName: "Trend Mücevher",
+    title: "Trend Mücevher | Yapay Zeka ile Mücevher Tasarımı",
+    description: "REMAURA AI ile yapay zeka destekli mücevher tasarımı ve 3D model üretimi.",
+    images: [{ url: "/og-image.jpg", width: 1200, height: 630, alt: "Trend Mücevher - REMAURA AI" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Trend Mücevher | REMAURA AI",
+    description: "Yapay zeka ile mücevher tasarımı ve 3D model üretim platformu.",
+    images: ["/og-image.jpg"],
+  },
+  verification: {
+    google: "google-site-verification-code",
+    yandex: "yandex-verification-code",
+  },
+  alternates: {
+    canonical: siteUrl,
+    languages: {
+      "tr-TR": siteUrl,
+      "en-US": `${siteUrl}/en`,
+      "de-DE": `${siteUrl}/de`,
+      "ru-RU": `${siteUrl}/ru`,
+    },
   },
 };
 
