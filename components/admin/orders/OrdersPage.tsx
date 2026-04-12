@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
@@ -14,6 +14,7 @@ import {
   Clock,
   Download,
   FileBarChart,
+  Loader2,
   Package,
   RefreshCw,
   Search,
@@ -47,152 +48,91 @@ export type OrderRow = {
   risk: boolean;
 };
 
-const INITIAL_ORDERS: OrderRow[] = [
-  {
-    id: "o1",
-    orderNo: "TM-2025-90421",
-    date: "2025-03-14T11:20:00",
-    customer: "Ece Yıldız",
-    seller: "Atölye Mara",
-    amount: 24_800,
-    payment: "Ödendi",
-    delivery: "Kargoda",
-    status: "Kargoda",
-    risk: false,
-  },
-  {
-    id: "o2",
-    orderNo: "TM-2025-90418",
-    date: "2025-03-14T09:05:00",
-    customer: "Murat Kılıç",
-    seller: "Pırlanta Loft",
-    amount: 62_400,
-    payment: "Ödendi",
-    delivery: "Teslim Edildi",
-    status: "Tamamlandı",
-    risk: false,
-  },
-  {
-    id: "o3",
-    orderNo: "TM-2025-90412",
-    date: "2025-03-13T16:40:00",
-    customer: "Selin Aydın",
-    seller: "Vintage Koleksiyon",
-    amount: 18_200,
-    payment: "Bekliyor",
-    delivery: "Hazırlanıyor",
-    status: "Bekleyen",
-    risk: true,
-  },
-  {
-    id: "o4",
-    orderNo: "TM-2025-90408",
-    date: "2025-03-13T14:22:00",
-    customer: "Can Öztürk",
-    seller: "Osmanlı Hat Sanatı",
-    amount: 128_000,
-    payment: "Ödendi",
-    delivery: "Problemli",
-    status: "Kargoda",
-    risk: true,
-  },
-  {
-    id: "o5",
-    orderNo: "TM-2025-90399",
-    date: "2025-03-12T10:15:00",
-    customer: "Deniz Arslan",
-    seller: "Luna İnci Atölyesi",
-    amount: 9_450,
-    payment: "Ödendi",
-    delivery: "Hazırlanıyor",
-    status: "Hazırlanıyor",
-    risk: false,
-  },
-  {
-    id: "o6",
-    orderNo: "TM-2025-90388",
-    date: "2025-03-11T18:30:00",
-    customer: "Burak Şen",
-    seller: "Minimal Altın",
-    amount: 42_100,
-    payment: "İade Edildi",
-    delivery: "Teslim Edildi",
-    status: "İade",
-    risk: false,
-  },
-  {
-    id: "o7",
-    orderNo: "TM-2025-90371",
-    date: "2025-03-10T12:00:00",
-    customer: "Ayşe Demir",
-    seller: "Elmas Evi İstanbul",
-    amount: 33_900,
-    payment: "Ödendi",
-    delivery: "Kargoda",
-    status: "Kargoda",
-    risk: false,
-  },
-  {
-    id: "o8",
-    orderNo: "TM-2025-90365",
-    date: "2025-03-09T08:45:00",
-    customer: "Kerem Polat",
-    seller: "Gümüş İşleri Co.",
-    amount: 7_200,
-    payment: "Ödendi",
-    delivery: "Teslim Edildi",
-    status: "Tamamlandı",
-    risk: false,
-  },
-  {
-    id: "o9",
-    orderNo: "TM-2025-90350",
-    date: "2025-03-08T15:10:00",
-    customer: "Zeynep Koç",
-    seller: "Atölye Mara",
-    amount: 56_000,
-    payment: "Ödendi",
-    delivery: "Teslim Edildi",
-    status: "İptal",
-    risk: false,
-  },
-  {
-    id: "o10",
-    orderNo: "TM-2025-90341",
-    date: "2025-03-07T11:28:00",
-    customer: "Hakan Yılmaz",
-    seller: "Pırlanta Loft",
-    amount: 91_750,
-    payment: "Bekliyor",
-    delivery: "Hazırlanıyor",
-    status: "Bekleyen",
-    risk: false,
-  },
-  {
-    id: "o11",
-    orderNo: "TM-2025-90322",
-    date: "2025-03-06T09:50:00",
-    customer: "Merve Çelik",
-    seller: "Vintage Koleksiyon",
-    amount: 14_300,
-    payment: "Ödendi",
-    delivery: "Teslim Edildi",
-    status: "Tamamlandı",
-    risk: false,
-  },
-  {
-    id: "o12",
-    orderNo: "TM-2025-90310",
-    date: "2025-03-05T13:05:00",
-    customer: "Onur Taş",
-    seller: "Luna İnci Atölyesi",
-    amount: 22_600,
-    payment: "Ödendi",
-    delivery: "Problemli",
-    status: "Kargoda",
-    risk: true,
-  },
-];
+type OrderRowView = OrderRow & { productSearch: string };
+
+type ProfileEmbed = { store_name: string | null };
+
+type ApiOrderRow = {
+  id: string;
+  created_at: string;
+  amount: number | null;
+  payment_status: string | null;
+  buyer_id: string | null;
+  seller_id: string | null;
+  product_id: string | null;
+  customer_name: string | null;
+  product_name: string | null;
+  products_3d: { name: string } | { name: string }[] | null;
+  buyer_pf: ProfileEmbed | ProfileEmbed[] | null;
+  seller_pf: ProfileEmbed | ProfileEmbed[] | null;
+};
+
+function embedStoreName(v: ProfileEmbed | ProfileEmbed[] | null | undefined): string {
+  if (!v) return "";
+  const row = Array.isArray(v) ? v[0] : v;
+  return typeof row?.store_name === "string" ? row.store_name.trim() : "";
+}
+
+function nestedProductName(v: ApiOrderRow["products_3d"]): string {
+  if (!v) return "";
+  if (Array.isArray(v)) return typeof v[0]?.name === "string" ? v[0].name : "";
+  return typeof v.name === "string" ? v.name : "";
+}
+
+function mapPayment(raw: string | null | undefined): PaymentStatus {
+  const s = (raw ?? "").toLowerCase();
+  if (s === "paid") return "Ödendi";
+  if (s === "refunded") return "İade Edildi";
+  return "Bekliyor";
+}
+
+function mapOrderStatus(raw: string | null | undefined): OrderStatus {
+  const s = (raw ?? "").toLowerCase();
+  if (s === "paid") return "Tamamlandı";
+  if (s === "refunded") return "İade";
+  if (s === "cancelled" || s === "canceled") return "İptal";
+  return "Bekleyen";
+}
+
+function mapDelivery(raw: string | null | undefined): DeliveryStatus {
+  const s = (raw ?? "").toLowerCase();
+  if (s === "paid") return "Teslim Edildi";
+  if (s === "refunded") return "Teslim Edildi";
+  if (s === "cancelled" || s === "canceled") return "Problemli";
+  return "Hazırlanıyor";
+}
+
+function mapApiRowToOrderRow(row: ApiOrderRow): OrderRowView {
+  const buyerStore = embedStoreName(row.buyer_pf);
+  const customerName = typeof row.customer_name === "string" ? row.customer_name.trim() : "";
+  const customer = customerName || buyerStore || (row.buyer_id ? `${row.buyer_id.slice(0, 8)}…` : "—");
+
+  const sellerStore = embedStoreName(row.seller_pf);
+  const seller = sellerStore || (row.seller_id ? `${row.seller_id.slice(0, 8)}…` : "—");
+
+  const pTitle = nestedProductName(row.products_3d);
+  const productLabel = (typeof row.product_name === "string" && row.product_name.trim() !== "" ? row.product_name : pTitle) || "—";
+
+  const amount = Number(row.amount ?? 0);
+  const payment = mapPayment(row.payment_status);
+  const status = mapOrderStatus(row.payment_status);
+  const delivery = mapDelivery(row.payment_status);
+  const risk = Number.isFinite(amount) && amount >= 100_000;
+
+  return {
+    id: row.id,
+    orderNo: row.id.length >= 8 ? row.id.slice(0, 8) : row.id,
+    date: row.created_at,
+    customer,
+    seller,
+    amount: Number.isFinite(amount) ? amount : 0,
+    payment,
+    delivery,
+    status,
+    risk,
+    productSearch: productLabel,
+  };
+}
 
 const STATUS_BADGE: Record<OrderStatus, string> = {
   Bekleyen: "border-amber-500/35 bg-amber-500/12 text-amber-200",
@@ -225,13 +165,6 @@ const DISTRIBUTION_BAR: Record<OrderStatus, string> = {
   İade: "bg-rose-500/80",
 };
 
-const OPERATION_ALERTS: { id: string; title: string; detail: string }[] = [
-  { id: "a1", title: "Geciken gönderiler", detail: "3 sipariş SLA aşımına yaklaşıyor (kargo henüz teslim edilmedi)." },
-  { id: "a2", title: "İade bekleyen siparişler", detail: "2 sipariş için satıcı onayı veya inceleme bekleniyor." },
-  { id: "a3", title: "Teslimat problemi", detail: "1 sipariş kurye geri dönüşü nedeniyle operasyon ekibinde." },
-  { id: "a4", title: "Şüpheli sipariş", detail: "Yüksek tutar + yeni müşteri profili — risk skoru yükseldi." },
-];
-
 type StatusFilter = "Tümü" | OrderStatus;
 type SortKey = "newest" | "amount" | "risk";
 
@@ -254,15 +187,47 @@ function Badge({ className, children }: { className: string; children: ReactNode
   );
 }
 
+function csvEscape(s: string): string {
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
 export function OrdersPage() {
   const searchParams = useSearchParams();
-  const [orders] = useState<OrderRow[]>(INITIAL_ORDERS);
+  const [orders, setOrders] = useState<OrderRowView[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("Tümü");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [sellerFilter, setSellerFilter] = useState("Tümü");
   const [sort, setSort] = useState<SortKey>("newest");
+
+  const loadOrders = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const res = await fetch("/api/admin/orders", { credentials: "include" });
+      const data = (await res.json()) as { orders?: ApiOrderRow[]; error?: string };
+      if (!res.ok) {
+        setLoadError(data.error ?? "Siparişler yüklenemedi.");
+        setOrders([]);
+        return;
+      }
+      const mapped = (data.orders ?? []).map((r) => mapApiRowToOrderRow(r));
+      setOrders(mapped);
+    } catch {
+      setLoadError("Ağ hatası.");
+      setOrders([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadOrders();
+  }, [loadOrders]);
 
   useEffect(() => {
     if (searchParams.get("status") === "pending") {
@@ -286,6 +251,27 @@ export function OrdersPage() {
     return { total, bekleyen, hazir, kargo, tamam, iade, iptal };
   }, [orders]);
 
+  const operationAlerts = useMemo(() => {
+    const pendingPay = orders.filter((o) => o.payment === "Bekliyor").length;
+    const cancelled = orders.filter((o) => o.status === "İptal").length;
+    const items: { id: string; title: string; detail: string }[] = [];
+    if (pendingPay > 0) {
+      items.push({
+        id: "pending-pay",
+        title: "Bekleyen ödeme",
+        detail: `${pendingPay} siparişte ödeme henüz tamamlanmadı (payment_status: pending).`,
+      });
+    }
+    if (cancelled > 0) {
+      items.push({
+        id: "cancelled",
+        title: "İptal edilen siparişler",
+        detail: `${cancelled} sipariş iptal / cancelled durumunda.`,
+      });
+    }
+    return items;
+  }, [orders]);
+
   const distribution = useMemo(() => {
     const keys: OrderStatus[] = ["Bekleyen", "Hazırlanıyor", "Kargoda", "Tamamlandı", "İptal", "İade"];
     const counts = keys.map((s) => orders.filter((o) => o.status === s).length);
@@ -298,11 +284,14 @@ export function OrdersPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = orders.filter((o) => {
+      const extra = o.productSearch.toLowerCase();
       const match =
         !q ||
         o.orderNo.toLowerCase().includes(q) ||
+        o.id.toLowerCase().includes(q) ||
         o.customer.toLowerCase().includes(q) ||
-        o.seller.toLowerCase().includes(q);
+        o.seller.toLowerCase().includes(q) ||
+        extra.includes(q);
       const st = statusFilter === "Tümü" || o.status === statusFilter;
       const sell = sellerFilter === "Tümü" || o.seller === sellerFilter;
       const d = new Date(o.date);
@@ -321,6 +310,34 @@ export function OrdersPage() {
     });
     return list;
   }, [orders, search, statusFilter, sellerFilter, dateFrom, dateTo, sort]);
+
+  const exportCsv = () => {
+    const headers = ["SiparişNo", "SiparişId", "Tarih", "Müşteri", "Satıcı", "Tutar", "Ödeme", "Teslimat", "Durum", "Risk"];
+    const lines = [
+      headers.join(","),
+      ...filtered.map((o) =>
+        [
+          csvEscape(o.orderNo),
+          csvEscape(o.id),
+          csvEscape(o.date),
+          csvEscape(o.customer),
+          csvEscape(o.seller),
+          csvEscape(String(o.amount)),
+          csvEscape(o.payment),
+          csvEscape(o.delivery),
+          csvEscape(o.status),
+          csvEscape(o.risk ? "evet" : "hayır"),
+        ].join(","),
+      ),
+    ];
+    const blob = new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `siparisler-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const kpiCards: { id: string; label: string; value: string; icon: LucideIcon; sub: string; tone: AdminKpiTone }[] = [
     { id: "t", label: "Toplam Sipariş", value: String(kpi.total), icon: ShoppingCart, sub: "Kayıtlı sipariş", tone: "neutral" },
@@ -345,11 +362,25 @@ export function OrdersPage() {
           <h1 className="font-display text-3xl font-semibold tracking-[-0.02em] text-zinc-50">Siparişler</h1>
           <p className="mt-1 text-sm text-zinc-500">Sipariş yönetimi ve operasyon takibi</p>
         </div>
-        <button type="button" className={ADMIN_PRIMARY_BUTTON_CLASS}>
-          <Download className="h-4 w-4" strokeWidth={1.5} />
-          Sipariş Dışa Aktar
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void loadOrders()}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:border-white/[0.18]"
+          >
+            <RefreshCw className="h-4 w-4 text-[#b8956f]" strokeWidth={1.5} />
+            Yenile
+          </button>
+          <button type="button" className={ADMIN_PRIMARY_BUTTON_CLASS} onClick={exportCsv} disabled={filtered.length === 0}>
+            <Download className="h-4 w-4" strokeWidth={1.5} />
+            Sipariş Dışa Aktar
+          </button>
+        </div>
       </header>
+
+      {loadError && (
+        <div className="rounded-xl border border-rose-500/25 bg-rose-500/[0.06] px-4 py-3 text-sm text-rose-200/90">{loadError}</div>
+      )}
 
       <section aria-label="Sipariş özeti" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         {kpiCards.map((k) => (
@@ -370,7 +401,7 @@ export function OrdersPage() {
             <input
               id="order-search"
               type="search"
-              placeholder="Sipariş no, müşteri veya satıcı..."
+              placeholder="Sipariş no, müşteri, satıcı veya ürün..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-xl border border-white/[0.08] bg-[#07080a] py-2.5 pl-10 pr-4 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none ring-[#c69575]/30 focus:border-[#c69575]/30 focus:ring-2"
@@ -459,7 +490,12 @@ export function OrdersPage() {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
         <div className="xl:col-span-8">
           <CardShell title="Sipariş Listesi">
-            {orders.length === 0 ? (
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-16 text-sm text-zinc-500">
+                <Loader2 className="h-5 w-5 animate-spin text-[#c9a88a]" aria-hidden />
+                Yükleniyor…
+              </div>
+            ) : orders.length === 0 ? (
               <AdminEmptyState
                 message="Henüz sipariş bulunmuyor"
                 hint="Yeni siparişler geldiğinde burada listelenecek."
@@ -544,16 +580,21 @@ export function OrdersPage() {
 
         <div className="xl:col-span-4">
           <CardShell title="Operasyon Uyarıları">
-            {OPERATION_ALERTS.length === 0 ? (
+            {loading ? (
+              <div className="flex items-center gap-2 py-8 text-sm text-zinc-500">
+                <Loader2 className="h-4 w-4 animate-spin text-[#c9a88a]" />
+                Yükleniyor…
+              </div>
+            ) : operationAlerts.length === 0 ? (
               <AdminEmptyState
                 message="Şu an kritik operasyon uyarısı yok"
-                hint="Gecikme, iade veya teslimat uyarısı bulunmuyor."
+                hint="Bekleyen ödeme veya iptal kaydı yok."
                 variant="shield"
                 size="compact"
               />
             ) : (
               <ul className="space-y-3">
-                {OPERATION_ALERTS.map((a) => (
+                {operationAlerts.map((a) => (
                   <li
                     key={a.id}
                     className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3 text-sm"
@@ -574,7 +615,9 @@ export function OrdersPage() {
       </div>
 
       <CardShell title="Sipariş Durumu Dağılımı">
-        {orders.length === 0 ? (
+        {loading ? (
+          <div className="flex justify-center py-8 text-sm text-zinc-500">Yükleniyor…</div>
+        ) : orders.length === 0 ? (
           <p className="py-8 text-center text-sm text-zinc-500">Gösterilecek veri yok.</p>
         ) : (
           <ul className="space-y-3">
@@ -583,18 +626,18 @@ export function OrdersPage() {
               return distribution.map((d) => {
                 const w = Math.round((d.count / maxCount) * 100);
                 return (
-                <li key={d.label}>
-                  <div className="mb-1 flex items-center justify-between text-xs">
-                    <span className="font-medium text-zinc-400">{d.label}</span>
-                    <span className="tabular-nums text-zinc-300">{d.count}</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
-                    <div
-                      className={`h-full rounded-full transition-all ${DISTRIBUTION_BAR[d.label as OrderStatus]}`}
-                      style={{ width: `${w}%` }}
-                    />
-                  </div>
-                </li>
+                  <li key={d.label}>
+                    <div className="mb-1 flex items-center justify-between text-xs">
+                      <span className="font-medium text-zinc-400">{d.label}</span>
+                      <span className="tabular-nums text-zinc-300">{d.count}</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
+                      <div
+                        className={`h-full rounded-full transition-all ${DISTRIBUTION_BAR[d.label as OrderStatus]}`}
+                        style={{ width: `${w}%` }}
+                      />
+                    </div>
+                  </li>
                 );
               });
             })()}
