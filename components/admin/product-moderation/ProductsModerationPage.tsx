@@ -15,6 +15,7 @@ import {
   Eye,
   FileWarning,
   Layers,
+  Loader2,
   Package,
   Search,
   ShieldAlert,
@@ -57,150 +58,42 @@ export type ProductRow = {
   date: string;
   updatedAt: string;
   sales30d: number;
+  /** ISO — sıralama için */
+  createdAt: string;
+  /** DB `is_published` */
+  isPublished: boolean;
 };
 
-const INITIAL_PRODUCTS: ProductRow[] = [
-  {
-    id: "p1",
-    name: "Elmas Yüzük — Aurora",
-    sku: "TM-YZ-90421",
-    seller: "Atölye Mara",
-    category: "Yüzük",
-    price: 24_800,
-    stock: 6,
-    status: "Onay Bekliyor",
-    risk: "Orta",
-    date: "2025-03-14",
-    updatedAt: "2025-03-14T10:00:00",
-    sales30d: 0,
-  },
-  {
-    id: "p2",
-    name: "İnci Kolye — Luna",
-    sku: "TM-KL-88201",
-    seller: "Luna İnci Atölyesi",
-    category: "Kolye",
-    price: 9_200,
-    stock: 42,
-    status: "Yayında",
+type Product3dRow = DbProduct3D & {
+  seller_id?: string | null;
+  title?: string | null;
+  updated_at?: string | null;
+};
+
+function mapProduct3dToRow(row: Product3dRow, sellerStoreName: string | null): ProductRow {
+  const ui = mapDbProductToUi(row);
+  const titleLike = row.title != null && String(row.title).trim() !== "" ? String(row.title).trim() : ui.name;
+  const createdRaw = row.created_at ?? new Date().toISOString();
+  const updatedRaw = row.updated_at ?? createdRaw;
+  const dateStr = createdRaw.slice(0, 10);
+  const published = Boolean(row.is_published);
+  return {
+    id: row.id,
+    name: titleLike,
+    sku: row.sku,
+    seller: sellerStoreName?.trim() || "—",
+    category: ui.jewelryType,
+    price: ui.price,
+    stock: 999,
+    status: published ? "Yayında" : "Onay Bekliyor",
     risk: "Düşük",
-    date: "2025-02-20",
-    updatedAt: "2025-03-12T09:30:00",
-    sales30d: 38,
-  },
-  {
-    id: "p3",
-    name: "Hat Sanatı Madalyon",
-    sku: "TM-MD-77102",
-    seller: "Osmanlı Hat Sanatı",
-    category: "Madalyon",
-    price: 18_500,
-    stock: 3,
-    status: "Yayında",
-    risk: "Yüksek",
-    date: "2025-01-10",
-    updatedAt: "2025-03-13T14:00:00",
-    sales30d: 12,
-  },
-  {
-    id: "p4",
-    name: "Minimal Altın Bilezik",
-    sku: "TM-BL-66009",
-    seller: "Minimal Altın",
-    category: "Bilezik",
-    price: 44_000,
-    stock: 0,
-    status: "Yayında",
-    risk: "Yüksek",
-    date: "2024-12-05",
-    updatedAt: "2025-03-11T11:20:00",
-    sales30d: 21,
-  },
-  {
-    id: "p5",
-    name: "Pırlanta Küpe — Solstice",
-    sku: "TM-KP-55188",
-    seller: "Pırlanta Loft",
-    category: "Küpe",
-    price: 32_400,
-    stock: 8,
-    status: "Reddedildi",
-    risk: "Orta",
-    date: "2025-03-08",
-    updatedAt: "2025-03-09T16:00:00",
+    date: dateStr,
+    updatedAt: updatedRaw,
     sales30d: 0,
-  },
-  {
-    id: "p6",
-    name: "Vintage Gümüş Set",
-    sku: "TM-SET-44001",
-    seller: "Vintage Koleksiyon",
-    category: "Set",
-    price: 11_900,
-    stock: 15,
-    status: "Taslak",
-    risk: "Düşük",
-    date: "2025-03-13",
-    updatedAt: "2025-03-13T18:00:00",
-    sales30d: 0,
-  },
-  {
-    id: "p7",
-    name: "Rose Gold Yüzük",
-    sku: "TM-YZ-33210",
-    seller: "Atölye Mara",
-    category: "Yüzük",
-    price: 19_200,
-    stock: 22,
-    status: "İnceleme Gerekiyor",
-    risk: "Yüksek",
-    date: "2025-03-12",
-    updatedAt: "2025-03-14T08:15:00",
-    sales30d: 2,
-  },
-  {
-    id: "p8",
-    name: "Gümüş Zincir Kolye",
-    sku: "TM-KL-22100",
-    seller: "Gümüş İşleri Co.",
-    category: "Kolye",
-    price: 3_450,
-    stock: 120,
-    status: "Yayında",
-    risk: "Düşük",
-    date: "2024-11-01",
-    updatedAt: "2025-03-01T12:00:00",
-    sales30d: 64,
-  },
-  {
-    id: "p9",
-    name: "Test Ürünü (kopya)",
-    sku: "TM-DUP-11002",
-    seller: "Pırlanta Loft",
-    category: "Yüzük",
-    price: 24_800,
-    stock: 4,
-    status: "İnceleme Gerekiyor",
-    risk: "Orta",
-    date: "2025-03-11",
-    updatedAt: "2025-03-13T17:45:00",
-    sales30d: 0,
-  },
-  {
-    id: "p10",
-    name: "Elmas Kanal Yüzük",
-    sku: "TM-YZ-99102",
-    seller: "Elmas Evi İstanbul",
-    category: "Yüzük",
-    price: 86_000,
-    stock: 2,
-    status: "Onay Bekliyor",
-    risk: "Yüksek",
-    date: "2025-03-14",
-    updatedAt: "2025-03-14T13:00:00",
-    sales30d: 0,
-  },
-];
+    createdAt: createdRaw,
+    isPublished: published,
+  };
+}
 
 const STATUS_BADGE: Record<ProductModerationStatus, string> = {
   "Onay Bekliyor": "border-amber-500/40 bg-amber-500/12 text-amber-200",
@@ -466,7 +359,9 @@ const LOW_STOCK_FILTER_THRESHOLD = 10;
 export function ProductsModerationPage() {
   const searchParams = useSearchParams();
   const lowStockOnly = searchParams.get("filter") === "low-stock";
-  const [products, setProducts] = useState<ProductRow[]>(INITIAL_PRODUCTS);
+  const [products, setProducts] = useState<ProductRow[]>([]);
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [productsError, setProductsError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("Tümü");
   const [categoryFilter, setCategoryFilter] = useState("Tümü");
@@ -552,7 +447,7 @@ export function ProductsModerationPage() {
       return match && st && cat && sel && stockOk;
     });
     list = [...list].sort((a, b) => {
-      if (sort === "newest") return b.date.localeCompare(a.date);
+      if (sort === "newest") return b.createdAt.localeCompare(a.createdAt);
       if (sort === "sales") return b.sales30d - a.sales30d;
       if (sort === "risk") return RISK_ORDER[a.risk] - RISK_ORDER[b.risk];
       if (sort === "updated") return b.updatedAt.localeCompare(a.updatedAt);
@@ -561,9 +456,62 @@ export function ProductsModerationPage() {
     return list;
   }, [products, search, statusFilter, categoryFilter, sellerFilter, sort, lowStockOnly]);
 
-  const updateProduct = useCallback((id: string, patch: Partial<ProductRow>) => {
-    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  const loadModerationProducts = useCallback(async () => {
+    setProductsError(null);
+    const supabase = createClient();
+    const { data, error } = await supabase.from("products_3d").select("*").order("created_at", { ascending: false });
+    if (error) {
+      setProductsError(error.message);
+      setProducts([]);
+      return;
+    }
+    const rows = (data ?? []) as Product3dRow[];
+    const sellerIds = [...new Set(rows.map((r) => r.seller_id).filter((x): x is string => typeof x === "string" && x.length > 0))];
+    let nameBySeller = new Map<string, string | null>();
+    if (sellerIds.length > 0) {
+      const { data: profs, error: pErr } = await supabase.from("profiles").select("id, store_name").in("id", sellerIds);
+      if (!pErr && profs) {
+        nameBySeller = new Map(
+          (profs as { id: string; store_name: string | null }[]).map((p) => [p.id, p.store_name]),
+        );
+      }
+    }
+    setProducts(rows.map((r) => mapProduct3dToRow(r, r.seller_id ? nameBySeller.get(r.seller_id) ?? null : null)));
   }, []);
+
+  useEffect(() => {
+    let alive = true;
+    setProductsLoading(true);
+    void loadModerationProducts().finally(() => {
+      if (alive) setProductsLoading(false);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [loadModerationProducts]);
+
+  const updateProductPublished = useCallback(
+    async (id: string, published: boolean, statusAfter: ProductModerationStatus) => {
+      const supabase = createClient();
+      const { error } = await supabase.from("products_3d").update({ is_published: published }).eq("id", id);
+      if (error) {
+        window.alert(`Güncellenemedi: ${error.message}`);
+        return;
+      }
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                isPublished: published,
+                status: statusAfter,
+              }
+            : p,
+        ),
+      );
+    },
+    [],
+  );
 
   const toggleModelPublish = useCallback(async (id: string) => {
     const row = modelRows.find((m) => m.id === id);
@@ -921,6 +869,18 @@ export function ProductsModerationPage() {
 
       {activeTab === "products" ? (
         <>
+          {productsLoading && (
+            <div className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-sm text-zinc-400">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#c9a88a]" aria-hidden />
+              Ürün listesi yükleniyor…
+            </div>
+          )}
+          {productsError && !productsLoading && (
+            <div className="rounded-xl border border-rose-500/25 bg-rose-500/[0.06] px-4 py-3 text-sm text-rose-200/90">
+              {productsError}
+            </div>
+          )}
+
           <section aria-label="Özet" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
             {kpiCards.map((k) => (
               <AdminKpiCard key={k.id} label={k.label} value={k.value} sub={k.sub} icon={k.icon} tone={k.tone} />
@@ -1022,7 +982,18 @@ export function ProductsModerationPage() {
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
             <div className="xl:col-span-8">
               <CardShell title="Ürün Listesi">
-                {products.length === 0 ? (
+                {productsLoading ? (
+                  <div className="flex items-center justify-center gap-2 py-16 text-sm text-zinc-500">
+                    <Loader2 className="h-5 w-5 animate-spin text-[#c9a88a]" aria-hidden />
+                    Yükleniyor…
+                  </div>
+                ) : productsError ? (
+                  <AdminEmptyState
+                    message="Ürün listesi alınamadı"
+                    hint={productsError}
+                    variant="warning"
+                  />
+                ) : products.length === 0 ? (
                   <AdminEmptyState
                     message="Henüz ürün kaydı yok"
                     hint="Satıcılar ürün ekledikçe burada listelenecek."
@@ -1089,24 +1060,24 @@ export function ProductsModerationPage() {
                                 </Link>
                                 <button
                                   type="button"
-                                  onClick={() => updateProduct(row.id, { status: "Yayında", risk: "Düşük" })}
+                                  onClick={() => void updateProductPublished(row.id, true, "Yayında")}
                                   className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2 py-1.5 text-xs font-medium text-emerald-200 transition-colors hover:bg-emerald-500/18"
                                 >
                                   Onayla
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => updateProduct(row.id, { status: "Reddedildi" })}
+                                  onClick={() => void updateProductPublished(row.id, false, "Reddedildi")}
                                   className="rounded-lg border border-rose-500/25 bg-rose-500/10 px-2 py-1.5 text-xs font-medium text-rose-200 transition-colors hover:bg-rose-500/18"
                                 >
                                   Reddet
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => updateProduct(row.id, { status: "İnceleme Gerekiyor" })}
-                                  className="rounded-lg border border-orange-500/25 bg-orange-500/10 px-2 py-1.5 text-xs font-medium text-orange-200 transition-colors hover:bg-orange-500/18"
+                                  onClick={() => void updateProductPublished(row.id, false, "Taslak")}
+                                  className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-2 py-1.5 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-500/18"
                                 >
-                                  İncelemeye Al
+                                  Askıya Al
                                 </button>
                               </div>
                             </td>
@@ -1151,7 +1122,14 @@ export function ProductsModerationPage() {
           </div>
 
           <CardShell title="Durum Dağılımı">
-            {products.length === 0 ? (
+            {productsLoading ? (
+              <div className="flex items-center justify-center gap-2 py-10 text-sm text-zinc-500">
+                <Loader2 className="h-4 w-4 animate-spin text-[#c9a88a]" aria-hidden />
+                Yükleniyor…
+              </div>
+            ) : productsError ? (
+              <p className="py-8 text-center text-sm text-rose-200/80">{productsError}</p>
+            ) : products.length === 0 ? (
               <p className="py-8 text-center text-sm text-zinc-500">Gösterilecek veri yok.</p>
             ) : (
               <ul className="space-y-3">
