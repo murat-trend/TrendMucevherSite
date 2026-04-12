@@ -60,6 +60,9 @@ type ApiOrderRow = {
   product_id: string | null;
   customer_name: string | null;
   product_name: string | null;
+  customer_email?: string | null;
+  license_type?: string | null;
+  download_token?: string | null;
   buyer_name: string;
   seller_name: string;
   product_title: string;
@@ -634,13 +637,13 @@ export function OrdersPage() {
             <RefreshCw className="h-4 w-4 text-[#b8956f]" strokeWidth={1.5} />
             İadeleri Gör
           </Link>
-          <button
-            type="button"
+          <Link
+            href="/admin/shipping"
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm font-medium text-zinc-200 transition-colors hover:border-[#c69575]/30 hover:bg-[#c69575]/10 hover:text-[#f0dcc8]"
           >
             <Truck className="h-4 w-4 text-[#b8956f]" strokeWidth={1.5} />
             Kargoyu Yönet
-          </button>
+          </Link>
           <button
             type="button"
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm font-medium text-zinc-200 transition-colors hover:border-[#c69575]/30 hover:bg-[#c69575]/10 hover:text-[#f0dcc8]"

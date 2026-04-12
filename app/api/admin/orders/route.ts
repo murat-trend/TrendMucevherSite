@@ -19,6 +19,9 @@ type OrderBase = {
   product_id: string | null;
   customer_name: string | null;
   product_name: string | null;
+  customer_email: string | null;
+  license_type: string | null;
+  download_token: string | null;
 };
 
 export type AdminOrderRow = OrderBase & {
@@ -55,7 +58,9 @@ export async function GET(req: Request) {
 
   let orderQuery = supabase
     .from("orders")
-    .select("id, created_at, amount, payment_status, buyer_id, seller_id, product_id, customer_name, product_name")
+    .select(
+      "id, created_at, amount, payment_status, buyer_id, seller_id, product_id, customer_name, product_name, customer_email, license_type, download_token",
+    )
     .order("created_at", { ascending: false })
     .limit(200);
   if (paymentFilter) {
