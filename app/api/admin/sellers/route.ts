@@ -28,16 +28,11 @@ type OrderRow = {
 };
 
 function mapRoleToStatus(role: string | null): SellerStatus {
-  if (role === "seller") return "active";
+  if (role === "seller" || role === "admin") return "active";
   if (role === "pending_seller") return "pending";
+  if (role === "buyer") return "pending";
   if (role === "suspended" || role === "blocked") return "suspended";
   return "pending";
-}
-
-function isSellerListRole(role: string | null): boolean {
-  if (role == null) return true;
-  if (role === "buyer" || role === "admin") return false;
-  return true;
 }
 
 function profileToSeller(profile: ProfileRow, stats: { orderCount: number; totalSales: number; returnCount: number }): Seller {
@@ -146,7 +141,6 @@ export async function GET(req: NextRequest) {
     }
 
     const profiles = (profilesRaw ?? []) as ProfileRow[];
-    const sellerProfiles = profiles.filter((p) => isSellerListRole(p.role));
 
     const orders = await fetchAllOrders(supabase);
     const agg = aggregateOrdersBySeller(orders);
@@ -157,14 +151,14 @@ export async function GET(req: NextRequest) {
     };
 
     if (singleId) {
-      const profile = sellerProfiles.find((p) => p.id === singleId);
+      const profile = profiles.find((p) => p.id === singleId);
       if (!profile) {
         return NextResponse.json({ error: "Satıcı bulunamadı" }, { status: 404 });
       }
       return NextResponse.json({ seller: buildSeller(profile) });
     }
 
-    const sellers: Seller[] = sellerProfiles.map(buildSeller);
+    const sellers: Seller[] = profiles.map(buildSeller);
     return NextResponse.json({ sellers });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

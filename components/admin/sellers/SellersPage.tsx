@@ -287,7 +287,7 @@ export function SellersPage() {
         {loading || loadError ? null : sellers.length === 0 ? (
           <AdminEmptyState
             message="Henüz satıcı bulunmuyor"
-            hint="Supabase profiles: seller, pending_seller, suspended veya blocked rolündeki kayıtlar listelenir."
+            hint="Tüm profiles kayıtları listelenir (buyer ve admin dahil)."
             variant="shield"
           />
         ) : filtered.length === 0 ? (

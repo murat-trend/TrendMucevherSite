@@ -1,5 +1,5 @@
-import { headers } from "next/headers";
-import type { Seller } from "./types";
+import { createClient } from "@supabase/supabase-js";
+import type { Seller, SellerStatus } from "./types";
 
 export type SellerTabOrder = {
   id: string;
@@ -222,25 +222,90 @@ export function buildSellerDetailFromSeller(s: Seller): SellerDetail {
   return buildDetail(s);
 }
 
-async function fetchSellerFromAdminApi(id: string): Promise<Seller | null> {
-  const h = await headers();
-  const origin =
-    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
-    "http://localhost:3000";
-  const url = `${origin}/api/admin/sellers?id=${encodeURIComponent(id)}`;
-  const res = await fetch(url, {
-    cache: "no-store",
-    headers: { cookie: h.get("cookie") ?? "" },
-  });
-  if (!res.ok) return null;
-  const data = (await res.json()) as { seller?: Seller; error?: string };
-  if (!data.seller || data.error) return null;
-  return data.seller;
+function mapRoleToStatus(role: string | null): SellerStatus {
+  if (role === "seller" || role === "admin") return "active";
+  if (role === "pending_seller") return "pending";
+  if (role === "buyer") return "pending";
+  if (role === "suspended" || role === "blocked") return "suspended";
+  return "pending";
 }
 
+/**
+ * Sunucu bileşenlerinden çağrılmalıdır. Service role yalnızca sunucuda env’den okunur;
+ * istemci bu fonksiyonu çağırmamalıdır (env yok / güvenlik).
+ */
 export async function getSellerDetail(id: string): Promise<SellerDetail | null> {
-  const s = await fetchSellerFromAdminApi(id);
-  if (!s) return null;
-  return buildDetail(s);
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) return null;
+
+  const supabase = createClient(url, key);
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (profileError || !profile || typeof profile !== "object") {
+    return null;
+  }
+
+  const row = profile as Record<string, unknown>;
+  const pid = typeof row.id === "string" ? row.id : id;
+
+  const { data: ordersRaw, error: ordersError } = await supabase
+    .from("orders")
+    .select("*")
+    .eq("seller_id", pid)
+    .order("created_at", { ascending: false });
+
+  if (ordersError) {
+    return null;
+  }
+
+  const orders = (ordersRaw ?? []) as Array<Record<string, unknown>>;
+
+  let totalSales = 0;
+  let returnCount = 0;
+  for (const o of orders) {
+    const ps = typeof o.payment_status === "string" ? o.payment_status : "";
+    const amt = typeof o.amount === "number" ? o.amount : Number(o.amount ?? 0);
+    if (ps === "paid" && Number.isFinite(amt)) totalSales += amt;
+    if (ps === "refunded") returnCount += 1;
+  }
+  const orderCount = orders.length;
+  const returnRate = orderCount > 0 ? (returnCount / orderCount) * 100 : 0;
+
+  const roleVal = row.role != null ? String(row.role) : null;
+  const storeNameRaw = row.store_name;
+  const storeName =
+    typeof storeNameRaw === "string" && storeNameRaw.trim() !== ""
+      ? storeNameRaw.trim()
+      : "İsimsiz Mağaza";
+  const ah = row.account_holder;
+  const wa = row.whatsapp_number;
+  const created = row.created_at;
+  const updated = row.updated_at;
+  const registeredAt =
+    (typeof created === "string" && created.slice(0, 10)) ||
+    (typeof updated === "string" && updated.slice(0, 10)) ||
+    new Date().toISOString().slice(0, 10);
+
+  const seller: Seller = {
+    id: pid,
+    storeName,
+    ownerName: typeof ah === "string" && ah.trim() !== "" ? ah.trim() : "—",
+    ownerEmail: "—",
+    phone: typeof wa === "string" && wa.trim() !== "" ? wa.trim() : "—",
+    status: mapRoleToStatus(roleVal),
+    totalSales,
+    orderCount,
+    returnCount,
+    returnRate,
+    rating: 0,
+    registeredAt,
+  };
+
+  return buildDetail(seller);
 }
