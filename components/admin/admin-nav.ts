@@ -25,6 +25,7 @@ import {
   Cpu,
   CheckSquare,
   Eye,
+  Coins,
 } from "lucide-react";
 
 export type AdminNavItem = {
@@ -179,6 +180,13 @@ export const ADMIN_NAV_ENTRIES: AdminNavEntry[] = [
         labelTr: "Finans Özeti",
         labelEn: "Finance Overview",
         icon: Wallet,
+      },
+      {
+        id: "credits",
+        href: "/admin/credits",
+        labelTr: "Kredi Yönetimi",
+        labelEn: "Credit Management",
+        icon: Coins,
       },
       {
         id: "finance-komisyon",
