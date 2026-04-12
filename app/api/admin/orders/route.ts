@@ -27,7 +27,7 @@ export type AdminOrderRow = OrderBase & {
   product_title: string;
 };
 
-export async function GET() {
+export async function GET(req: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!url || !serviceKey) {
@@ -50,11 +50,19 @@ export async function GET() {
 
   const supabase = createServiceClient(url, serviceKey);
 
-  const { data: orders, error } = await supabase
+  const paymentParam = new URL(req.url).searchParams.get("payment_status");
+  const paymentFilter = paymentParam && PAYMENT_ALLOWED.has(paymentParam) ? paymentParam : null;
+
+  let orderQuery = supabase
     .from("orders")
     .select("id, created_at, amount, payment_status, buyer_id, seller_id, product_id, customer_name, product_name")
     .order("created_at", { ascending: false })
     .limit(200);
+  if (paymentFilter) {
+    orderQuery = orderQuery.eq("payment_status", paymentFilter);
+  }
+
+  const { data: orders, error } = await orderQuery;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
