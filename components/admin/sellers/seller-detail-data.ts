@@ -1,5 +1,5 @@
+import { headers } from "next/headers";
 import type { Seller } from "./types";
-import { INITIAL_SELLERS } from "./types";
 
 export type SellerTabOrder = {
   id: string;
@@ -222,8 +222,25 @@ export function buildSellerDetailFromSeller(s: Seller): SellerDetail {
   return buildDetail(s);
 }
 
-export function getSellerDetail(id: string): SellerDetail | null {
-  const s = INITIAL_SELLERS.find((x) => x.id === id);
+async function fetchSellerFromAdminApi(id: string): Promise<Seller | null> {
+  const h = await headers();
+  const origin =
+    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+    "http://localhost:3000";
+  const url = `${origin}/api/admin/sellers?id=${encodeURIComponent(id)}`;
+  const res = await fetch(url, {
+    cache: "no-store",
+    headers: { cookie: h.get("cookie") ?? "" },
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as { seller?: Seller; error?: string };
+  if (!data.seller || data.error) return null;
+  return data.seller;
+}
+
+export async function getSellerDetail(id: string): Promise<SellerDetail | null> {
+  const s = await fetchSellerFromAdminApi(id);
   if (!s) return null;
   return buildDetail(s);
 }

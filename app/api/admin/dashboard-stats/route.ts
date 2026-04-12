@@ -69,8 +69,10 @@ export async function GET() {
     walletsRes,
     ledgerRes,
   ] = await Promise.all([
-    supabase.from("profiles").select("*", { count: "exact", head: true }),
-    supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "seller"),
+    // Tüm profil satırları: kolon filtreleri yok (store_name / role vb. ile daraltma yok); NULL alanlı satırlar dahil
+    supabase.from("profiles").select("id", { count: "exact", head: true }),
+    // Satıcı sayısı: yalnızca role eşlemesi; store_name veya diğer kolonlarda filtre yok (role NULL → bu sayıma dahil değil)
+    supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "seller"),
     supabase.from("products_3d").select("*", { count: "exact", head: true }),
     supabase.from("orders").select("*", { count: "exact", head: true }),
     supabase

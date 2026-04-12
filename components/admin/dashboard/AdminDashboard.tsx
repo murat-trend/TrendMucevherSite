@@ -442,7 +442,7 @@ const RISK_SUMMARY = [
  * Satıcı sağlığı (gösterim) — `CriticalSellersPanel` içinde
  * iade &gt; %20 veya ort. puan &lt; 3 ile otomatik filtrelenir.
  */
-/** `INITIAL_SELLERS` id’leri ile uyumlu — detay sayfası `/admin/sellers/[id]` */
+/** Demo veri — detay `/admin/sellers/[id]` gerçek API ile beslenir */
 const SELLER_HEALTH_SNAPSHOT: SellerHealthRow[] = EMPTY_PREVIEW
   ? []
   : [

@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Ban,
   Check,
   CircleAlert,
   Eye,
+  Loader2,
   PauseCircle,
   Plus,
   Search,
@@ -18,7 +19,7 @@ import { AdminEmptyState } from "@/components/admin/ui/AdminEmptyState";
 import { AdminDataScroll, ADMIN_TABLE_TH_STICKY } from "@/components/admin/ui/AdminDataScroll";
 import { AdminKpiCard, type AdminKpiTone } from "@/components/admin/ui/AdminKpiCard";
 import type { Seller, SellerStatus } from "./types";
-import { INITIAL_SELLERS, isHighReturnCount, SELLER_RETURN_WARNING_THRESHOLD } from "./types";
+import { isHighReturnCount, SELLER_RETURN_WARNING_THRESHOLD } from "./types";
 import { SellerStatusBadge } from "./SellerStatusBadge";
 import { computeSellerHealthScore, sellerHealthScoreClass } from "@/lib/seller/compute-seller-health-score";
 
@@ -30,13 +31,39 @@ const numFmt = (n: number) => new Intl.NumberFormat("tr-TR", { maximumFractionDi
 const dateFmt = (iso: string) =>
   new Intl.DateTimeFormat("tr-TR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(iso));
 
-type SortKey = "newest" | "sales" | "rating";
+type SortKey = "newest" | "sales" | "rating" | "health";
 
 export function SellersPage() {
-  const [sellers, setSellers] = useState<Seller[]>(INITIAL_SELLERS);
+  const [sellers, setSellers] = useState<Seller[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [mutError, setMutError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | SellerStatus>("all");
   const [sort, setSort] = useState<SortKey>("newest");
+
+  const loadSellers = useCallback(async () => {
+    setLoadError(null);
+    const res = await fetch("/api/admin/sellers", { credentials: "include" });
+    const json = (await res.json()) as { sellers?: Seller[]; error?: string };
+    if (!res.ok) {
+      setLoadError(json.error ?? `HTTP ${res.status}`);
+      setSellers([]);
+      return;
+    }
+    setSellers(Array.isArray(json.sellers) ? json.sellers : []);
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    void loadSellers().finally(() => {
+      if (alive) setLoading(false);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [loadSellers]);
 
   const summary = useMemo(() => {
     const total = sellers.length;
@@ -61,68 +88,97 @@ export function SellersPage() {
       if (sort === "newest") return b.registeredAt.localeCompare(a.registeredAt);
       if (sort === "sales") return b.totalSales - a.totalSales;
       if (sort === "rating") return b.rating - a.rating;
-      const ha = computeSellerHealthScore({
-        returnRate: a.returnRate,
-        rating: a.rating,
-        orderCount: a.orderCount,
-      });
-      const hb = computeSellerHealthScore({
-        returnRate: b.returnRate,
-        rating: b.rating,
-        orderCount: b.orderCount,
-      });
-      return hb - ha;
+      if (sort === "health") {
+        const ha = computeSellerHealthScore({
+          returnRate: a.returnRate,
+          rating: a.rating,
+          orderCount: a.orderCount,
+        });
+        const hb = computeSellerHealthScore({
+          returnRate: b.returnRate,
+          rating: b.rating,
+          orderCount: b.orderCount,
+        });
+        return hb - ha;
+      }
+      return 0;
     });
     return list;
   }, [sellers, search, statusFilter, sort]);
 
-  const updateSeller = useCallback((id: string, patch: Partial<Seller>) => {
-    setSellers((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-  }, []);
+  const runPatch = useCallback(
+    async (sellerId: string, action: string) => {
+      setMutError(null);
+      const res = await fetch("/api/admin/sellers", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sellerId, action }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setMutError(json.error ?? "İşlem başarısız");
+        return;
+      }
+      await loadSellers();
+    },
+    [loadSellers],
+  );
 
-  const removeSeller = useCallback((id: string) => {
-    setSellers((prev) => prev.filter((s) => s.id !== id));
-  }, []);
+  const runDelete = useCallback(
+    async (sellerId: string) => {
+      setMutError(null);
+      const res = await fetch("/api/admin/sellers", {
+        method: "DELETE",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sellerId }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setMutError(json.error ?? "Silinemedi");
+        return;
+      }
+      await loadSellers();
+    },
+    [loadSellers],
+  );
 
   const handleApprove = useCallback(
     (id: string) => {
-      updateSeller(id, {
-        status: "active",
-        rating: 4.5,
-      });
+      void runPatch(id, "approve");
     },
-    [updateSeller],
+    [runPatch],
   );
 
   const handleSuspend = useCallback(
     (id: string) => {
-      updateSeller(id, { status: "suspended" });
+      void runPatch(id, "suspend");
     },
-    [updateSeller],
+    [runPatch],
   );
 
   const handleDelete = useCallback(
     (id: string) => {
-      if (typeof window !== "undefined" && window.confirm("Bu satıcıyı silmek istediğinize emin misiniz?")) {
-        removeSeller(id);
+      if (typeof window !== "undefined" && window.confirm("Profil kaydı kalıcı olarak silinecek (auth kullanıcısı ayrıca etkilenebilir). Emin misiniz?")) {
+        void runDelete(id);
       }
     },
-    [removeSeller],
+    [runDelete],
   );
 
-  /** Tamamen engelle — listeden kaldır (API’de ban / soft-delete ile değiştirilebilir) */
   const handleBan = useCallback(
     (id: string, storeName: string) => {
       if (
         typeof window !== "undefined" &&
         window.confirm(
-          `“${storeName}” satıcısı tamamen engellenecek ve listeden kaldırılacak. Bu işlem geri alınamayabilir. Emin misiniz?`,
+          `“${storeName}” hesabı engellenecek (role: blocked). Liste güncellenene kadar askıda görünebilir. Emin misiniz?`,
         )
       ) {
-        removeSeller(id);
+        void runPatch(id, "block");
       }
     },
-    [removeSeller],
+    [runPatch],
   );
 
   return (
@@ -137,6 +193,23 @@ export function SellersPage() {
           Yeni Satıcı Ekle
         </button>
       </header>
+
+      {loading && (
+        <div className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-sm text-zinc-400">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#c9a88a]" aria-hidden />
+          Satıcılar yükleniyor…
+        </div>
+      )}
+      {loadError && !loading && (
+        <div className="rounded-xl border border-rose-500/25 bg-rose-500/[0.06] px-4 py-3 text-sm text-rose-200/90">
+          {loadError}
+        </div>
+      )}
+      {mutError && (
+        <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.08] px-4 py-3 text-sm text-amber-100/95">
+          {mutError}
+        </div>
+      )}
 
       <section aria-label="Özet" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {(
@@ -211,10 +284,10 @@ export function SellersPage() {
         aria-label="Satıcı listesi"
         className="overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-[#12141a]/90 via-[#0c0d11] to-[#08090c] shadow-[0_1px_0_rgba(255,255,255,0.04)_inset]"
       >
-        {sellers.length === 0 ? (
+        {loading || loadError ? null : sellers.length === 0 ? (
           <AdminEmptyState
             message="Henüz satıcı bulunmuyor"
-            hint="Yeni satıcı ekleyerek veya başvuruları onaylayarak listeyi doldurabilirsiniz."
+            hint="Supabase profiles: seller, pending_seller, suspended veya blocked rolündeki kayıtlar listelenir."
             variant="shield"
           />
         ) : filtered.length === 0 ? (

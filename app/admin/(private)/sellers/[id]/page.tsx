@@ -7,7 +7,7 @@ type Props = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const d = getSellerDetail(id);
+  const d = await getSellerDetail(id);
   if (!d) return { title: "Satıcı | Super Admin" };
   return {
     title: `${d.storeName} | Satıcı`,
@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function AdminSellerDetailPage({ params }: Props) {
   const { id } = await params;
-  const detail = getSellerDetail(id);
+  const detail = await getSellerDetail(id);
   if (!detail) notFound();
   return <SellerDetailView initialDetail={detail} />;
 }
