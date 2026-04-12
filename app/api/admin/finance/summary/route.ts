@@ -10,17 +10,80 @@ export const dynamic = "force-dynamic";
 
 const CHUNK = 1000;
 
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
+function maybeParseJsonField(v: unknown): unknown {
+  if (typeof v === "string") {
+    const t = v.trim();
+    if ((t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]"))) {
+      try {
+        return JSON.parse(t) as unknown;
+      } catch {
+        return v;
+      }
+    }
+  }
+  return v;
+}
+
+/** jsonb / nested obje içinden tutar alanları (proje ve eski şemalar için). */
+function amountFromJsonBlob(rawBlob: unknown): number | null {
+  const parsed = maybeParseJsonField(rawBlob);
+  if (!isPlainObject(parsed)) return null;
+  const obj = parsed;
+  for (const k of ["amount_try", "amountTry", "amount", "value", "total_try", "totalTry"] as const) {
+    if (!(k in obj)) continue;
+    const raw = obj[k];
+    if (raw === null || raw === undefined || raw === "") continue;
+    const n = Number(raw);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+/**
+ * `finance_expenses` satırından TRY tutarı.
+ * Repo migration: `amount_try` numeric + `invoices` jsonb.
+ * Bazı projelerde tutar yalnızca `data` / `payload` / `jsonb` gibi jsonb kolonlarda olabilir.
+ */
+function extractExpenseAmountTry(row: Record<string, unknown>): number {
+  if ("amount_try" in row && row.amount_try !== null && row.amount_try !== undefined && row.amount_try !== "") {
+    const n = Number(row.amount_try);
+    if (Number.isFinite(n)) return n;
+  }
+  for (const key of ["data", "payload", "jsonb", "json", "meta", "body", "record"] as const) {
+    const fromBlob = amountFromJsonBlob(row[key]);
+    if (fromBlob != null) return fromBlob;
+  }
+  const inv = maybeParseJsonField(row.invoices);
+  if (Array.isArray(inv)) {
+    let invSum = 0;
+    let any = false;
+    for (const item of inv) {
+      if (!isPlainObject(item)) continue;
+      const a = amountFromJsonBlob(item);
+      if (a != null) {
+        invSum += a;
+        any = true;
+      }
+    }
+    if (any) return invSum;
+  }
+  return 0;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function sumNumericColumn(supabase: any, table: string, column: string): Promise<number> {
+async function sumFinanceExpensesTry(supabase: any): Promise<number> {
   let sum = 0;
   let from = 0;
   for (;;) {
-    const { data, error } = await supabase.from(table).select(column).range(from, from + CHUNK - 1);
+    const { data, error } = await supabase.from("finance_expenses").select("*").range(from, from + CHUNK - 1);
     if (error) throw new Error(error.message);
     const rows = (data ?? []) as Record<string, unknown>[];
     for (const row of rows) {
-      const n = Number(row[column] ?? 0);
-      if (Number.isFinite(n)) sum += n;
+      sum += extractExpenseAmountTry(row);
     }
     if (rows.length < CHUNK) break;
     from += CHUNK;
@@ -81,7 +144,7 @@ export async function GET() {
       }
     }
 
-    const expensesTry = await sumNumericColumn(supabase, "finance_expenses", "amount_try");
+    const expensesTry = await sumFinanceExpensesTry(supabase);
 
     const netProfitTry = revenueTry - expensesTry;
 
