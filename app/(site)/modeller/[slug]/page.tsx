@@ -409,13 +409,25 @@ export default function ModelDetayPage({
   useEffect(() => {
     if (!dbProduct?.id) return
     const track = async () => {
-      const supabase = createClient()
       const referrer = document.referrer
       let source = 'direct'
       if (referrer.includes('google') || referrer.includes('bing') || referrer.includes('yahoo')) source = 'organic'
       else if (referrer.includes('instagram') || referrer.includes('facebook') || referrer.includes('twitter') || referrer.includes('tiktok')) source = 'social'
       else if (referrer && !referrer.includes(window.location.hostname)) source = 'referral'
-      await supabase.from('page_views').insert({ product_id: dbProduct.id, source })
+      try {
+        await fetch('/api/page-view', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            page_path: typeof window !== 'undefined' ? window.location.pathname : '/modeller',
+            source,
+            product_id: dbProduct.id,
+          }),
+        })
+      } catch {
+        /* izleme isteğe bağlı */
+      }
     }
     void track()
   }, [dbProduct?.id])

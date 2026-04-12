@@ -24,6 +24,7 @@ import {
   Mail,
   Cpu,
   CheckSquare,
+  Eye,
 } from "lucide-react";
 
 export type AdminNavItem = {
@@ -231,6 +232,13 @@ export const ADMIN_NAV_ENTRIES: AdminNavEntry[] = [
         labelTr: "API Kullanımı",
         labelEn: "API Usage",
         icon: Cpu,
+      },
+      {
+        id: "page-views",
+        href: "/admin/page-views",
+        labelTr: "Ziyaretçiler",
+        labelEn: "Visitors",
+        icon: Eye,
       },
     ],
   },
