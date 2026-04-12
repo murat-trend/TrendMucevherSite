@@ -7,6 +7,13 @@ export type SiteSettings = {
   shippingPriceTry: number;
   freeShippingThresholdTry: number;
   taxRate: number;
+  /** Öne çıkarma: ürün başına kredi (site_settings.data içinde özelleştirilebilir) */
+  campaignFeaturedWeek1PerProduct: number;
+  campaignFeaturedWeek2PerProduct: number;
+  campaignFeaturedMonth1PerProduct: number;
+  /** Banner: sabit kredi (süreye göre) */
+  campaignBannerWeek1: number;
+  campaignBannerMonth1: number;
   features: {
     generateEnabled: boolean;
     analyzeJewelryEnabled: boolean;
@@ -30,6 +37,11 @@ function defaults(): SiteSettings {
     shippingPriceTry: 99,
     freeShippingThresholdTry: 5000,
     taxRate: 20,
+    campaignFeaturedWeek1PerProduct: 50,
+    campaignFeaturedWeek2PerProduct: 90,
+    campaignFeaturedMonth1PerProduct: 150,
+    campaignBannerWeek1: 100,
+    campaignBannerMonth1: 300,
     features: {
       generateEnabled: true,
       analyzeJewelryEnabled: true,

@@ -163,6 +163,7 @@ export function SaticiNav({ active }: { active: string }) {
           {[
             { href: "/satici/dashboard", label: "Dashboard" },
             { href: "/satici/urunlerim", label: "Ürünlerim" },
+            { href: "/satici/kampanyalarim", label: "Kampanyalarım" },
             { href: "/satici/siparislerim", label: "Siparişlerim" },
             { href: "/satici/hesabim", label: "Hesabım" },
           ].map(item => (

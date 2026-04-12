@@ -526,6 +526,7 @@ export default function SaticiUrunlerimPage() {
             {[
               { href: "/satici/dashboard", label: "Dashboard" },
               { href: "/satici/urunlerim", label: "Ürünlerim", active: true },
+              { href: "/satici/kampanyalarim", label: "Kampanyalarım" },
               { href: "/satici/siparislerim", label: "Siparişlerim" },
               { href: "/satici/hesabim", label: "Hesabım" },
             ].map((item) => (
