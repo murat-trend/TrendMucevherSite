@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import sharp from "sharp";
 import { isRemauraSuperAdminUserId } from "@/lib/billing/super-admin";
 import { createClient } from "@/utils/supabase/server";
 
@@ -61,18 +62,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Desteklenen türler: JPEG, PNG, WebP, GIF" }, { status: 400 });
     }
 
-    const ext =
-      mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : mime === "image/gif" ? "gif" : "jpg";
-    const key = `blog/covers/${randomUUID()}.${ext}`;
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const key = `blog/covers/${randomUUID()}.webp`;
+    const input = Buffer.from(await file.arrayBuffer());
+    const webpBuffer = await sharp(input).webp({ quality: 85 }).toBuffer();
 
     const { client, bucket, publicBase } = getS3();
     await client.send(
       new PutObjectCommand({
         Bucket: bucket,
         Key: key,
-        Body: buffer,
-        ContentType: mime,
+        Body: webpBuffer,
+        ContentType: "image/webp",
       }),
     );
 
