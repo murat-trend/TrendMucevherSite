@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { GiderTanimlamaClient } from "@/components/admin/finance/GiderTanimlamaClient";
 
@@ -5,6 +6,14 @@ export const metadata: Metadata = {
   title: "Gider Tanımlama | Muhasebe | Super Admin",
   robots: { index: false, follow: false },
 };
+
+function GiderTanimlamaFallback() {
+  return (
+    <div className="rounded-xl border border-white/[0.08] bg-[#0a0b0e]/80 px-4 py-10 text-center text-sm text-zinc-500">
+      Yükleniyor…
+    </div>
+  );
+}
 
 export default function AdminFinanceExpenseDefinitionsPage() {
   return (
@@ -15,7 +24,9 @@ export default function AdminFinanceExpenseDefinitionsPage() {
         muhasebeciye tıklanabilir fatura bağlantıları gönderebilirsiniz.
       </p>
       <div className="mt-8">
-        <GiderTanimlamaClient />
+        <Suspense fallback={<GiderTanimlamaFallback />}>
+          <GiderTanimlamaClient />
+        </Suspense>
       </div>
     </div>
   );

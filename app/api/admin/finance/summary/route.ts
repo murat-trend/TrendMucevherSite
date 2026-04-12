@@ -98,6 +98,18 @@ function monthKeyUtc(iso: string): string {
 
 export type FinanceMonthlyPoint = { month: string; totalTry: number; orderCount: number };
 
+export type FinanceMonthlyExpensePoint = { month: string; totalTry: number; rowCount: number };
+
+function expenseMonthFromRow(row: Record<string, unknown>): string | null {
+  const iso = row.date_iso;
+  if (typeof iso === "string" && /^\d{4}-\d{2}-\d{2}/.test(iso)) {
+    return iso.slice(0, 7);
+  }
+  const u = row.updated_at;
+  if (typeof u === "string") return monthKeyUtc(u);
+  return null;
+}
+
 export async function GET() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
@@ -186,6 +198,33 @@ export async function GET() {
       months.push({ month: key, totalTry: agg.totalTry, orderCount: agg.orderCount });
     }
 
+    const validMonthKeys = new Set(months.map((m) => m.month));
+    const expenseMonthMap = new Map<string, { totalTry: number; rowCount: number }>();
+    {
+      let exFrom = 0;
+      for (;;) {
+        const { data, error } = await supabase.from("finance_expenses").select("*").range(exFrom, exFrom + CHUNK - 1);
+        if (error) throw new Error(error.message);
+        const rows = (data ?? []) as Record<string, unknown>[];
+        for (const row of rows) {
+          const mk = expenseMonthFromRow(row);
+          if (!mk || !validMonthKeys.has(mk)) continue;
+          const amt = extractExpenseAmountTry(row);
+          const cur = expenseMonthMap.get(mk) ?? { totalTry: 0, rowCount: 0 };
+          cur.totalTry += amt;
+          cur.rowCount += 1;
+          expenseMonthMap.set(mk, cur);
+        }
+        if (rows.length < CHUNK) break;
+        exFrom += CHUNK;
+      }
+    }
+
+    const monthlyExpenses: FinanceMonthlyExpensePoint[] = months.map((m) => {
+      const agg = expenseMonthMap.get(m.month) ?? { totalTry: 0, rowCount: 0 };
+      return { month: m.month, totalTry: agg.totalTry, rowCount: agg.rowCount };
+    });
+
     const thirtyAgo = new Date(now.getTime() - 30 * 86400000).toISOString();
     let pendingCount = 0;
     let pendingAmountTry = 0;
@@ -256,6 +295,7 @@ export async function GET() {
       expensesTry,
       netProfitTry,
       monthlyRevenue: months,
+      monthlyExpenses,
       pendingOrdersCount: pendingCount,
       pendingOrdersAmountTry: pendingAmountTry,
       refundedOrdersCount: refundedCount,
