@@ -220,7 +220,7 @@ export const ADMIN_NAV_ENTRIES: AdminNavEntry[] = [
     children: [
       {
         id: "reports",
-        href: "/admin/reports",
+        href: "/admin/raporlar",
         labelTr: "Raporlar",
         labelEn: "Reports",
         icon: BarChart3,
