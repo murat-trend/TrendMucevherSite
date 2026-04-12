@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { requireBlogAdminJson } from "@/lib/admin/blog-admin-auth";
-import { slugifyTitle } from "@/lib/blog/slugify";
+import { generateSlug } from "@/lib/blog/slugify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
   }
 
   const slugRaw = typeof body.slug === "string" ? body.slug.trim() : "";
-  const baseSlug = slugifyTitle(slugRaw || title);
+  const baseSlug = generateSlug(slugRaw || title);
 
   let slug = baseSlug;
   for (let i = 0; i < 50; i++) {
@@ -182,7 +182,7 @@ export async function PATCH(req: Request) {
   if (typeof body.seo_description === "string") patch.seo_description = body.seo_description.trim() || null;
 
   if (typeof body.slug === "string" && body.slug.trim()) {
-    patch.slug = slugifyTitle(body.slug.trim());
+    patch.slug = generateSlug(body.slug.trim());
   }
 
   if (typeof body.read_time_minutes === "number" && Number.isFinite(body.read_time_minutes)) {

@@ -2,11 +2,25 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BLOG_CATEGORIES } from "@/lib/blog/categories";
-import { slugifyTitle } from "@/lib/blog/slugify";
 import type { PostRow } from "@/lib/blog/types";
 import { ADMIN_PRIMARY_BUTTON_CLASS } from "@/components/admin/ui/adminPrimaryButton";
 import { FinanceScrollTable, FINANCE_TH } from "@/components/admin/finance/FinanceScrollTable";
-import { Loader2, Pencil, Plus, RefreshCw, Sparkles, Trash2, Upload } from "lucide-react";
+import { Loader2, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, Upload } from "lucide-react";
+
+const generateSlug = (title: string): string => {
+  const s = title
+    .toLowerCase()
+    .replace(/ğ/g, "g")
+    .replace(/ü/g, "u")
+    .replace(/ş/g, "s")
+    .replace(/ı/g, "i")
+    .replace(/ö/g, "o")
+    .replace(/ç/g, "c")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-");
+  return s || "yazi";
+};
 
 const SECONDARY_BTN =
   "inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-white/[0.14] bg-white/[0.04] px-3 py-2 text-xs font-medium text-zinc-200 transition-colors hover:bg-white/[0.07]";
@@ -33,6 +47,7 @@ const emptyForm = {
   category: "genel",
   seo_title: "",
   seo_description: "",
+  keywords: "",
   read_time_minutes: 5,
 };
 
@@ -46,6 +61,7 @@ export function AdminBlogPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [polishing, setPolishing] = useState(false);
+  const [seoSuggesting, setSeoSuggesting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [modalErr, setModalErr] = useState<string | null>(null);
 
@@ -92,6 +108,7 @@ export function AdminBlogPage() {
       category: p.category || "genel",
       seo_title: p.seo_title ?? "",
       seo_description: p.seo_description ?? "",
+      keywords: (p.tags ?? []).join(", "),
       read_time_minutes: p.read_time_minutes ?? 5,
     });
     setSlugManual(true);
@@ -108,7 +125,7 @@ export function AdminBlogPage() {
     setForm((f) => {
       const next = { ...f, title };
       if (!slugManual) {
-        next.slug = slugifyTitle(title);
+        next.slug = generateSlug(title);
       }
       return next;
     });
@@ -121,11 +138,12 @@ export function AdminBlogPage() {
 
   const buildPayload = (isPublished: boolean) => ({
     title: form.title.trim(),
-    slug: form.slug.trim() || slugifyTitle(form.title),
+    slug: form.slug.trim() || generateSlug(form.title),
     content: form.content,
     excerpt: form.excerpt.trim() || null,
     cover_image_url: form.cover_image_url.trim() || null,
     category: form.category,
+    tags: form.keywords.trim() || null,
     is_published: isPublished,
     seo_title: form.seo_title.trim() || null,
     seo_description: form.seo_description.trim() || null,
@@ -199,6 +217,47 @@ export function AdminBlogPage() {
       setModalErr("Ağ hatası");
     } finally {
       setPolishing(false);
+    }
+  };
+
+  const aiSeo = async () => {
+    const title = form.title.trim();
+    if (!title) {
+      setModalErr("Önce başlık yazın.");
+      return;
+    }
+    setSeoSuggesting(true);
+    setModalErr(null);
+    try {
+      const res = await fetch("/api/admin/blog/ai-seo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ title, content: form.content }),
+      });
+      const j = (await res.json()) as {
+        seoTitle?: string;
+        seoDescription?: string;
+        keywords?: string;
+        slug?: string;
+        error?: string;
+      };
+      if (!res.ok) {
+        setModalErr(j.error ?? "SEO önerisi alınamadı");
+        return;
+      }
+      setForm((f) => ({
+        ...f,
+        seo_title: j.seoTitle ?? f.seo_title,
+        seo_description: j.seoDescription ?? f.seo_description,
+        keywords: j.keywords ?? f.keywords,
+        slug: j.slug != null && j.slug !== "" ? j.slug : f.slug,
+      }));
+      setSlugManual(true);
+    } catch {
+      setModalErr("Ağ hatası");
+    } finally {
+      setSeoSuggesting(false);
     }
   };
 
@@ -338,7 +397,14 @@ export function AdminBlogPage() {
                   }}
                   className="mt-1 w-full rounded-xl border border-white/[0.12] bg-[#0e1015] px-3 py-2.5 font-mono text-sm text-zinc-100"
                 />
-                <button type="button" className="mt-1 text-[11px] text-[#c9a88a] hover:underline" onClick={() => setSlugManual(false)}>
+                <button
+                  type="button"
+                  className="mt-1 text-[11px] text-[#c9a88a] hover:underline"
+                  onClick={() => {
+                    setSlugManual(false);
+                    setForm((f) => ({ ...f, slug: generateSlug(f.title) }));
+                  }}
+                >
                   Başlıktan yeniden üret
                 </button>
               </label>
@@ -431,6 +497,22 @@ export function AdminBlogPage() {
                 </label>
               </div>
 
+              <div className="rounded-xl border border-white/[0.08] bg-black/20 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-zinc-500">SEO</span>
+                  <button
+                    type="button"
+                    className={SECONDARY_BTN}
+                    disabled={seoSuggesting || saving || !form.title.trim()}
+                    onClick={() => void aiSeo()}
+                  >
+                    {seoSuggesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                    SEO Öner
+                  </button>
+                </div>
+                <p className="mt-1 text-[10px] text-zinc-600">Başlık ve içeriğe göre meta başlık, açıklama, anahtar kelime ve slug önerisi.</p>
+              </div>
+
               <label className="block text-xs font-medium text-zinc-500">
                 SEO başlık
                 <input
@@ -446,6 +528,15 @@ export function AdminBlogPage() {
                   onChange={(e) => setForm((f) => ({ ...f, seo_description: e.target.value }))}
                   rows={2}
                   className="mt-1 w-full rounded-xl border border-white/[0.12] bg-[#0e1015] px-3 py-2.5 text-sm text-zinc-100"
+                />
+              </label>
+              <label className="block text-xs font-medium text-zinc-500">
+                Anahtar kelimeler (virgülle; kayıtta etiket olarak saklanır)
+                <input
+                  value={form.keywords}
+                  onChange={(e) => setForm((f) => ({ ...f, keywords: e.target.value }))}
+                  className="mt-1 w-full rounded-xl border border-white/[0.12] bg-[#0e1015] px-3 py-2.5 text-sm text-zinc-100"
+                  placeholder="ör. mücevher tasarımı, vitrin, altın"
                 />
               </label>
             </div>
