@@ -75,6 +75,33 @@ type Product3dRow = DbProduct3D & {
   updated_at?: string | null;
 };
 
+function isJewelryTypeMissing(row: Product3dRow): boolean {
+  const jt = row.jewelry_type;
+  if (jt == null) return true;
+  return String(jt).trim() === "";
+}
+
+/** `thumbnail_url` veya (kolon varsa) `thumbnail_front_url` eksik. */
+function rowThumbnailUrlsIncomplete(row: Product3dRow): boolean {
+  const mainMissing = row.thumbnail_url == null || String(row.thumbnail_url).trim() === "";
+  if (mainMissing) return true;
+  if (!("thumbnail_front_url" in row)) return false;
+  const f = row.thumbnail_front_url;
+  return f == null || String(f).trim() === "";
+}
+
+function isPublishedMissingPrice(row: Product3dRow): boolean {
+  if (!row.is_published) return false;
+  const p = row.personal_price;
+  if (p == null) return true;
+  return typeof p === "number" && (p === 0 || Number.isNaN(p));
+}
+
+function rowModerationStatusRaw(row: Product3dRow): string {
+  const v = row.moderation_status;
+  return typeof v === "string" ? v.trim().toLowerCase() : "";
+}
+
 function mapProduct3dToRow(row: Product3dRow, sellerStoreName: string | null): ProductRow {
   const ui = mapDbProductToUi(row);
   const titleLike = row.title != null && String(row.title).trim() !== "" ? String(row.title).trim() : ui.name;
@@ -119,14 +146,6 @@ const DISTRIBUTION_BAR: Record<ProductModerationStatus, string> = {
   rejected: "bg-rose-500/80",
   suspended: "bg-zinc-500/75",
 };
-
-const MODERATION_ALERTS: { id: string; title: string; detail: string }[] = [
-  { id: "a1", title: "Kategorisi eksik ürün", detail: "2 ürün için birincil kategori atanmadı; yayın öncesi zorunlu." },
-  { id: "a2", title: "Eksik görsel", detail: "5 üründe minimum 3 görsel kuralı sağlanmıyor." },
-  { id: "a3", title: "Düşük stok ama yayında", detail: "4 ürün stok ≤2 iken canlı; otomatik uyarı gönderildi." },
-  { id: "a4", title: "Şüpheli açıklama", detail: "1 üründe marka ihlali anahtar kelimesi tespit edildi." },
-  { id: "a5", title: "Yinelenen ürün riski", detail: "SKU ve görsel hash eşleşmesi — inceleme kuyruğunda." },
-];
 
 type StatusFilter = "Tümü" | ProductModerationStatus;
 type SortKey = "newest" | "sales" | "risk" | "updated";
@@ -363,6 +382,8 @@ export function ProductsModerationPage() {
   const searchParams = useSearchParams();
   const lowStockOnly = searchParams.get("filter") === "low-stock";
   const [products, setProducts] = useState<ProductRow[]>([]);
+  /** Uyarılar için ham `products_3d` satırları (jewelry_type, thumbnail, fiyat). */
+  const [productSnapshotRows, setProductSnapshotRows] = useState<Product3dRow[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
   const [productsError, setProductsError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -429,6 +450,51 @@ export function ProductsModerationPage() {
     return keys.map((label, i) => ({ label, count: counts[i] }));
   }, [products]);
 
+  const moderationAlerts = useMemo(() => {
+    const items: { id: string; title: string; detail: string }[] = [];
+    const missingCategory = productSnapshotRows.filter(isJewelryTypeMissing).length;
+    if (missingCategory > 0) {
+      items.push({
+        id: "missing-category",
+        title: "Kategorisi eksik ürün",
+        detail: `${missingCategory} üründe jewelry_type boş veya atanmamış.`,
+      });
+    }
+    const missingThumb = productSnapshotRows.filter(rowThumbnailUrlsIncomplete).length;
+    if (missingThumb > 0) {
+      items.push({
+        id: "missing-thumbnail",
+        title: "Eksik görsel",
+        detail: `${missingThumb} üründe thumbnail_url veya thumbnail_front_url eksik.`,
+      });
+    }
+    const publishedNoPrice = productSnapshotRows.filter(isPublishedMissingPrice).length;
+    if (publishedNoPrice > 0) {
+      items.push({
+        id: "published-no-price",
+        title: "Yayında ama fiyatsız",
+        detail: `${publishedNoPrice} yayında ürünün personal_price değeri yok veya 0.`,
+      });
+    }
+    const pendingCount = productSnapshotRows.filter((r) => rowModerationStatusRaw(r) === "pending").length;
+    if (pendingCount > 0) {
+      items.push({
+        id: "pending-moderation",
+        title: "Onay bekleyen ürünler",
+        detail: `${pendingCount} ürün moderation_status: pending.`,
+      });
+    }
+    const rejectedCount = productSnapshotRows.filter((r) => rowModerationStatusRaw(r) === "rejected").length;
+    if (rejectedCount > 0) {
+      items.push({
+        id: "rejected-moderation",
+        title: "Reddedilen ürünler",
+        detail: `${rejectedCount} ürün moderation_status: rejected.`,
+      });
+    }
+    return items;
+  }, [productSnapshotRows]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = products.filter((p) => {
@@ -455,14 +521,17 @@ export function ProductsModerationPage() {
 
   const loadModerationProducts = useCallback(async () => {
     setProductsError(null);
+    setProductSnapshotRows([]);
     const supabase = createClient();
     const { data, error } = await supabase.from("products_3d").select("*").order("created_at", { ascending: false });
     if (error) {
       setProductsError(error.message);
       setProducts([]);
+      setProductSnapshotRows([]);
       return;
     }
     const rows = (data ?? []) as Product3dRow[];
+    setProductSnapshotRows(rows);
     const sellerIds = [...new Set(rows.map((r) => r.seller_id).filter((x): x is string => typeof x === "string" && x.length > 0))];
     let nameBySeller = new Map<string, string | null>();
     if (sellerIds.length > 0) {
@@ -506,6 +575,11 @@ export function ProductsModerationPage() {
               status: patch.moderation_status,
             }
           : p,
+      ),
+    );
+    setProductSnapshotRows((prev) =>
+      prev.map((r) =>
+        r.id === id ? { ...r, is_published: patch.is_published, moderation_status: patch.moderation_status } : r,
       ),
     );
   }, []);
@@ -1094,16 +1168,21 @@ export function ProductsModerationPage() {
 
             <div className="xl:col-span-4">
               <CardShell title="Moderasyon Uyarıları">
-                {MODERATION_ALERTS.length === 0 ? (
+                {productsLoading ? (
+                  <div className="flex items-center justify-center gap-2 py-8 text-sm text-zinc-500">
+                    <Loader2 className="h-4 w-4 animate-spin text-[#c9a88a]" aria-hidden />
+                    Uyarılar hesaplanıyor…
+                  </div>
+                ) : moderationAlerts.length === 0 ? (
                   <AdminEmptyState
                     message="Şu an kritik moderasyon uyarısı bulunmuyor"
-                    hint="Kısıt veya politika ihlali tespit edilmedi."
+                    hint="Liste yüklenen ürünler için seçilen uyarı koşulları eşleşmedi."
                     variant="shield"
                     size="compact"
                   />
                 ) : (
                   <ul className="space-y-3">
-                    {MODERATION_ALERTS.map((a) => (
+                    {moderationAlerts.map((a) => (
                       <li
                         key={a.id}
                         className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3 text-sm"

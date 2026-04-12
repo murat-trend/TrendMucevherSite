@@ -4,12 +4,13 @@ export type DbProduct3D = {
   name: string;
   slug: string;
   story: string | null;
-  jewelry_type: string;
-  personal_price: number;
+  jewelry_type: string | null;
+  personal_price: number | null;
   commercial_price: number | null;
   glb_url: string | null;
   stl_url: string | null;
   thumbnail_url: string | null;
+  thumbnail_front_url?: string | null;
   images: unknown;
   dimensions: unknown;
   is_published: boolean;
@@ -84,8 +85,8 @@ export function mapDbProductToUi(row: DbProduct3D): Ui3DModel {
     name_en: (row as any).name_en ?? null,
     name_de: (row as any).name_de ?? null,
     name_ru: (row as any).name_ru ?? null,
-    jewelryType: normalizeJewelryType(row.jewelry_type),
-    price: row.personal_price,
+    jewelryType: normalizeJewelryType(row.jewelry_type ?? ""),
+    price: Number(row.personal_price ?? 0),
     licensePersonalPrice: row.personal_price ?? null,
     licenseCommercialPrice: row.commercial_price ?? null,
     glbUrl: row.glb_url,
