@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -12,6 +12,7 @@ import {
   Gem,
   HeartHandshake,
   Layers,
+  Loader2,
   Megaphone,
   MessageSquareWarning,
   Package,
@@ -19,8 +20,10 @@ import {
   RefreshCw,
   Search,
   ShieldAlert,
+  Store,
   Target,
   Timer,
+  Users,
   Zap,
 } from "lucide-react";
 import {
@@ -49,6 +52,36 @@ import {
 } from "./marketing-dashboard-constants";
 import { SalesTrendChart } from "./SalesTrendChart";
 import { DEMO_ZERO_RESULT_SEARCHES } from "@/lib/search/zero-result-searches";
+
+export type AdminDashboardStatsPayload = {
+  totalUsers: number;
+  totalSellers: number;
+  totalProducts: number;
+  totalOrders: number;
+  totalCreditsInSystem: number;
+  totalRevenueTry: number;
+  totalBillingCreditsCredited: number;
+  recentOrders: Array<{
+    id: string;
+    created_at: string;
+    payment_status: string | null;
+    amount: number | null;
+    buyer_id: string | null;
+    product_name: string | null;
+    customer_name: string | null;
+  }>;
+  topProducts: Array<{ id: string; name: string; price: number; viewCount: number }>;
+  jobStats: Record<string, number>;
+  jobStatusStats: Record<string, number>;
+  ledger: Array<{ amount: number | string | null; type: string | null; created_at: string }>;
+};
+
+const PAYMENT_STATUS_TR: Record<string, string> = {
+  pending: "Bekliyor",
+  paid: "Ödendi",
+  cancelled: "İptal",
+  refunded: "İade",
+};
 
 const tryFmt = (n: number) =>
   new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 0 }).format(n);
@@ -614,12 +647,246 @@ function OrderStatusBars() {
 }
 
 export function AdminDashboard() {
+  const [liveStats, setLiveStats] = useState<AdminDashboardStatsPayload | null>(null);
+  const [liveLoading, setLiveLoading] = useState(true);
+  const [liveError, setLiveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/admin/dashboard-stats", { credentials: "include" });
+        const json = (await res.json()) as AdminDashboardStatsPayload & { error?: string };
+        if (!res.ok) {
+          throw new Error(json.error || `HTTP ${res.status}`);
+        }
+        if (!cancelled) {
+          setLiveStats(json);
+          setLiveError(null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setLiveError(e instanceof Error ? e.message : String(e));
+          setLiveStats(null);
+        }
+      } finally {
+        if (!cancelled) setLiveLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="space-y-6 lg:space-y-8">
       <header className="space-y-1">
         <h1 className="font-display text-3xl font-semibold tracking-[-0.02em] text-zinc-50">Dashboard</h1>
         <p className="text-sm text-zinc-500">Genel sistem performansı ve özet</p>
       </header>
+
+      <section aria-label="Canlı platform verileri" className="space-y-4">
+        {liveLoading && (
+          <div className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-sm text-zinc-400">
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#c9a88a]" aria-hidden />
+            Canlı istatistikler yükleniyor…
+          </div>
+        )}
+        {liveError && !liveLoading && (
+          <div className="rounded-xl border border-rose-500/25 bg-rose-500/[0.06] px-4 py-3 text-sm text-rose-200/90">
+            Canlı veri alınamadı: {liveError}
+            <span className="mt-1 block text-xs text-rose-200/60">
+              Super admin (.env) veya <code className="rounded bg-black/30 px-1">profiles.role = admin</code> gerekir.
+            </span>
+          </div>
+        )}
+        {liveStats && !liveLoading && (
+          <>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <AdminKpiCard
+                label="Toplam kullanıcı"
+                value={numFmt(liveStats.totalUsers)}
+                sub="profiles tablosu"
+                icon={Users}
+                tone="info"
+              />
+              <AdminKpiCard
+                label="Toplam satıcı"
+                value={numFmt(liveStats.totalSellers)}
+                sub="role = seller"
+                icon={Store}
+                tone="neutral"
+                href="/admin/sellers"
+              />
+              <AdminKpiCard
+                label="Toplam ürün"
+                value={numFmt(liveStats.totalProducts)}
+                sub="products_3d"
+                icon={Package}
+                tone="info"
+                href="/admin/products"
+              />
+              <AdminKpiCard
+                label="Toplam sipariş"
+                value={numFmt(liveStats.totalOrders)}
+                sub="Tüm sipariş kayıtları"
+                icon={Layers}
+                tone="neutral"
+                href="/admin/orders"
+              />
+              <AdminKpiCard
+                label="Toplam gelir (TL)"
+                value={tryFmt(liveStats.totalRevenueTry)}
+                sub="Ödenmiş siparişler (payment_status = paid)"
+                icon={CreditCard}
+                tone="revenue"
+                href="/admin/finance"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <CardShell title="Son siparişler" className="min-h-0 overflow-hidden">
+                {liveStats.recentOrders.length === 0 ? (
+                  <AdminEmptyState
+                    message="Henüz sipariş yok."
+                    variant="shield"
+                    size="compact"
+                    className="rounded-xl"
+                  />
+                ) : (
+                  <AdminDataScroll className="!rounded-lg" maxHeightClass="max-h-[320px]" fadeBottom={false}>
+                    <table className="w-full min-w-[480px] text-left text-sm">
+                      <thead>
+                        <tr className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                          <th className={`px-3 py-2 font-medium ${ADMIN_TABLE_TH_STICKY}`}>Tarih</th>
+                          <th className={`px-3 py-2 font-medium ${ADMIN_TABLE_TH_STICKY}`}>Ürün</th>
+                          <th className={`px-3 py-2 font-medium ${ADMIN_TABLE_TH_STICKY}`}>Müşteri</th>
+                          <th className={`px-3 py-2 font-medium tabular-nums ${ADMIN_TABLE_TH_STICKY}`}>Tutar</th>
+                          <th className={`px-3 py-2 font-medium ${ADMIN_TABLE_TH_STICKY}`}>Durum</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/[0.05]">
+                        {liveStats.recentOrders.map((o) => (
+                          <tr key={o.id} className="hover:bg-white/[0.02]">
+                            <td className="px-3 py-2 tabular-nums text-xs text-zinc-400">
+                              {new Date(o.created_at).toLocaleString("tr-TR", {
+                                day: "2-digit",
+                                month: "short",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </td>
+                            <td className="max-w-[140px] truncate px-3 py-2 text-zinc-200" title={o.product_name ?? ""}>
+                              {o.product_name ?? "—"}
+                            </td>
+                            <td className="max-w-[120px] truncate px-3 py-2 text-zinc-400" title={o.customer_name ?? ""}>
+                              {o.customer_name ?? "—"}
+                            </td>
+                            <td className="px-3 py-2 tabular-nums text-zinc-300">{tryFmt(Number(o.amount ?? 0))}</td>
+                            <td className="px-3 py-2 text-xs">
+                              <span
+                                className={
+                                  o.payment_status === "paid"
+                                    ? "text-emerald-400/90"
+                                    : o.payment_status === "pending"
+                                      ? "text-amber-400/90"
+                                      : "text-zinc-500"
+                                }
+                              >
+                                {PAYMENT_STATUS_TR[o.payment_status ?? ""] ?? o.payment_status ?? "—"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </AdminDataScroll>
+                )}
+                <p className="mt-2 text-[11px] text-zinc-600">
+                  Son 10 sipariş · Kredi bakiyesi (sistem):{" "}
+                  <span className="font-medium tabular-nums text-zinc-400">{numFmt(Math.round(liveStats.totalCreditsInSystem))}</span>
+                </p>
+              </CardShell>
+
+              <CardShell title="Remaura AI kullanımı (son 50 iş)" className="min-h-0 overflow-hidden">
+                {Object.keys(liveStats.jobStats).length === 0 ? (
+                  <AdminEmptyState
+                    message="Henüz remaura_jobs kaydı yok."
+                    hint="İşlem yapıldıkça tip dağılımı burada görünür."
+                    variant="shield"
+                    size="compact"
+                    className="rounded-xl"
+                  />
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">İş tipi</p>
+                      <ul className="space-y-2">
+                        {Object.entries(liveStats.jobStats)
+                          .sort((a, b) => b[1] - a[1])
+                          .map(([type, count]) => (
+                            <li
+                              key={type}
+                              className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-sm"
+                            >
+                              <span className="font-mono text-xs text-zinc-300">{type}</span>
+                              <span className="tabular-nums font-medium text-zinc-100">{numFmt(count)}</span>
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                    {Object.keys(liveStats.jobStatusStats).length > 0 && (
+                      <div>
+                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Durum</p>
+                        <ul className="flex flex-wrap gap-2">
+                          {Object.entries(liveStats.jobStatusStats).map(([st, count]) => (
+                            <li
+                              key={st}
+                              className="rounded-md border border-white/[0.08] bg-black/20 px-2.5 py-1 text-xs text-zinc-400"
+                            >
+                              <span className="text-zinc-500">{st}:</span>{" "}
+                              <span className="tabular-nums font-medium text-zinc-200">{numFmt(count)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <p className="text-[11px] text-zinc-600">
+                      Ledger (credit toplamı, son 100 satır):{" "}
+                      <span className="tabular-nums text-zinc-400">{numFmt(Math.round(liveStats.totalBillingCreditsCredited))}</span> kredi
+                    </p>
+                  </div>
+                )}
+              </CardShell>
+            </div>
+
+            {liveStats.topProducts.length > 0 && (
+              <CardShell title="Öne çıkan ürünler (görüntülenme veya yeni)" className="min-h-0 overflow-hidden">
+                <AdminDataScroll className="!rounded-lg" maxHeightClass="max-h-[220px]" fadeBottom={false}>
+                  <table className="w-full min-w-[400px] text-left text-sm">
+                    <thead>
+                      <tr className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                        <th className={`px-3 py-2 font-medium ${ADMIN_TABLE_TH_STICKY}`}>Ürün</th>
+                        <th className={`px-3 py-2 font-medium tabular-nums ${ADMIN_TABLE_TH_STICKY}`}>Fiyat</th>
+                        <th className={`px-3 py-2 font-medium tabular-nums ${ADMIN_TABLE_TH_STICKY}`}>Görüntülenme</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/[0.05]">
+                      {liveStats.topProducts.map((p) => (
+                        <tr key={p.id} className="hover:bg-white/[0.02]">
+                          <td className="px-3 py-2 font-medium text-zinc-200">{p.name}</td>
+                          <td className="px-3 py-2 tabular-nums text-zinc-400">{tryFmt(p.price)}</td>
+                          <td className="px-3 py-2 tabular-nums text-zinc-500">{numFmt(p.viewCount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </AdminDataScroll>
+              </CardShell>
+            )}
+          </>
+        )}
+      </section>
 
       {/* Net kar — rapor dönemi; ciro − COGS − reklam − iade (tek ana gösterim; stratejik satırda tekrarlanmaz) */}
       {!EMPTY_PREVIEW && (
