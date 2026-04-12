@@ -6,7 +6,7 @@ import { buildSystemPrompt as buildMatrixGoldSystemPrompt } from "@/lib/remaura/
 
 loadEnvConfig(process.cwd());
 
-const LOG_PREFIX = "[cad-kocu/analyze]";
+const LOG_PREFIX = "[remaura/cad-coach/analyze]";
 
 type ImageMedia = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 

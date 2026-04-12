@@ -10,9 +10,6 @@ const nextConfig: NextConfig = {
   },
   turbopack: {},
   serverExternalPackages: ["draco3dgltf"],
-  async redirects() {
-    return [{ source: "/remaura/cad-koc", destination: "/cad-kocu", permanent: true }];
-  },
   images: {
     remotePatterns: [
       {
