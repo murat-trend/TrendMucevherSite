@@ -26,6 +26,7 @@ import {
   CheckSquare,
   Eye,
   Coins,
+  BookOpen,
 } from "lucide-react";
 
 export type AdminNavItem = {
@@ -259,6 +260,13 @@ export const ADMIN_NAV_ENTRIES: AdminNavEntry[] = [
     titleEn: "Communication & Content",
     icon: FileText,
     children: [
+      {
+        id: "blog",
+        href: "/admin/blog",
+        labelTr: "Blog / Günlük",
+        labelEn: "Blog / Journal",
+        icon: BookOpen,
+      },
       {
         id: "cms",
         href: "/admin/cms",
