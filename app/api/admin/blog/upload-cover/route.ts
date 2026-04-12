@@ -6,31 +6,20 @@ import sharp from "sharp";
 import { isRemauraSuperAdminUserId } from "@/lib/billing/super-admin";
 import { createClient } from "@/utils/supabase/server";
 
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 export const dynamic = "force-dynamic";
+
+const s3 = new S3Client({
+  region: "auto",
+  endpoint: process.env.R2_ENDPOINT!,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+  },
+});
 
 function adminAllowed(userId: string, role: string | null | undefined): boolean {
   return isRemauraSuperAdminUserId(userId) || role === "admin";
-}
-
-function getS3(): { client: S3Client; bucket: string; publicBase: string } {
-  const endpoint = process.env.R2_ENDPOINT?.trim();
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID?.trim();
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY?.trim();
-  const bucket = process.env.R2_BUCKET_NAME?.trim();
-  const publicBase = process.env.R2_PUBLIC_BASE_URL?.replace(/\/$/, "").trim();
-  if (!endpoint || !accessKeyId || !secretAccessKey || !bucket || !publicBase) {
-    throw new Error("R2 yapılandırması eksik");
-  }
-  return {
-    client: new S3Client({
-      region: "auto",
-      endpoint,
-      credentials: { accessKeyId, secretAccessKey },
-    }),
-    bucket,
-    publicBase,
-  };
 }
 
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -51,6 +40,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Yetkisiz" }, { status: 403 });
     }
 
+    const endpoint = process.env.R2_ENDPOINT?.trim();
+    const accessKeyId = process.env.R2_ACCESS_KEY_ID?.trim();
+    const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY?.trim();
+    const bucket = process.env.R2_BUCKET_NAME?.trim();
+    const publicBase = process.env.R2_PUBLIC_BASE_URL?.replace(/\/$/, "").trim();
+    if (!endpoint || !accessKeyId || !secretAccessKey || !bucket || !publicBase) {
+      return NextResponse.json({ error: "R2 yapılandırması eksik" }, { status: 500 });
+    }
+
     const form = await req.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {
@@ -62,12 +60,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Desteklenen türler: JPEG, PNG, WebP, GIF" }, { status: 400 });
     }
 
-    const key = `blog/covers/${randomUUID()}.webp`;
+    const uuid = randomUUID();
+    const key = `blog/covers/${uuid}.webp`;
     const input = Buffer.from(await file.arrayBuffer());
     const webpBuffer = await sharp(input).webp({ quality: 85 }).toBuffer();
 
-    const { client, bucket, publicBase } = getS3();
-    await client.send(
+    await s3.send(
       new PutObjectCommand({
         Bucket: bucket,
         Key: key,
@@ -76,7 +74,8 @@ export async function POST(req: Request) {
       }),
     );
 
-    return NextResponse.json({ url: `${publicBase}/${key}` });
+    const url = `${publicBase}/blog/covers/${uuid}.webp`;
+    return NextResponse.json({ url });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Yükleme başarısız";
     return NextResponse.json({ error: msg }, { status: 500 });
