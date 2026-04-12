@@ -50,8 +50,6 @@ export type OrderRow = {
 
 type OrderRowView = OrderRow & { productSearch: string };
 
-type ProfileEmbed = { store_name: string | null };
-
 type ApiOrderRow = {
   id: string;
   created_at: string;
@@ -62,22 +60,10 @@ type ApiOrderRow = {
   product_id: string | null;
   customer_name: string | null;
   product_name: string | null;
-  products_3d: { name: string } | { name: string }[] | null;
-  buyer_pf: ProfileEmbed | ProfileEmbed[] | null;
-  seller_pf: ProfileEmbed | ProfileEmbed[] | null;
+  buyer_name: string;
+  seller_name: string;
+  product_title: string;
 };
-
-function embedStoreName(v: ProfileEmbed | ProfileEmbed[] | null | undefined): string {
-  if (!v) return "";
-  const row = Array.isArray(v) ? v[0] : v;
-  return typeof row?.store_name === "string" ? row.store_name.trim() : "";
-}
-
-function nestedProductName(v: ApiOrderRow["products_3d"]): string {
-  if (!v) return "";
-  if (Array.isArray(v)) return typeof v[0]?.name === "string" ? v[0].name : "";
-  return typeof v.name === "string" ? v.name : "";
-}
 
 function mapPayment(raw: string | null | undefined): PaymentStatus {
   const s = (raw ?? "").toLowerCase();
@@ -103,15 +89,9 @@ function mapDelivery(raw: string | null | undefined): DeliveryStatus {
 }
 
 function mapApiRowToOrderRow(row: ApiOrderRow): OrderRowView {
-  const buyerStore = embedStoreName(row.buyer_pf);
-  const customerName = typeof row.customer_name === "string" ? row.customer_name.trim() : "";
-  const customer = customerName || buyerStore || (row.buyer_id ? `${row.buyer_id.slice(0, 8)}…` : "—");
-
-  const sellerStore = embedStoreName(row.seller_pf);
-  const seller = sellerStore || (row.seller_id ? `${row.seller_id.slice(0, 8)}…` : "—");
-
-  const pTitle = nestedProductName(row.products_3d);
-  const productLabel = (typeof row.product_name === "string" && row.product_name.trim() !== "" ? row.product_name : pTitle) || "—";
+  const customer = row.buyer_name?.trim() || "—";
+  const seller = row.seller_name?.trim() || "—";
+  const productLabel = row.product_title?.trim() || "—";
 
   const amount = Number(row.amount ?? 0);
   const payment = mapPayment(row.payment_status);

@@ -9,10 +9,7 @@ export const dynamic = "force-dynamic";
 
 const PAYMENT_ALLOWED = new Set(["pending", "paid", "refunded", "cancelled"]);
 
-type ProfileEmbed = { store_name: string | null };
-
-/** PostgREST may return a single object or an array for embedded FK rows. */
-export type AdminOrderRow = {
+type OrderBase = {
   id: string;
   created_at: string;
   amount: number | null;
@@ -22,9 +19,12 @@ export type AdminOrderRow = {
   product_id: string | null;
   customer_name: string | null;
   product_name: string | null;
-  products_3d: { name: string } | { name: string }[] | null;
-  buyer_pf: ProfileEmbed | ProfileEmbed[] | null;
-  seller_pf: ProfileEmbed | ProfileEmbed[] | null;
+};
+
+export type AdminOrderRow = OrderBase & {
+  buyer_name: string;
+  seller_name: string;
+  product_title: string;
 };
 
 export async function GET() {
@@ -52,22 +52,7 @@ export async function GET() {
 
   const { data: orders, error } = await supabase
     .from("orders")
-    .select(
-      `
-      id,
-      created_at,
-      amount,
-      payment_status,
-      buyer_id,
-      seller_id,
-      product_id,
-      customer_name,
-      product_name,
-      products_3d(name),
-      buyer_pf:profiles!orders_buyer_id_fkey(store_name),
-      seller_pf:profiles!orders_seller_id_fkey(store_name)
-    `,
-    )
+    .select("id, created_at, amount, payment_status, buyer_id, seller_id, product_id, customer_name, product_name")
     .order("created_at", { ascending: false })
     .limit(200);
 
@@ -75,7 +60,66 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ orders: (orders ?? []) as AdminOrderRow[] });
+  const list = (orders ?? []) as OrderBase[];
+
+  const buyerIds = [...new Set(list.map((o) => o.buyer_id).filter((id): id is string => Boolean(id)))];
+  const sellerIds = [...new Set(list.map((o) => o.seller_id).filter((id): id is string => Boolean(id)))];
+  const productIds = [...new Set(list.map((o) => o.product_id).filter((id): id is string => Boolean(id)))];
+  const profileIds = [...new Set([...buyerIds, ...sellerIds])];
+
+  let profiles: { id: string; store_name: string | null }[] = [];
+  if (profileIds.length > 0) {
+    const { data: profileRows, error: profileError } = await supabase
+      .from("profiles")
+      .select("id, store_name")
+      .in("id", profileIds);
+    if (profileError) {
+      return NextResponse.json({ error: profileError.message }, { status: 500 });
+    }
+    profiles = profileRows ?? [];
+  }
+
+  let products: { id: string; name: string | null }[] = [];
+  if (productIds.length > 0) {
+    const { data: productRows, error: productError } = await supabase
+      .from("products_3d")
+      .select("id, name")
+      .in("id", productIds);
+    if (productError) {
+      return NextResponse.json({ error: productError.message }, { status: 500 });
+    }
+    products = productRows ?? [];
+  }
+
+  const profileMap = Object.fromEntries(
+    profiles.map((p) => [p.id, typeof p.store_name === "string" ? p.store_name.trim() : ""]),
+  ) as Record<string, string>;
+
+  const productMap = Object.fromEntries(
+    products.map((p) => [p.id, typeof p.name === "string" ? p.name.trim() : ""]),
+  ) as Record<string, string>;
+
+  const enrichedOrders: AdminOrderRow[] = list.map((o) => {
+    const customerName = typeof o.customer_name === "string" ? o.customer_name.trim() : "";
+    const buyerStore = o.buyer_id ? profileMap[o.buyer_id] ?? "" : "";
+    const buyer_name = customerName || buyerStore || (o.buyer_id ? `${o.buyer_id.slice(0, 8)}…` : "—");
+
+    const sellerStore = o.seller_id ? profileMap[o.seller_id] ?? "" : "";
+    const seller_name = sellerStore || (o.seller_id ? `${o.seller_id.slice(0, 8)}…` : "—");
+
+    const fromTable = o.product_id ? productMap[o.product_id] ?? "" : "";
+    const snapshot = typeof o.product_name === "string" ? o.product_name.trim() : "";
+    const product_title = fromTable || snapshot || "—";
+
+    return {
+      ...o,
+      buyer_name,
+      seller_name,
+      product_title,
+    };
+  });
+
+  return NextResponse.json({ orders: enrichedOrders });
 }
 
 export async function PATCH(req: Request) {
