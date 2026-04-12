@@ -147,6 +147,9 @@ const DISTRIBUTION_BAR: Record<ProductModerationStatus, string> = {
   suspended: "bg-zinc-500/75",
 };
 
+/** `products_3d.jewelry_type` — UI ve moderasyon ile uyumlu sabit liste */
+const ALLOWED_JEWELRY_TYPES = ["Yüzük", "Kolye", "Bilezik", "Küpe", "Pandant", "Broş"] as const;
+
 type StatusFilter = "Tümü" | ProductModerationStatus;
 type SortKey = "newest" | "sales" | "risk" | "updated";
 type AdminProductsTab = "products" | "models3d";
@@ -392,6 +395,7 @@ export function ProductsModerationPage() {
   const [sellerFilter, setSellerFilter] = useState("Tümü");
   const [sort, setSort] = useState<SortKey>("newest");
   const [activeTab, setActiveTab] = useState<AdminProductsTab>("products");
+  const [categoryRulesModalOpen, setCategoryRulesModalOpen] = useState(false);
   const [modelRows, setModelRows] = useState<Model3DRow[]>([]);
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
@@ -423,6 +427,10 @@ export function ProductsModerationPage() {
       urunler: false,
     },
   });
+
+  const scrollPageToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   const categories = useMemo(() => {
     const u = new Set(products.map((p) => p.category));
@@ -698,6 +706,10 @@ export function ProductsModerationPage() {
       },
     });
     setIsModelModalOpen(true);
+  }, []);
+
+  const closeCategoryRulesModal = useCallback(() => {
+    setCategoryRulesModalOpen(false);
   }, []);
 
   const closeModelModal = useCallback(() => {
@@ -1243,6 +1255,7 @@ export function ProductsModerationPage() {
               <button
                 type="button"
                 onClick={() => {
+                  scrollPageToTop();
                   setStatusFilter("pending");
                   setSort("newest");
                 }}
@@ -1254,6 +1267,7 @@ export function ProductsModerationPage() {
               <button
                 type="button"
                 onClick={() => {
+                  scrollPageToTop();
                   setStatusFilter("rejected");
                   setSort("updated");
                 }}
@@ -1265,21 +1279,26 @@ export function ProductsModerationPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setSort("risk");
-                  setStatusFilter("Tümü");
+                  scrollPageToTop();
+                  setStatusFilter("suspended");
+                  setSort("newest");
                 }}
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm font-medium text-zinc-200 transition-colors hover:border-[#c69575]/30 hover:bg-[#c69575]/10 hover:text-[#f0dcc8]"
               >
                 <ShieldAlert className="h-4 w-4 text-[#b8956f]" strokeWidth={1.5} />
                 Riskli Ürünler
               </button>
-              <Link
-                href="/admin/commission-settings"
+              <button
+                type="button"
+                onClick={() => {
+                  scrollPageToTop();
+                  setCategoryRulesModalOpen(true);
+                }}
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm font-medium text-zinc-200 transition-colors hover:border-[#c69575]/30 hover:bg-[#c69575]/10 hover:text-[#f0dcc8]"
               >
                 <Tag className="h-4 w-4 text-[#b8956f]" strokeWidth={1.5} />
                 Kategori Kuralları
-              </Link>
+              </button>
             </div>
           </CardShell>
         </>
@@ -1393,6 +1412,59 @@ export function ProductsModerationPage() {
           )}
         </CardShell>
       )}
+
+      {categoryRulesModalOpen ? (
+        <div
+          className="fixed inset-0 z-[91] overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="category-rules-title"
+        >
+          <div className="mx-auto flex min-h-full w-full max-w-lg items-start justify-center py-4 sm:py-8">
+            <div className="w-full max-h-[86vh] overflow-y-auto rounded-2xl border border-white/[0.12] bg-gradient-to-br from-[#12141a] via-[#0d0f15] to-[#08090c] shadow-2xl">
+              <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4 sm:px-6">
+                <h3 id="category-rules-title" className="font-display text-lg font-semibold text-zinc-100">
+                  Kategori kuralları (jewelry_type)
+                </h3>
+                <button
+                  type="button"
+                  onClick={closeCategoryRulesModal}
+                  className="rounded-lg border border-white/[0.12] bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-zinc-300 hover:border-white/[0.2]"
+                >
+                  Kapat
+                </button>
+              </div>
+              <div className="space-y-5 px-5 py-4 text-sm text-zinc-400 sm:px-6">
+                <p className="leading-relaxed text-zinc-500">
+                  Ürün kaydında <span className="font-mono text-zinc-400">jewelry_type</span> alanı bu sabit değerlerden biri olmalıdır. Boş veya geçersiz değer moderasyon uyarısına düşer.
+                </p>
+                <div>
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">İzin verilen değerler</p>
+                  <ul className="flex flex-wrap gap-2">
+                    {ALLOWED_JEWELRY_TYPES.map((t) => (
+                      <li
+                        key={t}
+                        className="rounded-lg border border-[#c69575]/25 bg-[#c69575]/10 px-2.5 py-1 text-xs font-medium text-[#f0dcc8]"
+                      >
+                        {t}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Kurallar</p>
+                  <ul className="list-inside list-disc space-y-1.5 text-zinc-400">
+                    <li>Metin alanı boş bırakılmamalı; yayından önce doğru takı tipi seçilmelidir.</li>
+                    <li>Liste dışı serbest metin veritabanında tutulmamalı; yeni tip gerekiyorsa şema ve UI güncellenmelidir.</li>
+                    <li>Mağaza arayüzünde girilen tip, bu listedeki etiketlerle birebir eşleşmelidir (ör. &quot;Küpe&quot;, &quot;küpe&quot; normalizasyonu arka planda yapılır).</li>
+                    <li>Moderasyon panelinde &quot;Kategorisi eksik ürün&quot; uyarısı, alanın null veya boş olması durumunda tetiklenir.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isModelModalOpen ? (
         <div className="fixed inset-0 z-[90] overflow-y-auto bg-black/70 p-4 backdrop-blur-sm">
