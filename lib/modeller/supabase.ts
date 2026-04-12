@@ -13,6 +13,8 @@ export type DbProduct3D = {
   images: unknown;
   dimensions: unknown;
   is_published: boolean;
+  /** products_3d.moderation_status — published | rejected | suspended | pending */
+  moderation_status?: string | null;
   show_on_home: boolean;
   show_on_modeller: boolean;
   created_at: string;

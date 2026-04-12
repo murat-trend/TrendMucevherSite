@@ -20,10 +20,11 @@ import {
 import { AdminEmptyState } from "@/components/admin/ui/AdminEmptyState";
 import { AdminDataScroll, ADMIN_TABLE_TH_STICKY } from "@/components/admin/ui/AdminDataScroll";
 import { AdminKpiCard, type AdminKpiTone } from "@/components/admin/ui/AdminKpiCard";
-import type {
-  ProductDetailFull,
-  ProductModerationStatus,
-  RiskLevel,
+import {
+  MODERATION_STATUS_LABEL_TR,
+  type ProductDetailFull,
+  type ProductModerationStatus,
+  type RiskLevel,
 } from "./product-moderation-detail-data";
 
 const tryFmt = (n: number) =>
@@ -39,11 +40,10 @@ const dateFmt = (iso: string) =>
   }).format(new Date(iso));
 
 const STATUS_BADGE: Record<ProductModerationStatus, string> = {
-  "Onay Bekliyor": "border-amber-500/40 bg-amber-500/12 text-amber-200",
-  Yayında: "border-emerald-500/35 bg-emerald-500/12 text-emerald-200",
-  Reddedildi: "border-rose-500/35 bg-rose-500/12 text-rose-200",
-  Taslak: "border-zinc-500/40 bg-zinc-500/10 text-zinc-400",
-  "İnceleme Gerekiyor": "border-orange-500/40 bg-orange-500/12 text-orange-200",
+  pending: "border-amber-500/40 bg-amber-500/12 text-amber-200",
+  published: "border-emerald-500/35 bg-emerald-500/12 text-emerald-200",
+  rejected: "border-rose-500/35 bg-rose-500/12 text-rose-200",
+  suspended: "border-zinc-500/40 bg-zinc-500/10 text-zinc-400",
 };
 
 const RISK_BADGE: Record<RiskLevel, string> = {
@@ -163,7 +163,7 @@ export function ProductModerationDetailView({ initial }: { initial: ProductDetai
             </Link>
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="font-display text-2xl font-semibold tracking-tight text-zinc-50 sm:text-3xl">{product.name}</h1>
-              <Badge className={STATUS_BADGE[product.status]}>{product.status}</Badge>
+              <Badge className={STATUS_BADGE[product.status]}>{MODERATION_STATUS_LABEL_TR[product.status]}</Badge>
               <Badge className={RISK_BADGE[product.risk]}>{product.risk}</Badge>
             </div>
             <p className="max-w-2xl text-sm leading-relaxed text-zinc-500">
@@ -173,24 +173,24 @@ export function ProductModerationDetailView({ initial }: { initial: ProductDetai
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
             <button
               type="button"
-              onClick={() => setStatus("Yayında")}
+              onClick={() => setStatus("published")}
               className="rounded-xl border border-emerald-500/30 bg-emerald-500/12 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
             >
               Onayla
             </button>
             <button
               type="button"
-              onClick={() => setStatus("Reddedildi")}
+              onClick={() => setStatus("rejected")}
               className="rounded-xl border border-rose-500/30 bg-rose-500/12 px-4 py-2.5 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/20"
             >
               Reddet
             </button>
             <button
               type="button"
-              onClick={() => setStatus("İnceleme Gerekiyor")}
-              className="rounded-xl border border-orange-500/30 bg-orange-500/12 px-4 py-2.5 text-sm font-semibold text-orange-100 transition hover:bg-orange-500/20"
+              onClick={() => setStatus("suspended")}
+              className="rounded-xl border border-amber-500/30 bg-amber-500/12 px-4 py-2.5 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/20"
             >
-              İncelemeye Al
+              Askıya Al
             </button>
             <div className="relative">
               <button

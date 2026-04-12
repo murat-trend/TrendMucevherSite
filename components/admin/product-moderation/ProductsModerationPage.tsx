@@ -29,6 +29,9 @@ import {
 } from "@/lib/modeller/model-store";
 import { createClient } from "@/utils/supabase/client";
 import { type DbProduct3D, mapDbProductToUi } from "@/lib/modeller/supabase";
+import { MODERATION_STATUS_LABEL_TR, type ProductModerationStatus } from "./product-moderation-detail-data";
+
+export type { ProductModerationStatus };
 
 const tryFmt = (n: number) =>
   new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 0 }).format(n);
@@ -36,12 +39,14 @@ const tryFmt = (n: number) =>
 const dateFmt = (iso: string) =>
   new Intl.DateTimeFormat("tr-TR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(iso));
 
-export type ProductModerationStatus =
-  | "Onay Bekliyor"
-  | "Yayında"
-  | "Reddedildi"
-  | "Taslak"
-  | "İnceleme Gerekiyor";
+function moderationStatusFromDb(raw: string | null | undefined, isPublished: boolean): ProductModerationStatus {
+  const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (v === "published") return "published";
+  if (v === "rejected") return "rejected";
+  if (v === "suspended") return "suspended";
+  if (v === "pending") return "pending";
+  return isPublished ? "published" : "pending";
+}
 
 export type RiskLevel = "Düşük" | "Orta" | "Yüksek";
 
@@ -85,7 +90,7 @@ function mapProduct3dToRow(row: Product3dRow, sellerStoreName: string | null): P
     category: ui.jewelryType,
     price: ui.price,
     stock: 999,
-    status: published ? "Yayında" : "Onay Bekliyor",
+    status: moderationStatusFromDb(row.moderation_status, published),
     risk: "Düşük",
     date: dateStr,
     updatedAt: updatedRaw,
@@ -96,11 +101,10 @@ function mapProduct3dToRow(row: Product3dRow, sellerStoreName: string | null): P
 }
 
 const STATUS_BADGE: Record<ProductModerationStatus, string> = {
-  "Onay Bekliyor": "border-amber-500/40 bg-amber-500/12 text-amber-200",
-  Yayında: "border-emerald-500/35 bg-emerald-500/12 text-emerald-200",
-  Reddedildi: "border-rose-500/35 bg-rose-500/12 text-rose-200",
-  Taslak: "border-zinc-500/40 bg-zinc-500/10 text-zinc-400",
-  "İnceleme Gerekiyor": "border-orange-500/40 bg-orange-500/12 text-orange-200",
+  pending: "border-amber-500/40 bg-amber-500/12 text-amber-200",
+  published: "border-emerald-500/35 bg-emerald-500/12 text-emerald-200",
+  rejected: "border-rose-500/35 bg-rose-500/12 text-rose-200",
+  suspended: "border-zinc-500/40 bg-zinc-500/10 text-zinc-400",
 };
 
 const RISK_BADGE: Record<RiskLevel, string> = {
@@ -110,11 +114,10 @@ const RISK_BADGE: Record<RiskLevel, string> = {
 };
 
 const DISTRIBUTION_BAR: Record<ProductModerationStatus, string> = {
-  "Onay Bekliyor": "bg-amber-500/80",
-  Yayında: "bg-emerald-500/80",
-  Reddedildi: "bg-rose-500/80",
-  Taslak: "bg-zinc-500/75",
-  "İnceleme Gerekiyor": "bg-orange-500/80",
+  pending: "bg-amber-500/80",
+  published: "bg-emerald-500/80",
+  rejected: "bg-rose-500/80",
+  suspended: "bg-zinc-500/75",
 };
 
 const MODERATION_ALERTS: { id: string; title: string; detail: string }[] = [
@@ -412,22 +415,16 @@ export function ProductsModerationPage() {
 
   const kpi = useMemo(() => {
     const total = products.length;
-    const pending = products.filter((p) => p.status === "Onay Bekliyor").length;
-    const live = products.filter((p) => p.status === "Yayında").length;
-    const rejected = products.filter((p) => p.status === "Reddedildi").length;
-    const review = products.filter((p) => p.status === "İnceleme Gerekiyor").length;
+    const pending = products.filter((p) => p.status === "pending").length;
+    const live = products.filter((p) => p.status === "published").length;
+    const rejected = products.filter((p) => p.status === "rejected").length;
+    const suspended = products.filter((p) => p.status === "suspended").length;
     const risky = products.filter((p) => p.risk === "Yüksek").length;
-    return { total, pending, live, rejected, review, risky };
+    return { total, pending, live, rejected, suspended, risky };
   }, [products]);
 
   const distribution = useMemo(() => {
-    const keys: ProductModerationStatus[] = [
-      "Onay Bekliyor",
-      "Yayında",
-      "Reddedildi",
-      "Taslak",
-      "İnceleme Gerekiyor",
-    ];
+    const keys: ProductModerationStatus[] = ["pending", "published", "rejected", "suspended"];
     const counts = keys.map((s) => products.filter((p) => p.status === s).length);
     return keys.map((label, i) => ({ label, count: counts[i] }));
   }, [products]);
@@ -490,28 +487,28 @@ export function ProductsModerationPage() {
     };
   }, [loadModerationProducts]);
 
-  const updateProductPublished = useCallback(
-    async (id: string, published: boolean, statusAfter: ProductModerationStatus) => {
-      const supabase = createClient();
-      const { error } = await supabase.from("products_3d").update({ is_published: published }).eq("id", id);
-      if (error) {
-        window.alert(`Güncellenemedi: ${error.message}`);
-        return;
-      }
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === id
-            ? {
-                ...p,
-                isPublished: published,
-                status: statusAfter,
-              }
-            : p,
-        ),
-      );
-    },
-    [],
-  );
+  const updateProductPublished = useCallback(async (id: string, patch: { is_published: boolean; moderation_status: ProductModerationStatus }) => {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("products_3d")
+      .update({ is_published: patch.is_published, moderation_status: patch.moderation_status })
+      .eq("id", id);
+    if (error) {
+      window.alert(`Güncellenemedi: ${error.message}`);
+      return;
+    }
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              isPublished: patch.is_published,
+              status: patch.moderation_status,
+            }
+          : p,
+      ),
+    );
+  }, []);
 
   const toggleModelPublish = useCallback(async (id: string) => {
     const row = modelRows.find((m) => m.id === id);
@@ -825,7 +822,7 @@ export function ProductsModerationPage() {
     { id: "p", label: "Onay Bekleyen", value: String(kpi.pending), icon: ClipboardCheck, sub: "Kuyruk", tone: "neutral" },
     { id: "y", label: "Yayında", value: String(kpi.live), icon: TrendingUp, sub: "Canlı", tone: "neutral" },
     { id: "r", label: "Reddedilen", value: String(kpi.rejected), icon: Ban, sub: "Arşiv", tone: "negative" },
-    { id: "rv", label: "İnceleme Gereken", value: String(kpi.review), icon: FileWarning, sub: "Öncelikli", tone: "neutral" },
+    { id: "rv", label: "Askıda", value: String(kpi.suspended), icon: FileWarning, sub: "Askıya alınmış", tone: "neutral" },
     { id: "rk", label: "Riskli Ürünler", value: String(kpi.risky), icon: ShieldAlert, sub: "Yüksek risk", tone: "negative" },
   ];
 
@@ -918,11 +915,10 @@ export function ProductsModerationPage() {
                     className="w-full cursor-pointer rounded-xl border border-white/[0.08] bg-[#07080a] px-3 py-2.5 text-sm text-zinc-200 outline-none ring-[#c69575]/30 focus:border-[#c69575]/30 focus:ring-2"
                   >
                     <option value="Tümü">Tümü</option>
-                    <option value="Onay Bekliyor">Onay Bekliyor</option>
-                    <option value="Yayında">Yayında</option>
-                    <option value="Reddedildi">Reddedildi</option>
-                    <option value="Taslak">Taslak</option>
-                    <option value="İnceleme Gerekiyor">İnceleme Gerekiyor</option>
+                    <option value="pending">{MODERATION_STATUS_LABEL_TR.pending}</option>
+                    <option value="published">{MODERATION_STATUS_LABEL_TR.published}</option>
+                    <option value="rejected">{MODERATION_STATUS_LABEL_TR.rejected}</option>
+                    <option value="suspended">{MODERATION_STATUS_LABEL_TR.suspended}</option>
                   </select>
                 </div>
                 <div>
@@ -1038,7 +1034,7 @@ export function ProductsModerationPage() {
                               <span
                                 className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${STATUS_BADGE[row.status]}`}
                               >
-                                {row.status}
+                                {MODERATION_STATUS_LABEL_TR[row.status]}
                               </span>
                             </td>
                             <td className="px-3 py-3">
@@ -1060,21 +1056,27 @@ export function ProductsModerationPage() {
                                 </Link>
                                 <button
                                   type="button"
-                                  onClick={() => void updateProductPublished(row.id, true, "Yayında")}
+                                  onClick={() =>
+                                    void updateProductPublished(row.id, { is_published: true, moderation_status: "published" })
+                                  }
                                   className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2 py-1.5 text-xs font-medium text-emerald-200 transition-colors hover:bg-emerald-500/18"
                                 >
                                   Onayla
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => void updateProductPublished(row.id, false, "Reddedildi")}
+                                  onClick={() =>
+                                    void updateProductPublished(row.id, { is_published: false, moderation_status: "rejected" })
+                                  }
                                   className="rounded-lg border border-rose-500/25 bg-rose-500/10 px-2 py-1.5 text-xs font-medium text-rose-200 transition-colors hover:bg-rose-500/18"
                                 >
                                   Reddet
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => void updateProductPublished(row.id, false, "Taslak")}
+                                  onClick={() =>
+                                    void updateProductPublished(row.id, { is_published: false, moderation_status: "suspended" })
+                                  }
                                   className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-2 py-1.5 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-500/18"
                                 >
                                   Askıya Al
@@ -1140,7 +1142,7 @@ export function ProductsModerationPage() {
                     return (
                       <li key={d.label}>
                         <div className="mb-1 flex items-center justify-between text-xs">
-                          <span className="font-medium text-zinc-400">{d.label}</span>
+                          <span className="font-medium text-zinc-400">{MODERATION_STATUS_LABEL_TR[d.label]}</span>
                           <span className="tabular-nums text-zinc-300">{d.count}</span>
                         </div>
                         <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
@@ -1162,7 +1164,7 @@ export function ProductsModerationPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setStatusFilter("Onay Bekliyor");
+                  setStatusFilter("pending");
                   setSort("newest");
                 }}
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm font-medium text-zinc-200 transition-colors hover:border-[#c69575]/30 hover:bg-[#c69575]/10 hover:text-[#f0dcc8]"
@@ -1173,7 +1175,7 @@ export function ProductsModerationPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setStatusFilter("Reddedildi");
+                  setStatusFilter("rejected");
                   setSort("updated");
                 }}
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm font-medium text-zinc-200 transition-colors hover:border-[#c69575]/30 hover:bg-[#c69575]/10 hover:text-[#f0dcc8]"

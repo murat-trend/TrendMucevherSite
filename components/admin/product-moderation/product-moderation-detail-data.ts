@@ -1,11 +1,14 @@
 /** Ürün denetim detayı — p1…p10 ile liste sayfası uyumlu */
 
-export type ProductModerationStatus =
-  | "Onay Bekliyor"
-  | "Yayında"
-  | "Reddedildi"
-  | "Taslak"
-  | "İnceleme Gerekiyor";
+/** `products_3d.moderation_status` ile uyumlu */
+export type ProductModerationStatus = "published" | "rejected" | "suspended" | "pending";
+
+export const MODERATION_STATUS_LABEL_TR: Record<ProductModerationStatus, string> = {
+  pending: "Onay bekliyor",
+  published: "Yayında",
+  rejected: "Reddedildi",
+  suspended: "Askıda",
+};
 
 export type RiskLevel = "Düşük" | "Orta" | "Yüksek";
 
@@ -96,7 +99,7 @@ function build(id: string, patch: Partial<ProductDetailFull> & Pick<ProductDetai
         sku: `${patch.sku}-STD`,
         price: patch.price!,
         stock: Math.max(0, patch.stock! - 1),
-        status: patch.status === "Yayında" ? "Aktif" : "Beklemede",
+        status: patch.status === "published" ? "Aktif" : "Beklemede",
       },
       {
         id: `${id}-v2`,
@@ -104,7 +107,7 @@ function build(id: string, patch: Partial<ProductDetailFull> & Pick<ProductDetai
         sku: `${patch.sku}-L`,
         price: Math.round(patch.price! * 1.08),
         stock: Math.min(5, patch.stock!),
-        status: patch.status === "Yayında" ? "Aktif" : "Beklemede",
+        status: patch.status === "published" ? "Aktif" : "Beklemede",
       },
     ] as ProductVariantRow[]);
 
@@ -191,7 +194,7 @@ const DETAILS: ProductDetailFull[] = [
     category: "Yüzük",
     price: 24_800,
     stock: 6,
-    status: "Onay Bekliyor",
+    status: "pending",
     risk: "Orta",
     createdAt: "2025-03-14T08:00:00",
     updatedAt: "2025-03-14T10:00:00",
@@ -204,7 +207,7 @@ const DETAILS: ProductDetailFull[] = [
     category: "Kolye",
     price: 9_200,
     stock: 42,
-    status: "Yayında",
+    status: "published",
     risk: "Düşük",
     createdAt: "2025-02-20T10:00:00",
     updatedAt: "2025-03-12T09:30:00",
@@ -217,7 +220,7 @@ const DETAILS: ProductDetailFull[] = [
     category: "Madalyon",
     price: 18_500,
     stock: 3,
-    status: "Yayında",
+    status: "published",
     risk: "Yüksek",
     createdAt: "2025-01-10T12:00:00",
     updatedAt: "2025-03-13T14:00:00",
@@ -237,7 +240,7 @@ const DETAILS: ProductDetailFull[] = [
     category: "Bilezik",
     price: 44_000,
     stock: 0,
-    status: "Yayında",
+    status: "published",
     risk: "Yüksek",
     createdAt: "2024-12-05T09:00:00",
     updatedAt: "2025-03-11T11:20:00",
@@ -251,7 +254,7 @@ const DETAILS: ProductDetailFull[] = [
     category: "Küpe",
     price: 32_400,
     stock: 8,
-    status: "Reddedildi",
+    status: "rejected",
     risk: "Orta",
     createdAt: "2025-03-08T11:00:00",
     updatedAt: "2025-03-09T16:00:00",
@@ -271,7 +274,7 @@ const DETAILS: ProductDetailFull[] = [
     category: "Set",
     price: 11_900,
     stock: 15,
-    status: "Taslak",
+    status: "suspended",
     risk: "Düşük",
     createdAt: "2025-03-13T14:00:00",
     updatedAt: "2025-03-13T18:00:00",
@@ -283,7 +286,7 @@ const DETAILS: ProductDetailFull[] = [
         sku: "TM-SET-44001-1",
         price: 11_900,
         stock: 15,
-        status: "Taslak",
+        status: "Beklemede",
       },
     ],
     variantCount: 1,
@@ -310,7 +313,7 @@ const DETAILS: ProductDetailFull[] = [
     category: "Yüzük",
     price: 19_200,
     stock: 22,
-    status: "İnceleme Gerekiyor",
+    status: "pending",
     risk: "Yüksek",
     createdAt: "2025-03-12T10:00:00",
     updatedAt: "2025-03-14T08:15:00",
@@ -335,7 +338,7 @@ const DETAILS: ProductDetailFull[] = [
     category: "Kolye",
     price: 3_450,
     stock: 120,
-    status: "Yayında",
+    status: "published",
     risk: "Düşük",
     createdAt: "2024-11-01T08:00:00",
     updatedAt: "2025-03-01T12:00:00",
@@ -347,7 +350,7 @@ const DETAILS: ProductDetailFull[] = [
     category: "Yüzük",
     price: 24_800,
     stock: 4,
-    status: "İnceleme Gerekiyor",
+    status: "pending",
     risk: "Orta",
     createdAt: "2025-03-11T09:00:00",
     updatedAt: "2025-03-13T17:45:00",
@@ -366,7 +369,7 @@ const DETAILS: ProductDetailFull[] = [
     category: "Yüzük",
     price: 86_000,
     stock: 2,
-    status: "Onay Bekliyor",
+    status: "pending",
     risk: "Yüksek",
     createdAt: "2025-03-14T09:00:00",
     updatedAt: "2025-03-14T13:00:00",
