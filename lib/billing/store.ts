@@ -22,10 +22,11 @@ function requireSupabase(): SupabaseClient {
   return c;
 }
 
-function rowToWallet(row: { user_id: string; credits: number | string; updated_at: string }): Wallet {
+function rowToWallet(row: { user_id: string; credits: number | string | null; updated_at: string }): Wallet {
+  const n = Number(row.credits);
   return {
     userId: row.user_id,
-    balanceCredits: Number(row.credits),
+    balanceCredits: Number.isFinite(n) ? n : 0,
     updatedAt: row.updated_at,
   };
 }
@@ -142,7 +143,7 @@ export async function debitCredits(
     const wallet = await ensureWalletRow(supabase, userId);
     const balance = wallet.balanceCredits;
 
-    if (balance < credits) {
+    if (!Number.isFinite(balance) || balance < credits) {
       return { ok: false, wallet };
     }
 

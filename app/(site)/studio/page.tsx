@@ -2,6 +2,11 @@
 
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
+import {
+  RemauraBillingModalProvider,
+  useRemauraBillingModal,
+} from "@/components/remaura/RemauraBillingModalProvider"
+import { useRemauraCreditsCheck } from "@/hooks/useRemauraCreditsCheck"
 import { FFmpeg } from "@ffmpeg/ffmpeg"
 import { toBlobURL } from "@ffmpeg/util"
 
@@ -36,6 +41,29 @@ async function ffmpegDeleteQuiet(ffmpeg: FFmpeg, name: string) {
 }
 
 export default function SesStudioPage() {
+  return (
+    <RemauraBillingModalProvider>
+      <SesStudioPageInner />
+    </RemauraBillingModalProvider>
+  )
+}
+
+function SesStudioPageInner() {
+  const billingUi = useRemauraBillingModal()
+  const { checkCredits } = useRemauraCreditsCheck()
+  const sourceInputRef = useRef<HTMLInputElement>(null)
+  const videoInputRef = useRef<HTMLInputElement>(null)
+
+  async function openSourcePicker() {
+    if (!(await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits))) return
+    sourceInputRef.current?.click()
+  }
+
+  async function openVideoPicker() {
+    if (!(await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits))) return
+    videoInputRef.current?.click()
+  }
+
   // Kaynak — video veya ses
   const [sourceFile, setSourceFile] = useState<File | null>(null)
   const [sourceType, setSourceType] = useState<"video" | "audio" | null>(null)
@@ -138,6 +166,7 @@ export default function SesStudioPage() {
   // Video'dan sesi ayir
   async function handleExtract() {
     if (!sourceFile || sourceType !== "video") return
+    if (!(await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits))) return
     setProcessing(true)
     setResultBlob(null)
     const ffmpeg = await ensureFfmpegLoaded()
@@ -175,6 +204,7 @@ export default function SesStudioPage() {
       window.alert("Lutfen video yukle.")
       return
     }
+    if (!(await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits))) return
     setProcessing(true)
     setResultBlob(null)
     const ffmpeg = await ensureFfmpegLoaded()
@@ -297,10 +327,16 @@ export default function SesStudioPage() {
           {/* Kaynak yukleme */}
           <div style={cardStyle}>
             <div style={sectionLabel}>1. Kaynak Yukle</div>
-            <label style={uploadBtnStyle}>
+            <button type="button" onClick={() => void openSourcePicker()} style={uploadBtnStyle}>
               {sourceFile ? `✓ ${sourceFile.name}` : "🎬 Video veya 🎵 Ses Yukle"}
-              <input type="file" accept="video/*,audio/*" onChange={handleSourceUpload} style={{ display: "none" }} />
-            </label>
+            </button>
+            <input
+              ref={sourceInputRef}
+              type="file"
+              accept="video/*,audio/*"
+              onChange={handleSourceUpload}
+              style={{ display: "none" }}
+            />
             {sourceFile && (
               <div style={{ fontSize: "10px", color: "#4a4642", marginTop: "6px" }}>
                 Tur: {sourceType === "video" ? "🎬 Video" : "🎵 Ses"} · {(sourceFile.size / 1024 / 1024).toFixed(1)} MB
@@ -464,10 +500,16 @@ export default function SesStudioPage() {
                 {/* Videoya ekle */}
                 <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: "10px", marginTop: "4px" }}>
                   <div style={labelStyle}>Videona Ekle</div>
-                  <label style={uploadBtnStyle}>
+                  <button type="button" onClick={() => void openVideoPicker()} style={uploadBtnStyle}>
                     {videoName || "🎬 Video Yukle (MP4...)"}
-                    <input type="file" accept="video/*" onChange={handleVideoUpload} style={{ display: "none" }} />
-                  </label>
+                  </button>
+                  <input
+                    ref={videoInputRef}
+                    type="file"
+                    accept="video/*"
+                    onChange={handleVideoUpload}
+                    style={{ display: "none" }}
+                  />
                   {videoFile && (
                     <button
                       onClick={() => handleProcess("video")}

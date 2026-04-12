@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 
 type BillingModalKind = "401" | "402" | null;
@@ -72,58 +73,63 @@ export function RemauraBillingModalProvider({ children }: { children: ReactNode 
     [openUnauthorized, openInsufficientCredits]
   );
 
+  const modal =
+    kind != null ? (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+        <div className="w-full max-w-md rounded-2xl border border-border/50 bg-card p-8 shadow-2xl">
+          {kind === "401" ? (
+            <>
+              <h3 className="text-center font-display text-lg font-medium text-foreground">
+                Bu özelliği kullanmak için giriş yapmanız gerekiyor
+              </h3>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+                <Link
+                  href="/giris"
+                  className="flex h-11 items-center justify-center rounded-full bg-accent text-center text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
+                >
+                  Giriş Yap
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setKind(null)}
+                  className="flex h-11 items-center justify-center rounded-full border border-border/60 text-sm text-muted transition-colors hover:text-foreground"
+                >
+                  Kapat
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h3 className="text-center font-display text-lg font-medium text-foreground">
+                Krediniz yetersiz. Paket satın alarak devam edebilirsiniz.
+              </h3>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+                <Link
+                  href="/fiyatlandirma"
+                  className="flex h-11 items-center justify-center rounded-full bg-accent text-center text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
+                >
+                  Paket Satın Al
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setKind(null)}
+                  className="flex h-11 items-center justify-center rounded-full border border-border/60 text-sm text-muted transition-colors hover:text-foreground"
+                >
+                  Kapat
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    ) : null;
+
   return (
     <RemauraBillingModalContext.Provider value={value}>
       {children}
-      {kind ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
-          <div className="w-full max-w-md rounded-2xl border border-border/50 bg-card p-8 shadow-2xl">
-            {kind === "401" ? (
-              <>
-                <h3 className="text-center font-display text-lg font-medium text-foreground">
-                  Bu özelliği kullanmak için giriş yapmanız gerekiyor
-                </h3>
-                <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
-                  <Link
-                    href="/giris"
-                    className="flex h-11 items-center justify-center rounded-full bg-accent text-center text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
-                  >
-                    Giriş Yap
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => setKind(null)}
-                    className="flex h-11 items-center justify-center rounded-full border border-border/60 text-sm text-muted transition-colors hover:text-foreground"
-                  >
-                    Kapat
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <h3 className="text-center font-display text-lg font-medium text-foreground">
-                  Krediniz yetersiz. Paket satın alarak devam edebilirsiniz.
-                </h3>
-                <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
-                  <Link
-                    href="/fiyatlandirma"
-                    className="flex h-11 items-center justify-center rounded-full bg-accent text-center text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
-                  >
-                    Paket Satın Al
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => setKind(null)}
-                    className="flex h-11 items-center justify-center rounded-full border border-border/60 text-sm text-muted transition-colors hover:text-foreground"
-                  >
-                    Kapat
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      ) : null}
+      {typeof document !== "undefined" && modal != null
+        ? createPortal(modal, document.body)
+        : null}
     </RemauraBillingModalContext.Provider>
   );
 }

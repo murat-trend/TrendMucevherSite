@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { useRemauraBillingModal } from "@/components/remaura/RemauraBillingModalProvider";
 import { MeshRealtimeViewer, type MeshRealtimeViewerHandle } from "@/components/remaura/MeshRealtimeViewer";
+import { useRemauraCreditsCheck } from "@/hooks/useRemauraCreditsCheck";
 import { getRingSizeTargetMm, RING_SIZE_SWISS } from "@/lib/remaura/ring-size";
 
 type MeasureReport = {
@@ -67,6 +69,8 @@ function buildScaledFilename(seq: number): string {
 }
 
 export function RemauraRingRailResizeSection() {
+  const billingUi = useRemauraBillingModal();
+  const { checkCredits } = useRemauraCreditsCheck();
   const [uploadedModel, setUploadedModel] = useState<File | null>(null);
   const [uploadBlobUrl, setUploadBlobUrl] = useState<string | null>(null);
   const [scaledBlobUrl, setScaledBlobUrl] = useState<string | null>(null);
@@ -208,6 +212,8 @@ export function RemauraRingRailResizeSection() {
 
   const handleScale = useCallback(async () => {
     if (!uploadedModel) return;
+    const creditOk = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+    if (!creditOk) return;
     const mm = parseFloat(targetInnerMm.replace(",", "."));
     if (!Number.isFinite(mm) || mm <= 0 || mm > 50) {
       setError("Hedef iç çap 0–50 mm arasında geçerli bir sayı olmalı.");
@@ -246,7 +252,7 @@ export function RemauraRingRailResizeSection() {
     } finally {
       setIsScaling(false);
     }
-  }, [uploadedModel, targetInnerMm]);
+  }, [billingUi, checkCredits, uploadedModel, targetInnerMm]);
 
   const handleDownloadScaled = useCallback(() => {
     if (!scaledBlob) return;

@@ -34,7 +34,9 @@ export async function requireRemauraUserAndCredits(
 
   try {
     const wallet = await getWallet(userId);
-    if (!wallet || wallet.balanceCredits < minCredits) {
+    const raw = Number(wallet?.balanceCredits);
+    const balance = Number.isFinite(raw) ? raw : 0;
+    if (!wallet || balance < minCredits) {
       return {
         ok: false,
         response: NextResponse.json(REMAURA_INSUFFICIENT_CREDITS_JSON, { status: 402 }),

@@ -1,11 +1,13 @@
-import { appendFile, mkdir, readFile, writeFile } from "fs/promises";
-import path from "path";
+import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeExpenseRow } from "@/lib/finance/expense-row";
-import { getExpensesJsonPath, getFinanceBackupsDir } from "@/lib/finance/expense-data-path";
+import { fetchFinanceExpenseRows } from "@/lib/finance/expense-data-path";
 import { generateExpenseBackupPdf } from "@/lib/finance/generate-expense-backup-pdf";
+import { getReportsStorageBucketName } from "@/lib/reports/saveReportToDisk";
 
 export const runtime = "nodejs";
+
+const MANIFEST_KEY = "finance-backups/manifest.jsonl";
 
 function verifyCron(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET?.trim();
@@ -24,44 +26,58 @@ function backupFileName(d: Date): string {
   return `gider-yedek-${iso}.pdf`;
 }
 
+function requireStorageClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) {
+    throw new Error("Gider yedeği için NEXT_PUBLIC_SUPABASE_URL ve SUPABASE_SERVICE_ROLE_KEY gerekli.");
+  }
+  return createClient(url, key);
+}
+
 export async function GET(req: NextRequest) {
   if (!verifyCron(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    let rowsRaw: unknown[] = [];
-    try {
-      const raw = await readFile(getExpensesJsonPath(), "utf-8");
-      const parsed = JSON.parse(raw) as unknown;
-      if (Array.isArray(parsed)) rowsRaw = parsed;
-    } catch {
-      /* dosya yok = boş rapor */
-    }
-
-    const rows = rowsRaw.map(normalizeExpenseRow);
+    const rows = (await fetchFinanceExpenseRows()).map(normalizeExpenseRow);
     const now = new Date();
     const pdfBytes = await generateExpenseBackupPdf(rows, now);
 
-    const dir = getFinanceBackupsDir();
-    await mkdir(dir, { recursive: true });
+    const supabase = requireStorageClient();
+    const bucket = getReportsStorageBucketName();
     const name = backupFileName(now);
-    const fullPath = path.join(dir, name);
-    await writeFile(fullPath, pdfBytes);
+    const objectPath = `finance-backups/${name}`;
 
-    const manifest = path.join(dir, "manifest.jsonl");
+    const { error: upErr } = await supabase.storage.from(bucket).upload(objectPath, Buffer.from(pdfBytes), {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+    if (upErr) throw upErr;
+
+    let manifestPrev = "";
+    const { data: manifestBlob, error: dlErr } = await supabase.storage.from(bucket).download(MANIFEST_KEY);
+    if (!dlErr && manifestBlob) {
+      manifestPrev = await manifestBlob.text();
+    }
+
     const line =
       JSON.stringify({
         file: name,
         createdAt: now.toISOString(),
         rowCount: rows.length,
       }) + "\n";
-    await appendFile(manifest, line, "utf-8");
+    const { error: manErr } = await supabase.storage.from(bucket).upload(MANIFEST_KEY, manifestPrev + line, {
+      contentType: "application/x-ndjson; charset=utf-8",
+      upsert: true,
+    });
+    if (manErr) throw manErr;
 
     return NextResponse.json({
       ok: true,
       file: name,
-      path: `data/finance/backups/${name}`,
+      storagePath: `${bucket}/${objectPath}`,
       rows: rows.length,
     });
   } catch (e) {

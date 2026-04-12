@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { RemauraBillingModalProvider } from "@/components/remaura/RemauraBillingModalProvider";
 import { RemauraWorkspace } from "@/components/remaura/RemauraWorkspace";
 import { RemauraLocalizedLandingHeader } from "@/components/remaura/RemauraLocalizedLandingHeader";
 
@@ -24,7 +25,9 @@ export default function RemauraPhotoEditPage() {
   return (
     <>
       <RemauraLocalizedLandingHeader variant="photoEdit" />
-      <RemauraWorkspace initialCategory="photoEdit" />
+      <RemauraBillingModalProvider>
+        <RemauraWorkspace initialCategory="photoEdit" embedBillingProvider={false} />
+      </RemauraBillingModalProvider>
     </>
   );
 }

@@ -1,6 +1,6 @@
 import { spawn } from "child_process";
-import { tmpdir } from "os";
 import { join } from "path";
+import { remauraServerlessTempDir } from "@/lib/remaura/runtime-temp-dir";
 import { writeFile, readFile, unlink } from "fs/promises";
 import { randomUUID } from "crypto";
 
@@ -20,8 +20,9 @@ export async function runMeshProcess(
   options: MeshProcessOptions
 ): Promise<{ buffer: Buffer; success: boolean; log: string }> {
   const id = randomUUID();
-  const tmpIn = join(tmpdir(), `remura_mesh_in_${id}.stl`);
-  const tmpOut = join(tmpdir(), `remura_mesh_out_${id}.stl`);
+  const tmpRoot = remauraServerlessTempDir();
+  const tmpIn = join(tmpRoot, `remura_mesh_in_${id}.stl`);
+  const tmpOut = join(tmpRoot, `remura_mesh_out_${id}.stl`);
 
   try {
     await writeFile(tmpIn, inputBuffer);

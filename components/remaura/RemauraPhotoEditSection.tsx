@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  remauraHandleBillingApiResponse,
+  useRemauraBillingModal,
+} from "@/components/remaura/RemauraBillingModalProvider";
 import { RemauraWatermarkOverlay } from "@/components/remaura/RemauraWatermarkOverlay";
+import { createClient } from "@/utils/supabase/client";
 import { applyWatermark } from "@/lib/remaura/apply-rem-watermark";
 
 type RemauraPhotoEditSectionText = {
@@ -362,6 +367,7 @@ async function convertHdrFileToDataUrl(file: File): Promise<string> {
 }
 
 export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
+  const billingUi = useRemauraBillingModal();
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [brightness, setBrightness] = useState(100);
   const [contrast, setContrast] = useState(100);
@@ -387,6 +393,48 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
   const [comparePos, setComparePos] = useState(50);
   const reflectionInputRef = useRef<HTMLInputElement | null>(null);
   const sceneEnvInputRef = useRef<HTMLInputElement | null>(null);
+  const mainImageInputRef = useRef<HTMLInputElement | null>(null);
+
+  const getFotoEditAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
+    const { data: sessionData } = await createClient().auth.getSession();
+    const token = sessionData.session?.access_token;
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    return headers;
+  }, []);
+
+  const verifyFotoEditCreditsOnServer = useCallback(async (): Promise<boolean> => {
+    let res: Response;
+    try {
+      res = await fetch("/api/remaura/foto-edit/verify-credits", {
+        method: "POST",
+        headers: await getFotoEditAuthHeaders(),
+        credentials: "same-origin",
+        cache: "no-store",
+        body: JSON.stringify({}),
+      });
+    } catch {
+      billingUi.openInsufficientCredits();
+      return false;
+    }
+    if (!res.ok) {
+      if (await remauraHandleBillingApiResponse(res, billingUi)) return false;
+      billingUi.openInsufficientCredits();
+      return false;
+    }
+    let body: { ok?: boolean };
+    try {
+      body = (await res.json()) as { ok?: boolean };
+    } catch {
+      billingUi.openInsufficientCredits();
+      return false;
+    }
+    if (!body.ok) {
+      billingUi.openInsufficientCredits();
+      return false;
+    }
+    return true;
+  }, [billingUi, getFotoEditAuthHeaders]);
 
   const controlsDisabled = !imageSrc;
 
@@ -396,16 +444,48 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
     [brightness, contrast, saturate]
   );
 
-  const onFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setImageSrc(reader.result as string);
-      setZoom(100);
-    };
-    reader.readAsDataURL(file);
-  }, []);
+  const onFile = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const input = e.target;
+      const file = input.files?.[0];
+      if (!file || !file.type.startsWith("image/")) {
+        input.value = "";
+        return;
+      }
+      void (async () => {
+        const ok = await verifyFotoEditCreditsOnServer();
+        if (!ok) {
+          input.value = "";
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          setImageSrc(reader.result as string);
+          setZoom(100);
+        };
+        reader.readAsDataURL(file);
+      })();
+    },
+    [verifyFotoEditCreditsOnServer],
+  );
+
+  const openMainImagePicker = useCallback(async () => {
+    const ok = await verifyFotoEditCreditsOnServer();
+    if (!ok) return;
+    mainImageInputRef.current?.click();
+  }, [verifyFotoEditCreditsOnServer]);
+
+  const openSceneEnvPicker = useCallback(async () => {
+    const ok = await verifyFotoEditCreditsOnServer();
+    if (!ok) return;
+    sceneEnvInputRef.current?.click();
+  }, [verifyFotoEditCreditsOnServer]);
+
+  const openReflectionPicker = useCallback(async () => {
+    const ok = await verifyFotoEditCreditsOnServer();
+    if (!ok) return;
+    reflectionInputRef.current?.click();
+  }, [verifyFotoEditCreditsOnServer]);
 
   const resetAdjustments = useCallback(() => {
     setBrightness(100);
@@ -439,103 +519,159 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
     resetAdjustments();
   }, [resetAdjustments]);
 
-  const onReflectionMapFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const isImageType = file.type.startsWith("image/");
-    const isExrByExt = /\.exr$/i.test(file.name);
-    const isHdrByExt = /\.hdr$/i.test(file.name);
-    if (!isImageType && !isExrByExt && !isHdrByExt) return;
+  const onReflectionMapFile = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const input = e.target;
+      const file = input.files?.[0];
+      if (!file) return;
+      const isImageType = file.type.startsWith("image/");
+      const isExrByExt = /\.exr$/i.test(file.name);
+      const isHdrByExt = /\.hdr$/i.test(file.name);
+      if (!isImageType && !isExrByExt && !isHdrByExt) {
+        input.value = "";
+        return;
+      }
 
-    setReflectionMapError(null);
-
-    if (isExrByExt) {
       void (async () => {
-        try {
-          const dataUrl = await convertExrFileToDataUrl(file);
-          setReflectionMapSrc(dataUrl);
+        const creditOk = await verifyFotoEditCreditsOnServer();
+        if (!creditOk) {
+          input.value = "";
+          return;
+        }
+
+        setReflectionMapError(null);
+
+        if (isExrByExt) {
+          try {
+            const dataUrl = await convertExrFileToDataUrl(file);
+            setReflectionMapSrc(dataUrl);
+            setReflectionReferenceEnabled(true);
+            setMetalRealismEnabled(true);
+          } catch {
+            setReflectionMapError("EXR dosyası okunamadı. Lütfen başka bir EXR deneyin.");
+          }
+          return;
+        }
+
+        if (isHdrByExt) {
+          try {
+            const dataUrl = await convertHdrFileToDataUrl(file);
+            setReflectionMapSrc(dataUrl);
+            setReflectionReferenceEnabled(true);
+            setMetalRealismEnabled(true);
+          } catch {
+            setReflectionMapError("HDR dosyası okunamadı. Lütfen başka bir HDR deneyin.");
+          }
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          setReflectionMapSrc(reader.result as string);
           setReflectionReferenceEnabled(true);
           setMetalRealismEnabled(true);
-        } catch {
-          setReflectionMapError("EXR dosyası okunamadı. Lütfen başka bir EXR deneyin.");
-        }
+        };
+        reader.readAsDataURL(file);
       })();
-      return;
-    }
+    },
+    [verifyFotoEditCreditsOnServer],
+  );
 
-    if (isHdrByExt) {
+  const onSceneEnvFile = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const input = e.target;
+      const file = input.files?.[0];
+      if (!file) return;
+      const typeAllowed =
+        file.type.startsWith("image/") || /\.exr$/i.test(file.name) || /\.hdr$/i.test(file.name);
+      if (!typeAllowed) {
+        input.value = "";
+        return;
+      }
+
       void (async () => {
-        try {
-          const dataUrl = await convertHdrFileToDataUrl(file);
-          setReflectionMapSrc(dataUrl);
+        const creditOk = await verifyFotoEditCreditsOnServer();
+        if (!creditOk) {
+          input.value = "";
+          return;
+        }
+
+        setSceneEnvFile(file);
+
+        if (!syncEnvToReflection) return;
+        setReflectionMapError(null);
+
+        if (/\.exr$/i.test(file.name)) {
+          try {
+            const dataUrl = await convertExrFileToDataUrl(file);
+            setReflectionMapSrc(dataUrl);
+            setReflectionReferenceEnabled(true);
+            setMetalRealismEnabled(true);
+          } catch {
+            setReflectionMapError("EXR ortam ışığı yansıma haritasına dönüştürülemedi.");
+          }
+          return;
+        }
+
+        if (/\.hdr$/i.test(file.name)) {
+          try {
+            const dataUrl = await convertHdrFileToDataUrl(file);
+            setReflectionMapSrc(dataUrl);
+            setReflectionReferenceEnabled(true);
+            setMetalRealismEnabled(true);
+          } catch {
+            setReflectionMapError("HDR ortam ışığı yansıma haritasına dönüştürülemedi.");
+          }
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          setReflectionMapSrc(reader.result as string);
           setReflectionReferenceEnabled(true);
           setMetalRealismEnabled(true);
-        } catch {
-          setReflectionMapError("HDR dosyası okunamadı. Lütfen başka bir HDR deneyin.");
-        }
+        };
+        reader.readAsDataURL(file);
       })();
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setReflectionMapSrc(reader.result as string);
-      setReflectionReferenceEnabled(true);
-      setMetalRealismEnabled(true);
-    };
-    reader.readAsDataURL(file);
-  }, []);
-
-  const onSceneEnvFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const ok =
-      file.type.startsWith("image/") || /\.exr$/i.test(file.name) || /\.hdr$/i.test(file.name);
-    if (!ok) return;
-    setSceneEnvFile(file);
-
-    if (!syncEnvToReflection) return;
-    setReflectionMapError(null);
-
-    if (/\.exr$/i.test(file.name)) {
-      void (async () => {
-        try {
-          const dataUrl = await convertExrFileToDataUrl(file);
-          setReflectionMapSrc(dataUrl);
-          setReflectionReferenceEnabled(true);
-          setMetalRealismEnabled(true);
-        } catch {
-          setReflectionMapError("EXR ortam ışığı yansıma haritasına dönüştürülemedi.");
-        }
-      })();
-      return;
-    }
-
-    if (/\.hdr$/i.test(file.name)) {
-      void (async () => {
-        try {
-          const dataUrl = await convertHdrFileToDataUrl(file);
-          setReflectionMapSrc(dataUrl);
-          setReflectionReferenceEnabled(true);
-          setMetalRealismEnabled(true);
-        } catch {
-          setReflectionMapError("HDR ortam ışığı yansıma haritasına dönüştürülemedi.");
-        }
-      })();
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setReflectionMapSrc(reader.result as string);
-      setReflectionReferenceEnabled(true);
-      setMetalRealismEnabled(true);
-    };
-    reader.readAsDataURL(file);
-  }, [syncEnvToReflection]);
+    },
+    [syncEnvToReflection, verifyFotoEditCreditsOnServer],
+  );
 
   const handleDownload = useCallback(async () => {
     if (!imageSrc) return;
+
+    const debitHeaders = await getFotoEditAuthHeaders();
+
+    let debitRes: Response;
+    try {
+      debitRes = await fetch("/api/remaura/foto-edit/debit-download", {
+        method: "POST",
+        headers: debitHeaders,
+        credentials: "same-origin",
+        body: JSON.stringify({}),
+      });
+    } catch {
+      billingUi.openInsufficientCredits();
+      return;
+    }
+
+    if (!debitRes.ok) {
+      if (await remauraHandleBillingApiResponse(debitRes, billingUi)) return;
+      billingUi.openInsufficientCredits();
+      return;
+    }
+
+    let debitBody: { ok?: boolean };
+    try {
+      debitBody = (await debitRes.json()) as { ok?: boolean };
+    } catch {
+      billingUi.openInsufficientCredits();
+      return;
+    }
+    if (!debitBody.ok) {
+      billingUi.openInsufficientCredits();
+      return;
+    }
 
     const img = new window.Image();
     img.src = imageSrc;
@@ -647,6 +783,8 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
     hideEnvFog,
     specularRolloff,
     whiteBackground,
+    billingUi,
+    getFotoEditAuthHeaders,
   ]);
 
   const applyPreset = useCallback((preset: "catalog" | "social" | "premium") => {
@@ -691,6 +829,8 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
 
   const applyAutoFix = useCallback(async () => {
     if (!imageSrc) return;
+    const ok = await verifyFotoEditCreditsOnServer();
+    if (!ok) return;
     const img = new window.Image();
     img.src = imageSrc;
     await new Promise<void>((resolve, reject) => {
@@ -773,7 +913,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
     setNoiseReduction(nextNoise);
     setHighlightProtect(nextHighlightProtect);
     setWhiteBackground(brightRatio > 0.2);
-  }, [imageSrc]);
+  }, [imageSrc, verifyFotoEditCreditsOnServer]);
 
   return (
     <section className="mx-auto w-full max-w-6xl rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-6">
@@ -785,10 +925,22 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="rounded-xl border border-white/10 bg-black/20 p-3 sm:p-4">
           <div className="flex flex-wrap items-center gap-2">
-            <label className="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-[#b76e79]/70 bg-[#b76e79]/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#b76e79] transition-colors hover:bg-[#b76e79]/20">
+            <button
+              type="button"
+              onClick={() => void openMainImagePicker()}
+              className="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-[#b76e79]/70 bg-[#b76e79]/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#b76e79] transition-colors hover:bg-[#b76e79]/20"
+            >
               {t.uploadImage}
-              <input type="file" accept="image/*" onChange={onFile} className="hidden" />
-            </label>
+            </button>
+            <input
+              ref={mainImageInputRef}
+              type="file"
+              accept="image/*"
+              onChange={onFile}
+              className="hidden"
+              tabIndex={-1}
+              aria-hidden
+            />
             <button
               type="button"
               onClick={clearImage}
@@ -799,7 +951,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
             </button>
             <button
               type="button"
-              onClick={handleDownload}
+              onClick={() => void handleDownload()}
               disabled={controlsDisabled}
               className="min-h-11 rounded-lg border border-[#b76e79]/70 bg-[#b76e79] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white transition-colors hover:bg-[#a65f69] disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -816,7 +968,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
             <button
               type="button"
               disabled={controlsDisabled}
-              onClick={() => sceneEnvInputRef.current?.click()}
+              onClick={() => void openSceneEnvPicker()}
               className="min-h-11 rounded-lg border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-foreground transition-colors hover:border-white/30 disabled:cursor-not-allowed disabled:opacity-40"
             >
               360 Ortam Işığı Yükle
@@ -826,7 +978,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
               disabled={controlsDisabled}
               onClick={() => {
                 if (!reflectionMapSrc) {
-                  reflectionInputRef.current?.click();
+                  void openReflectionPicker();
                   return;
                 }
                 setReflectionReferenceEnabled((v) => !v);
@@ -847,6 +999,8 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
               accept="image/*,.exr,.hdr"
               onChange={onReflectionMapFile}
               className="hidden"
+              tabIndex={-1}
+              aria-hidden
             />
             <input
               ref={sceneEnvInputRef}
@@ -854,6 +1008,8 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
               accept="image/*,.exr,.hdr"
               onChange={onSceneEnvFile}
               className="hidden"
+              tabIndex={-1}
+              aria-hidden
             />
             {reflectionMapSrc && (
               <button
@@ -886,9 +1042,10 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
           <div className="mt-4 flex min-h-[320px] items-center justify-center rounded-lg border border-white/10 bg-black/30 p-2">
             {imageSrc ? (
                 <div
-                  className={`relative h-[min(65vh,560px)] w-full rounded-md ${
+                  className={`relative h-[min(65vh,560px)] w-full select-none rounded-md ${
                     zoom > 100 ? "overflow-auto" : "overflow-hidden"
                   }`}
+                  onContextMenu={(e) => e.preventDefault()}
                 >
                   <div className="absolute right-2 top-2 z-10 rounded-md border border-white/10 bg-black/55 px-2 py-1 text-[10px] text-white/90">
                     Zoom %{zoom}
@@ -897,6 +1054,8 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
                     <img
                       src={imageSrc}
                       alt="Photo edit original"
+                      draggable={false}
+                      onContextMenu={(e) => e.preventDefault()}
                       className="max-h-full max-w-full rounded-md object-contain"
                       style={{
                         transform: `scale(${zoom / 100})`,
@@ -913,6 +1072,8 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
                       <img
                         src={imageSrc}
                         alt="Photo edit processed"
+                        draggable={false}
+                        onContextMenu={(e) => e.preventDefault()}
                         className="max-h-full max-w-full rounded-md object-contain"
                         style={{
                           filter: `${filterString} ${

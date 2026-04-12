@@ -2,6 +2,11 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { MeshRealtimeViewer, type MeshRealtimeViewerHandle } from "@/components/remaura/MeshRealtimeViewer";
+import {
+  RemauraBillingModalProvider,
+  useRemauraBillingModal,
+} from "@/components/remaura/RemauraBillingModalProvider";
+import { useRemauraCreditsCheck } from "@/hooks/useRemauraCreditsCheck";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import {
@@ -33,6 +38,16 @@ const FORMAT_OPTIONS = [
 ];
 
 export default function VideoOptimizePage() {
+  return (
+    <RemauraBillingModalProvider>
+      <VideoOptimizePageInner />
+    </RemauraBillingModalProvider>
+  );
+}
+
+function VideoOptimizePageInner() {
+  const billingUi = useRemauraBillingModal();
+  const { checkCredits } = useRemauraCreditsCheck();
   const [modelUrl, setModelUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>("");
   const [fileType, setFileType] = useState<"stl" | "glb" | "auto">("auto");
@@ -56,6 +71,12 @@ export default function VideoOptimizePage() {
   const recordCanvasRef = useRef<HTMLCanvasElement>(null);
   const ffmpegRef = useRef<FFmpeg | null>(null);
 
+  const openMeshFilePicker = useCallback(async () => {
+    const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+    if (!ok) return;
+    fileInputRef.current?.click();
+  }, [billingUi, checkCredits]);
+
   const handleFile = (file: File) => {
     const ext = file.name.split(".").pop()?.toLowerCase();
     const type = ext === "stl" ? "stl" : ext === "glb" ? "glb" : "auto";
@@ -71,6 +92,9 @@ export default function VideoOptimizePage() {
     const container = viewerContainerRef.current;
     const recordCanvas = recordCanvasRef.current;
     if (!container || !modelUrl || !recordCanvas) return;
+
+    const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+    if (!ok) return;
 
     setRecordState("recording");
     setProgress(0);
@@ -139,7 +163,7 @@ export default function VideoOptimizePage() {
     } catch {
       setRecordState("idle");
     }
-  }, [modelUrl, format, duration]);
+  }, [billingUi, checkCredits, modelUrl, format, duration]);
 
   const download = () => {
     if (!outputUrl) return;
@@ -249,10 +273,14 @@ export default function VideoOptimizePage() {
             onDrop={(e) => {
               e.preventDefault();
               setDragging(false);
-              const f = e.dataTransfer.files[0];
-              if (f) handleFile(f);
+              void (async () => {
+                const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+                if (!ok) return;
+                const f = e.dataTransfer.files[0];
+                if (f) handleFile(f);
+              })();
             }}
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => void openMeshFilePicker()}
             className={`flex min-h-[400px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all ${
               dragging ? "border-accent bg-accent/[0.04]" : "border-border/60 hover:border-accent/40 hover:bg-surface-alt/50"
             }`}

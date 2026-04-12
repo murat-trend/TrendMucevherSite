@@ -48,14 +48,14 @@ type RemauraCategory = "jewelry" | "background" | "photoEdit" | "mesh3d" | "ring
 
 type RemauraWorkspaceProps = {
   initialCategory?: RemauraCategory;
+  /** false: üst bileşen (ör. sayfa) zaten RemauraBillingModalProvider ile sarılı olmalı */
+  embedBillingProvider?: boolean;
 };
 
-export function RemauraWorkspace(props: RemauraWorkspaceProps) {
-  return (
-    <RemauraBillingModalProvider>
-      <RemauraWorkspaceInner {...props} />
-    </RemauraBillingModalProvider>
-  );
+export function RemauraWorkspace({ embedBillingProvider = true, ...props }: RemauraWorkspaceProps) {
+  const inner = <RemauraWorkspaceInner {...props} />;
+  if (!embedBillingProvider) return inner;
+  return <RemauraBillingModalProvider>{inner}</RemauraBillingModalProvider>;
 }
 
 function mapFormatToAnalysisPlatform(format: PlatformFormat): JewelryPlatformTarget {

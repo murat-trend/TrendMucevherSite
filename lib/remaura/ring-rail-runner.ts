@@ -1,6 +1,6 @@
 import { spawn } from "child_process";
-import { tmpdir } from "os";
 import { join } from "path";
+import { remauraServerlessTempDir } from "@/lib/remaura/runtime-temp-dir";
 import { writeFile, readFile, unlink } from "fs/promises";
 import { randomUUID } from "crypto";
 
@@ -110,8 +110,9 @@ export async function runRingMeasure(
   slices = 7
 ): Promise<{ report: RingRailMeasureReport; log: string }> {
   const id = randomUUID();
-  const tmpIn = join(tmpdir(), `ring_rail_in_${id}.stl`);
-  const tmpReport = join(tmpdir(), `ring_rail_report_${id}.json`);
+  const tmpRoot = remauraServerlessTempDir();
+  const tmpIn = join(tmpRoot, `ring_rail_in_${id}.stl`);
+  const tmpReport = join(tmpRoot, `ring_rail_report_${id}.json`);
 
   try {
     await writeFile(tmpIn, inputBuffer);
@@ -154,9 +155,10 @@ export async function runRingScale(
   slices = 7
 ): Promise<{ stlBuffer: Buffer; report: RingRailScaleReport; log: string }> {
   const id = randomUUID();
-  const tmpIn = join(tmpdir(), `ring_rail_scale_in_${id}.stl`);
-  const tmpOut = join(tmpdir(), `ring_rail_scale_out_${id}.stl`);
-  const tmpReport = join(tmpdir(), `ring_rail_scale_report_${id}.json`);
+  const tmpRoot = remauraServerlessTempDir();
+  const tmpIn = join(tmpRoot, `ring_rail_scale_in_${id}.stl`);
+  const tmpOut = join(tmpRoot, `ring_rail_scale_out_${id}.stl`);
+  const tmpReport = join(tmpRoot, `ring_rail_scale_report_${id}.json`);
 
   try {
     await writeFile(tmpIn, inputBuffer);

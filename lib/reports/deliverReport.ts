@@ -13,7 +13,7 @@ export type DeliveryExtras = {
 export async function deliverDailyReportPdf(
   pdfBytes: Uint8Array,
   fileName: string,
-  opts: { absolutePath: string },
+  opts: { savedLocation: string },
 ): Promise<DeliveryExtras> {
   const emailTo = process.env.REPORT_EMAIL_TO?.trim();
   const webhookUrl = process.env.REPORT_DELIVERY_WEBHOOK_URL?.trim();
@@ -41,7 +41,7 @@ export async function deliverDailyReportPdf(
         from,
         to: emailTo,
         subject: `Günlük dashboard raporu — ${fileName.replace(/\.pdf$/i, "")}`,
-        text: `Ekteki PDF otomatik oluşturulmuştur.\nSunucu dosya yolu: ${opts.absolutePath}`,
+        text: `Ekteki PDF otomatik oluşturulmuştur.\nSupabase Storage: ${opts.savedLocation}`,
         attachments: [
           {
             filename: fileName,

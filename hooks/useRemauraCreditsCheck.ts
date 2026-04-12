@@ -16,10 +16,17 @@ export function useRemauraCreditsCheck() {
     }
 
     try {
-      const res = await fetch(`/api/billing/wallet?userId=${encodeURIComponent(user.id)}`);
+      const res = await fetch(`/api/billing/wallet?userId=${encodeURIComponent(user.id)}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        onInsufficient();
+        return false;
+      }
       const data = (await res.json()) as { wallet?: { balanceCredits?: number } };
-      const credits = Number(data?.wallet?.balanceCredits ?? 0);
-      if (!Number.isFinite(credits) || credits < requiredCredits) {
+      const parsed = Number(data?.wallet?.balanceCredits ?? 0);
+      const credits = Number.isFinite(parsed) ? parsed : 0;
+      if (credits < requiredCredits) {
         onInsufficient();
         return false;
       }

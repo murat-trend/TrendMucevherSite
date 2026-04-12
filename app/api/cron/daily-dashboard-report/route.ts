@@ -30,8 +30,8 @@ export async function GET(request: Request) {
     const payload = buildDailyDashboardReportPayload();
     const pdfBytes = await buildDailyDashboardPdfBuffer(payload);
     const fileName = `Dashboard-${payload.reportDateIso}.pdf`;
-    const savedPath = savePdfToReportsFolder(pdfBytes, fileName);
-    const delivery = await deliverDailyReportPdf(pdfBytes, fileName, { absolutePath: savedPath });
+    const savedPath = await savePdfToReportsFolder(pdfBytes, fileName);
+    const delivery = await deliverDailyReportPdf(pdfBytes, fileName, { savedLocation: savedPath });
 
     return Response.json({
       ok: true,
