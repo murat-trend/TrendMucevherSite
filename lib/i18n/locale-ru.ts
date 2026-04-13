@@ -1,3 +1,5 @@
+import { siteLocales } from "./site-pages";
+
 /** Русские тексты интерфейса — структура должна совпадать с `en` */
 export const ruMessages = {
   nav: {
@@ -32,6 +34,25 @@ export const ruMessages = {
     trust1: "Ручная работа",
     trust2: "Индивидуальный дизайн",
     trust3: "Надёжная доставка",
+  },
+  home: {
+    remauraSectionTitle: "Remaura Store",
+    featuredModels: "Избранные модели",
+    viewAll: "Смотреть все",
+    featuredModelsEmpty: "Пока нет опубликованных моделей.",
+    noThumbnail: "Нет изображения",
+    step1Title: "Смотреть коллекции",
+    step1Desc: "Готовые коллекции и дизайн на ваш вкус.",
+    step2Title: "Индивидуальный заказ",
+    step2Desc: "Спроектируем и изготовим уникальное украшение для вас.",
+    step3Title: "Remaura AI",
+    step3Desc: "Инструменты дизайна и генерации на базе ИИ.",
+    whyTitle: "Уникальные украшения, высокое качество",
+    whyDesc:
+      "В Trend Mücevher мы тщательно проектируем и изготавливаем каждое изделие. Сочетаем традиционное мастерство и современный дизайн. По индивидуальному заказу воплотим вашу мечту.",
+    aiSectionTitle: "Дизайн украшений с искусственным интеллектом",
+    sellerSectionTitle: "Продавайте на нашей платформе",
+    faqTitle: "Частые вопросы",
   },
   valueProp: {
     title: "Уникальные украшения, высокое качество",
@@ -301,6 +322,7 @@ export const ruMessages = {
     convertFailed: "Конвертация не удалась",
     unexpectedError: "Неожиданная ошибка",
   },
+  site: siteLocales.ru,
   auth: {
     login: "Войти",
     register: "Регистрация",

@@ -1,3 +1,5 @@
+import { siteLocales } from "./site-pages";
+
 /** Almanca arayüz metinleri — yapı `en` ile birebir aynı olmalı */
 export const deMessages = {
   nav: {
@@ -32,6 +34,25 @@ export const deMessages = {
     trust1: "Handgefertigt",
     trust2: "Individuelles Design",
     trust3: "Sichere Lieferung",
+  },
+  home: {
+    remauraSectionTitle: "Remaura Store",
+    featuredModels: "Vorgestellte Modelle",
+    viewAll: "Alle anzeigen",
+    featuredModelsEmpty: "Noch keine veröffentlichten Modelle.",
+    noThumbnail: "Kein Bild",
+    step1Title: "Produkte entdecken",
+    step1Desc: "Durchstöbern Sie unsere Kollektionen und finden Sie Ihr Design.",
+    step2Title: "Sonderanfertigung",
+    step2Desc: "Wir entwerfen und fertigen ein einzigartiges Schmuckstück für Sie.",
+    step3Title: "Remaura AI",
+    step3Desc: "KI-gestützte Design- und Bildtools nutzen.",
+    whyTitle: "Einzigartige Designs, höchste Qualität",
+    whyDesc:
+      "Bei Trend Mücevher entwerfen und fertigen wir jedes Stück mit Sorgfalt. Wir verbinden traditionelles Handwerk mit modernem Design und bieten Ihnen exklusiven Schmuck. Mit Sonderanfertigungen verwirklichen wir Ihr Traumdesign.",
+    aiSectionTitle: "Schmuckdesign mit Künstlicher Intelligenz",
+    sellerSectionTitle: "Auf unserer Plattform verkaufen",
+    faqTitle: "Häufig gestellte Fragen",
   },
   valueProp: {
     title: "Einzigartige Designs, höchste Qualität",
@@ -301,6 +322,7 @@ export const deMessages = {
     convertFailed: "Konvertierung fehlgeschlagen",
     unexpectedError: "Unerwarteter Fehler",
   },
+  site: siteLocales.de,
   auth: {
     login: "Anmelden",
     register: "Registrieren",

@@ -3,8 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { useLanguage } from "@/components/i18n/LanguageProvider";
 
 export default function UyeGirisPage() {
+  const { t } = useLanguage();
+  const u = t.site.uyeGiris;
   const router = useRouter();
   const [mode, setMode] = useState<"giris" | "kayit">("giris");
   const [email, setEmail] = useState("");
@@ -31,14 +34,14 @@ export default function UyeGirisPage() {
         setLoading(false);
         return;
       }
-      setSuccess("Kayıt başarılı! Email adresinizi doğrulayın.");
+      setSuccess(u.successRegister);
       setLoading(false);
       return;
     }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      setError("E-posta veya şifre hatalı.");
+      setError(u.errWrongPassword);
       setLoading(false);
       return;
     }
@@ -51,8 +54,8 @@ export default function UyeGirisPage() {
     <main className="flex min-h-[80vh] items-center justify-center px-4 py-16">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <h1 className="font-display text-3xl font-medium text-foreground">{mode === "giris" ? "Giriş Yap" : "Üye Ol"}</h1>
-          <p className="mt-2 text-sm text-muted">{mode === "giris" ? "Hesabınıza giriş yapın" : "Yeni hesap oluşturun"}</p>
+          <h1 className="font-display text-3xl font-medium text-foreground">{mode === "giris" ? u.titleLogin : u.titleRegister}</h1>
+          <p className="mt-2 text-sm text-muted">{mode === "giris" ? u.subtitleLogin : u.subtitleRegister}</p>
         </div>
 
         <div className="rounded-2xl border border-border/80 bg-card p-8">
@@ -63,14 +66,14 @@ export default function UyeGirisPage() {
               onClick={() => setMode("giris")}
               className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${mode === "giris" ? "bg-[#c9a84c] text-black" : "text-muted hover:text-foreground"}`}
             >
-              Giriş Yap
+              {u.tabLogin}
             </button>
             <button
               type="button"
               onClick={() => setMode("kayit")}
               className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${mode === "kayit" ? "bg-[#c9a84c] text-black" : "text-muted hover:text-foreground"}`}
             >
-              Üye Ol
+              {u.tabRegister}
             </button>
           </div>
 
@@ -89,30 +92,30 @@ export default function UyeGirisPage() {
           <div className="flex flex-col gap-4">
             {mode === "kayit" && (
               <div>
-                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted">Ad Soyad</label>
+                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted">{u.fullName}</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Adınız Soyadınız"
+                  placeholder={u.fullNamePlaceholder}
                   className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none focus:border-accent/50"
                 />
               </div>
             )}
 
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted">E-posta</label>
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted">{t.auth.email}</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="ornek@mail.com"
+                placeholder={u.placeholderEmail}
                 className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none focus:border-accent/50"
               />
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted">Şifre</label>
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted">{t.auth.password}</label>
               <input
                 type="password"
                 value={password}
@@ -128,15 +131,15 @@ export default function UyeGirisPage() {
               disabled={loading}
               className="mt-2 w-full rounded-xl bg-[#c9a84c] py-3.5 text-sm font-semibold text-black transition-all hover:opacity-90 disabled:opacity-50"
             >
-              {loading ? "Lütfen bekleyin..." : mode === "giris" ? "Giriş Yap" : "Üye Ol"}
+              {loading ? u.waitPlease : mode === "giris" ? u.titleLogin : u.titleRegister}
             </button>
           </div>
 
           {mode === "giris" && (
             <p className="mt-4 text-center text-xs text-muted">
-              Hesabınız yok mu?{" "}
+              {u.noAccountPrompt}{" "}
               <button type="button" onClick={() => setMode("kayit")} className="text-[#c9a84c] hover:underline">
-                Üye olun
+                {u.registerCta}
               </button>
             </p>
           )}

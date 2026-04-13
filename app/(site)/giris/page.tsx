@@ -4,10 +4,13 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
+import { useLanguage } from "@/components/i18n/LanguageProvider";
 
 type AccountKind = "buyer" | "seller";
 
 function GirisPageContent() {
+  const { t } = useLanguage();
+  const g = t.site.giris;
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectAfterLogin = searchParams.get("redirect");
@@ -47,11 +50,11 @@ function GirisPageContent() {
 
       if (error) {
         if (error.message.includes("Invalid login")) {
-          setError("E-posta veya şifre hatalı. Lütfen tekrar deneyin.");
+          setError(g.errInvalidCredentials);
         } else if (error.message.includes("Email not confirmed")) {
-          setError("E-posta adresiniz henüz doğrulanmamış.");
+          setError(g.errEmailNotConfirmed);
         } else {
-          setError("Giriş yapılırken bir hata oluştu. Lütfen tekrar deneyin.");
+          setError(g.errLoginFailed);
         }
         return;
       }
@@ -65,7 +68,7 @@ function GirisPageContent() {
         router.push("/satici/dashboard");
       }
     } catch {
-      setError("Beklenmeyen bir hata oluştu.");
+      setError(g.errUnexpected);
     } finally {
       setLoading(false);
     }
@@ -104,12 +107,10 @@ function GirisPageContent() {
             </div>
           </div>
           <h1 className="font-display text-3xl font-medium tracking-[-0.03em] text-foreground">
-            {kind === "buyer" ? "Giriş" : "Satıcı Girişi"}
+            {kind === "buyer" ? g.buyerTitle : g.sellerTitle}
           </h1>
           <p className="mt-3 text-[14px] leading-relaxed text-muted">
-            {kind === "buyer"
-              ? "Modelleri satın almak ve hesabınızı yönetmek için giriş yapın."
-              : "Satıcı panelinize giriş yapın."}
+            {kind === "buyer" ? g.buyerSubtitle : g.sellerSubtitle}
           </p>
         </div>
 
@@ -126,7 +127,7 @@ function GirisPageContent() {
                 kind === "buyer" ? "bg-[#c9a84c] text-black" : "text-muted hover:text-foreground"
               }`}
             >
-              Giriş
+              {g.tabBuyer}
             </button>
             <button
               type="button"
@@ -138,37 +139,37 @@ function GirisPageContent() {
                 kind === "seller" ? "bg-[#c9a84c] text-black" : "text-muted hover:text-foreground"
               }`}
             >
-              Satıcı
+              {g.tabSeller}
             </button>
           </div>
           {resetMode && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
               <div className="w-full max-w-sm rounded-2xl border border-border/40 bg-card p-6">
-                <h3 className="font-semibold text-foreground mb-1">Şifre Sıfırla</h3>
+                <h3 className="font-semibold text-foreground mb-1">{g.resetPasswordTitle}</h3>
                 {resetSent ? (
                   <>
-                    <p className="text-sm text-emerald-400 mt-3">✓ Kayıtlı bir hesap varsa sıfırlama linki emailinize gönderildi.</p>
+                    <p className="text-sm text-emerald-400 mt-3">{g.resetSent}</p>
                     <button type="button" onClick={() => { setResetMode(false); setResetSent(false); setResetEmail("") }} className="mt-4 w-full rounded-xl border border-border/40 py-2.5 text-sm text-muted hover:text-foreground transition-colors">
-                      Kapat
+                      {g.close}
                     </button>
                   </>
                 ) : (
                   <>
-                    <p className="text-xs text-muted mt-1 mb-4">Kayıtlı email adresinizi girin, sıfırlama linki gönderelim.</p>
+                    <p className="text-xs text-muted mt-1 mb-4">{g.resetHint}</p>
                     <input
                       type="email"
                       value={resetEmail}
                       onChange={(e) => setResetEmail(e.target.value)}
-                      placeholder="ornek@mail.com"
+                      placeholder={g.placeholderEmail}
                       className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-foreground outline-none focus:border-accent/50"
                     />
                     {resetError && <p className="mt-2 text-xs text-red-400">{resetError}</p>}
                     <div className="mt-3 flex gap-2">
                       <button type="button" onClick={() => setResetMode(false)} className="flex-1 rounded-xl border border-border/40 py-2.5 text-sm text-muted hover:text-foreground transition-colors">
-                        İptal
+                        {g.cancel}
                       </button>
                       <button type="button" onClick={() => void handleReset()} disabled={resetLoading || !resetEmail.trim()} className="flex-1 rounded-xl bg-accent py-2.5 text-sm font-semibold text-accent-foreground hover:opacity-90 disabled:opacity-50 transition-colors">
-                        {resetLoading ? "Gönderiliyor..." : "Gönder"}
+                        {resetLoading ? g.sending : g.send}
                       </button>
                     </div>
                   </>
@@ -193,7 +194,7 @@ function GirisPageContent() {
             {/* E-posta */}
             <div>
               <label htmlFor="email" className="mb-2 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted">
-                E-posta
+                {t.auth.email}
               </label>
               <input
                 id="email"
@@ -201,7 +202,7 @@ function GirisPageContent() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                placeholder="örnek@mail.com"
+                placeholder={g.placeholderEmail}
                 className="w-full rounded-xl border border-border bg-background px-4 py-3 text-[14px] text-foreground placeholder:text-muted/50 outline-none transition-all duration-200 focus:border-accent/50 focus:ring-2 focus:ring-accent/10 dark:bg-surface-alt"
               />
             </div>
@@ -209,7 +210,7 @@ function GirisPageContent() {
             {/* Şifre */}
             <div>
               <label htmlFor="password" className="mb-2 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted">
-                Şifre
+                {t.auth.password}
               </label>
               <div className="relative">
                 <input
@@ -254,10 +255,10 @@ function GirisPageContent() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Giriş yapılıyor...
+                  {g.loggingIn}
                 </span>
               ) : (
-                "Giriş Yap"
+                g.loginSubmit
               )}
             </button>
           </form>
@@ -266,11 +267,11 @@ function GirisPageContent() {
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-6">
             {kind === "buyer" ? (
               <Link href={uyeKayitHref} className="text-[13px] text-muted transition-colors hover:text-accent">
-                Hesabınız yok mu? Üye olun →
+                {g.noAccountRegister}
               </Link>
             ) : (
               <Link href="/satici-ol" className="text-[13px] text-muted transition-colors hover:text-accent">
-                Satıcı hesabı oluştur →
+                {g.createSellerLink}
               </Link>
             )}
             <button
@@ -278,16 +279,16 @@ function GirisPageContent() {
               className="text-[13px] text-muted transition-colors hover:text-accent"
               onClick={() => setResetMode(true)}
             >
-              Şifremi unuttum
+              {t.auth.forgotPassword}
             </button>
           </div>
         </div>
 
         {/* Alt not */}
         <p className="mt-8 text-center text-[12px] text-muted/60">
-          Sorun mu yaşıyorsunuz?{" "}
+          {g.problemContactPrefix}{" "}
           <Link href="/iletisim" className="text-muted transition-colors hover:text-foreground">
-            Bize ulaşın
+            {g.contactUs}
           </Link>
         </p>
 

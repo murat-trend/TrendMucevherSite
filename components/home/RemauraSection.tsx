@@ -61,7 +61,7 @@ export function RemauraSection() {
               {t.remaura.label}
             </p>
             <h2 className="mt-5 font-display text-2xl font-medium tracking-[-0.03em] text-foreground sm:text-3xl lg:text-4xl">
-              {t.remaura.title}
+              {t.home.aiSectionTitle}
             </h2>
             <p className="mt-6 max-w-lg text-[15px] leading-[1.75] text-muted">
               {t.remaura.description}

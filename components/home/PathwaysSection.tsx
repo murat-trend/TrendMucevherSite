@@ -6,8 +6,8 @@ import { useLanguage } from "@/components/i18n/LanguageProvider";
 const PATHWAYS = [
   {
     href: "/modeller",
-    titleKey: "products" as const,
-    descKey: "productsDesc" as const,
+    titleKey: "step1" as const,
+    descKey: "step1Desc" as const,
     ctaKey: "productsCta" as const,
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -20,8 +20,8 @@ const PATHWAYS = [
   },
   {
     href: "/ozel-siparis",
-    titleKey: "customOrder" as const,
-    descKey: "customOrderDesc" as const,
+    titleKey: "step2" as const,
+    descKey: "step2Desc" as const,
     ctaKey: "customOrderCta" as const,
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -33,8 +33,8 @@ const PATHWAYS = [
   },
   {
     href: "/remaura",
-    titleKey: "remaura" as const,
-    descKey: "remauraDesc" as const,
+    titleKey: "step3" as const,
+    descKey: "step3Desc" as const,
     ctaKey: "remauraCta" as const,
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -80,12 +80,16 @@ export function PathwaysSection() {
               <h3 className={`font-display text-xl font-medium tracking-[-0.02em] sm:text-[1.35rem] ${
                 path.featured ? "text-accent" : "text-foreground"
               }`}>
-                {t.pathways[path.titleKey]}
+                {path.titleKey === "step1" && t.home.step1Title}
+                {path.titleKey === "step2" && t.home.step2Title}
+                {path.titleKey === "step3" && t.home.step3Title}
               </h3>
 
               {/* Açıklama */}
               <p className="mt-4 flex-1 text-[14px] leading-[1.75] text-muted">
-                {t.pathways[path.descKey]}
+                {path.descKey === "step1Desc" && t.home.step1Desc}
+                {path.descKey === "step2Desc" && t.home.step2Desc}
+                {path.descKey === "step3Desc" && t.home.step3Desc}
               </p>
 
               {/* CTA */}

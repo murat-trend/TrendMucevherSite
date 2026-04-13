@@ -4,8 +4,13 @@ import { useEffect, useState } from "react"
 import type React from "react"
 import { createClient } from "@/utils/supabase/client"
 import { SaticiNav } from "@/app/(site)/satici/dashboard/page"
+import { useLanguage } from "@/components/i18n/LanguageProvider"
 
 export default function HesabimPage() {
+  const { t } = useLanguage()
+  const a = t.site.seller.account
+  const fmt = (s: string, vars: Record<string, string>) =>
+    Object.entries(vars).reduce((acc, [k, v]) => acc.replaceAll(`{${k}}`, v), s)
   const [storeName, setStoreName] = useState("")
   const [bio, setBio] = useState("")
   const [email, setEmail] = useState("")
@@ -96,7 +101,7 @@ export default function HesabimPage() {
     const supabase = createClient()
     const { error } = await supabase.auth.updateUser({ password: newPassword })
     if (error) {
-      setPasswordError("Şifre güncellenemedi: " + error.message)
+      setPasswordError(fmt(a.passwordUpdateFailed, { message: error.message }))
       setPasswordSaving(false)
       return
     }
@@ -108,28 +113,28 @@ export default function HesabimPage() {
   }
 
   if (loading) return (
-    <div className="p-8"><SaticiNav active="Hesabım" /><p className="text-sm text-muted mt-4">Yükleniyor...</p></div>
+    <div className="p-8"><SaticiNav active="account" /><p className="text-sm text-muted mt-4">{t.site.loading}</p></div>
   )
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
-      <SaticiNav active="Hesabım" />
-      <h1 className="font-display text-2xl text-foreground mt-6 mb-6">Hesabım</h1>
+      <SaticiNav active="account" />
+      <h1 className="font-display text-2xl text-foreground mt-6 mb-6">{a.pageTitle}</h1>
 
       <div className="flex flex-col gap-4">
         <div className="rounded-xl border border-border/40 bg-surface p-5">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-4">Şifre Güncelle</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-4">{a.passwordSection}</p>
           <label className="block">
-            <span className="text-xs text-muted mb-1 block">Yeni Şifre</span>
+            <span className="text-xs text-muted mb-1 block">{a.newPassword}</span>
             <input
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="En az 6 karakter"
+              placeholder={a.newPasswordPlaceholder}
               className="w-full rounded-lg border border-border/40 bg-black/20 px-3 py-2 text-sm text-foreground outline-none"
             />
           </label>
-          {passwordSuccess && <p className="mt-2 text-xs text-emerald-400">✓ Şifre güncellendi.</p>}
+          {passwordSuccess && <p className="mt-2 text-xs text-emerald-400">{a.passwordUpdated}</p>}
           {passwordError && <p className="mt-2 text-xs text-red-400">{passwordError}</p>}
           <button
             type="button"
@@ -137,7 +142,7 @@ export default function HesabimPage() {
             disabled={passwordSaving || newPassword.length < 6}
             className="mt-3 rounded-lg border border-border/40 px-4 py-2 text-xs text-muted hover:text-foreground transition-colors disabled:opacity-50"
           >
-            {passwordSaving ? "Güncelleniyor..." : "Şifreyi Güncelle"}
+            {passwordSaving ? a.updatingPassword : a.updatePassword}
           </button>
         </div>
 
@@ -158,33 +163,33 @@ export default function HesabimPage() {
               )}
             </div>
             <div>
-              <p className="text-sm font-medium text-foreground">{storeName || "Mağaza Adı"}</p>
+              <p className="text-sm font-medium text-foreground">{storeName || a.storeDisplayFallback}</p>
               <label className="mt-1 cursor-pointer text-xs text-[#c9a84c] hover:underline">
-                {avatarUploading ? "Yükleniyor..." : "Fotoğraf Değiştir"}
+                {avatarUploading ? a.uploadingPhoto : a.changePhoto}
                 <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
               </label>
             </div>
           </div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-4">Mağaza Bilgileri</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-4">{a.storeInfo}</p>
 
           <label className="block mb-3">
-            <span className="text-xs text-muted mb-1 block">Mağaza Adı {storeNameLocked && <span className="text-amber-400 text-[10px]">(kilitli — değiştirilemez)</span>}</span>
+            <span className="text-xs text-muted mb-1 block">{a.storeName} {storeNameLocked && <span className="text-amber-400 text-[10px]">{a.storeNameLockedHint}</span>}</span>
             <input
               type="text"
               value={storeName}
               onChange={(e) => setStoreName(e.target.value)}
               disabled={storeNameLocked}
-              placeholder="Mağaza adınız..."
+              placeholder={a.storeNamePlaceholder}
               className="w-full rounded-lg border border-border/40 bg-black/20 px-3 py-2 text-sm text-foreground outline-none disabled:opacity-50"
             />
           </label>
 
           <label className="block mb-3">
-            <span className="text-xs text-muted mb-1 block">Mağaza Açıklaması</span>
+            <span className="text-xs text-muted mb-1 block">{a.storeBio}</span>
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              placeholder="Mağazanız hakkında kısa bir açıklama..."
+              placeholder={a.storeBioPlaceholder}
               rows={3}
               className="w-full rounded-lg border border-border/40 bg-black/20 px-3 py-2 text-sm text-foreground outline-none resize-none"
             />
@@ -192,10 +197,10 @@ export default function HesabimPage() {
         </div>
 
         <div className="rounded-xl border border-border/40 bg-surface p-5">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-4">İletişim Bilgileri</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-4">{a.contactSection}</p>
 
           <label className="block mb-3">
-            <span className="text-xs text-muted mb-1 block">Email (değiştirilemez)</span>
+            <span className="text-xs text-muted mb-1 block">{a.emailReadonly}</span>
             <input
               type="email"
               value={email}
@@ -205,50 +210,50 @@ export default function HesabimPage() {
           </label>
 
           <label className="block">
-            <span className="text-xs text-muted mb-1 block">WhatsApp Numarası</span>
+            <span className="text-xs text-muted mb-1 block">{a.whatsapp}</span>
             <input
               type="tel"
               value={whatsapp}
               onChange={(e) => setWhatsapp(e.target.value)}
-              placeholder="+90 5xx xxx xx xx"
+              placeholder={a.whatsappPlaceholder}
               className="w-full rounded-lg border border-border/40 bg-black/20 px-3 py-2 text-sm text-foreground outline-none"
             />
           </label>
         </div>
 
         <div className="rounded-xl border border-border/40 bg-surface p-5">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-4">Banka Bilgileri</p>
-          <p className="text-[11px] text-muted/70 mb-3">Ödeme transferleri için gereklidir. Bilgileriniz güvende tutulur.</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-4">{a.bankSection}</p>
+          <p className="text-[11px] text-muted/70 mb-3">{a.bankHint}</p>
 
           <label className="block mb-3">
-            <span className="text-xs text-muted mb-1 block">Hesap Sahibi Adı</span>
+            <span className="text-xs text-muted mb-1 block">{a.accountHolder}</span>
             <input
               type="text"
               value={accountHolder}
               onChange={(e) => setAccountHolder(e.target.value)}
-              placeholder="Ad Soyad veya Şirket Adı"
+              placeholder={a.accountHolderPlaceholder}
               className="w-full rounded-lg border border-border/40 bg-black/20 px-3 py-2 text-sm text-foreground outline-none"
             />
           </label>
 
           <label className="block mb-3">
-            <span className="text-xs text-muted mb-1 block">Banka Adı</span>
+            <span className="text-xs text-muted mb-1 block">{a.bankName}</span>
             <input
               type="text"
               value={bankName}
               onChange={(e) => setBankName(e.target.value)}
-              placeholder="Örn: Halkbank, Ziraat, Garanti"
+              placeholder={a.bankNamePlaceholder}
               className="w-full rounded-lg border border-border/40 bg-black/20 px-3 py-2 text-sm text-foreground outline-none"
             />
           </label>
 
           <label className="block">
-            <span className="text-xs text-muted mb-1 block">IBAN</span>
+            <span className="text-xs text-muted mb-1 block">{a.iban}</span>
             <input
               type="text"
               value={iban}
               onChange={(e) => setIban(e.target.value.toUpperCase())}
-              placeholder="TR00 0000 0000 0000 0000 0000 00"
+              placeholder={a.ibanPlaceholder}
               maxLength={32}
               className="w-full rounded-lg border border-border/40 bg-black/20 px-3 py-2 text-sm text-foreground outline-none font-mono"
             />
@@ -256,7 +261,7 @@ export default function HesabimPage() {
         </div>
 
         {success && (
-          <p className="text-sm text-emerald-400">✓ Bilgiler kaydedildi.</p>
+          <p className="text-sm text-emerald-400">{a.saved}</p>
         )}
 
         <button
@@ -265,7 +270,7 @@ export default function HesabimPage() {
           disabled={saving}
           className="rounded-lg bg-[#c9a84c] px-6 py-2.5 text-sm font-semibold text-black hover:bg-[#b8973b] transition-colors disabled:opacity-50"
         >
-          {saving ? "Kaydediliyor..." : "Kaydet"}
+          {saving ? a.saving : a.save}
         </button>
       </div>
     </div>

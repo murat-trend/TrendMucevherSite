@@ -12,7 +12,7 @@ export function FAQSection() {
   return (
     <section className="border-t border-border/60 bg-surface-alt-2 px-4 py-24 sm:px-6 lg:px-8 dark:bg-surface-alt-2">
       <div className="mx-auto max-w-2xl">
-        <h2 className="section-title text-center">{t.faq.title}</h2>
+        <h2 className="section-title text-center">{t.home.faqTitle}</h2>
 
         <div className="mt-16 space-y-3">
           {FAQ_KEYS.map((key, index) => (

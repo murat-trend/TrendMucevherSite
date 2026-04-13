@@ -16,6 +16,9 @@ import {
   Wallet, Calendar, ChevronRight, ThumbsUp, ThumbsDown, Minus,
   AlertTriangle, TrendingDown, Award,
 } from "lucide-react";
+import { useLanguage } from "@/components/i18n/LanguageProvider";
+
+export type SaticiNavActiveKey = "dashboard" | "products" | "campaigns" | "orders" | "account";
 
 // ── Tip tanımları ─────────────────────────────────────────────────────────
 type OrderStatus = "pending" | "shipped" | "completed" | "cancelled";
@@ -121,9 +124,10 @@ const numFmt = (n: number) => new Intl.NumberFormat("tr-TR").format(n);
 
 // ── Küçük bileşenler ──────────────────────────────────────────────────────
 
-export function SaticiNav({ active }: { active: string }) {
+export function SaticiNav({ active }: { active: SaticiNavActiveKey }) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
+  const { t, locale } = useLanguage();
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -133,12 +137,27 @@ export function SaticiNav({ active }: { active: string }) {
     router.refresh();
   };
 
+  const welcomeDate = new Date().toLocaleDateString(
+    locale === "tr" ? "tr-TR" : locale === "de" ? "de-DE" : locale === "ru" ? "ru-RU" : "en-US",
+    { month: "long", year: "numeric" },
+  );
+  const nav = t.site.seller.nav;
+  const items: { href: string; key: SaticiNavActiveKey; label: string }[] = [
+    { href: "/satici/dashboard", key: "dashboard", label: nav.dashboard },
+    { href: "/satici/urunlerim", key: "products", label: nav.products },
+    { href: "/satici/kampanyalarim", key: "campaigns", label: nav.campaigns },
+    { href: "/satici/siparislerim", key: "orders", label: nav.orders },
+    { href: "/satici/hesabim", key: "account", label: nav.account },
+  ];
+
   return (
     <div className="border-b border-border/60 bg-card">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
         <div>
-          <h1 className="font-display text-xl font-medium tracking-[-0.02em] text-foreground">Satıcı Paneli</h1>
-          <p className="mt-0.5 text-[13px] text-muted">Hoş geldiniz — Nisan 2026</p>
+          <h1 className="font-display text-xl font-medium tracking-[-0.02em] text-foreground">{nav.panelTitle}</h1>
+          <p className="mt-0.5 text-[13px] text-muted">
+            {nav.welcome} — {welcomeDate}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -148,28 +167,26 @@ export function SaticiNav({ active }: { active: string }) {
             className="flex items-center gap-2 rounded-full border border-border/80 bg-transparent px-4 py-2 text-[13px] font-medium text-muted transition-colors hover:border-red-500/30 hover:bg-red-500/[0.06] hover:text-red-400 disabled:opacity-50"
           >
             <LogOut size={14} strokeWidth={2} />
-            {loggingOut ? "Çıkılıyor..." : "Çıkış Yap"}
+            {loggingOut ? nav.loggingOut : nav.logout}
           </button>
           <Link
             href="/satici/urunlerim"
             className="flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground hover:opacity-90"
           >
-            <Plus size={14} strokeWidth={2} /> Ürün Ekle
+            <Plus size={14} strokeWidth={2} /> {nav.addProduct}
           </Link>
         </div>
       </div>
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <nav className="flex gap-6 overflow-x-auto">
-          {[
-            { href: "/satici/dashboard", label: "Dashboard" },
-            { href: "/satici/urunlerim", label: "Ürünlerim" },
-            { href: "/satici/kampanyalarim", label: "Kampanyalarım" },
-            { href: "/satici/siparislerim", label: "Siparişlerim" },
-            { href: "/satici/hesabim", label: "Hesabım" },
-          ].map(item => (
-            <Link key={item.href} href={item.href}
+          {items.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
               className={`shrink-0 border-b-2 pb-3 pt-1 text-[13px] font-medium transition-colors ${
-                active === item.label ? "border-accent text-accent" : "border-transparent text-muted hover:text-foreground"}`}>
+                active === item.key ? "border-accent text-accent" : "border-transparent text-muted hover:text-foreground"
+              }`}
+            >
               {item.label}
             </Link>
           ))}
@@ -230,6 +247,12 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 
 // ── Ana bileşen ───────────────────────────────────────────────────────────
 export default function SaticiDashboardPage() {
+  const { t, locale } = useLanguage();
+  const d = t.site.seller.dashboard;
+  const fmt = (s: string, vars: Record<string, string | number>) =>
+    Object.entries(vars).reduce((acc, [k, v]) => acc.replaceAll(`{${k}}`, String(v)), s);
+  const dateLocale = locale === "tr" ? "tr-TR" : locale === "de" ? "de-DE" : locale === "ru" ? "ru-RU" : "en-US";
+
   const [dashboardData, setDashboardData] = useState({
     totalRevenue: 0,
     pendingOrders: 0,
@@ -334,7 +357,7 @@ export default function SaticiDashboardPage() {
       const abandonedData = (cartData ?? [])
         .filter((c) => !paidProductIds.includes(c.product_id))
         .map((c) => ({
-          name: sellerProductIds.find((p) => p.id === c.product_id)?.name ?? "Bilinmeyen",
+          name: sellerProductIds.find((p) => p.id === c.product_id)?.name ?? d.unknownProduct,
           count: 1,
         }))
         .reduce((acc: any[], item) => {
@@ -459,7 +482,7 @@ export default function SaticiDashboardPage() {
         channel = null;
       }
     };
-  }, []);
+  }, [locale]);
 
   const [notifOpen, setNotifOpen] = useState(false);
   const unreadCount = notifications.filter((n) => !n.is_read).length;
@@ -467,7 +490,7 @@ export default function SaticiDashboardPage() {
 
   const categoryChartData: { name: string; value: number }[] = categoryDistribution.reduce(
     (acc, item) => {
-      const label = item.jewelry_type ?? "Diğer";
+      const label = item.jewelry_type ?? d.otherCategory;
       const existing = acc.find((a: { name: string; value: number }) => a.name === label);
       if (existing) existing.value++;
       else acc.push({ name: label, value: 1 });
@@ -481,7 +504,7 @@ export default function SaticiDashboardPage() {
   const topProductsData = (
     Object.values(
       productPerformance.reduce((acc, order) => {
-        const key = order.product_name ?? "Bilinmeyen";
+        const key = order.product_name ?? d.unknownProduct;
         if (!acc[key]) acc[key] = { name: key, revenue: 0, orderCount: 0 };
         acc[key].revenue += order.amount ?? 0;
         acc[key].orderCount++;
@@ -496,7 +519,7 @@ export default function SaticiDashboardPage() {
 
   const trafficChartData: { name: string; value: number }[] = trafficSources.reduce(
     (acc, item) => {
-      const key = item.source ?? "Doğrudan";
+      const key = item.source ?? d.directTraffic;
       const existing = acc.find((a: { name: string; value: number }) => a.name === key);
       if (existing) existing.value++;
       else acc.push({ name: key, value: 1 });
@@ -506,26 +529,26 @@ export default function SaticiDashboardPage() {
   );
   const trafficTotal = trafficChartData.reduce((s, t) => s + t.value, 0);
 
-  const weekDays = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
-  const weeklyChartData = weekDays.map((day, i) => {
+  const weeklyChartData = Array.from({ length: 7 }, (_, i) => {
     const date = new Date();
     date.setDate(date.getDate() - (6 - i));
+    const dayLabel = date.toLocaleDateString(dateLocale, { weekday: "short" });
     const dayOrders = weeklySales.filter((o) => {
-      const d = new Date(o.created_at);
-      return d.toDateString() === date.toDateString();
+      const od = new Date(o.created_at);
+      return od.toDateString() === date.toDateString();
     });
-    return { day, total: dayOrders.reduce((s, o) => s + (o.amount ?? 0), 0) };
+    return { day: dayLabel, total: dayOrders.reduce((s, o) => s + (o.amount ?? 0), 0) };
   });
 
-  const monthNames = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
   const monthlyChartData = Array.from({ length: 7 }, (_, i) => {
     const date = new Date();
     date.setMonth(date.getMonth() - (6 - i));
+    const monthLabel = date.toLocaleDateString(dateLocale, { month: "short" });
     const monthOrders = monthlySales.filter((o) => {
-      const d = new Date(o.created_at);
-      return d.getMonth() === date.getMonth() && d.getFullYear() === date.getFullYear();
+      const od = new Date(o.created_at);
+      return od.getMonth() === date.getMonth() && od.getFullYear() === date.getFullYear();
     });
-    return { month: monthNames[date.getMonth()], total: monthOrders.reduce((s, o) => s + (o.amount ?? 0), 0) };
+    return { month: monthLabel, total: monthOrders.reduce((s, o) => s + (o.amount ?? 0), 0) };
   });
 
   const hourlyChartData = Array.from({ length: 24 }, (_, hour) => {
@@ -543,7 +566,7 @@ export default function SaticiDashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <SaticiNav active="Dashboard" />
+      <SaticiNav active="dashboard" />
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
 
@@ -554,7 +577,7 @@ export default function SaticiDashboardPage() {
           <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] p-5">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Gelecek Ödeme</p>
+                <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">{d.nextPayout}</p>
                 <p className="mt-2 font-display text-2xl font-medium text-emerald-500">{tryFmt(STATS.nextPayoutAmount)}</p>
                 <div className="mt-2 flex items-center gap-1.5 text-[12px] text-muted">
                   <Calendar size={12} /> {STATS.nextPayoutDate}
@@ -563,7 +586,7 @@ export default function SaticiDashboardPage() {
               <Wallet size={18} className="text-emerald-500/60" strokeWidth={1.75} />
             </div>
             <div className="mt-4 border-t border-border/40 pt-3 text-[12px] text-muted">
-              Son ödeme: <span className="text-foreground">{tryFmt(STATS.lastPayoutAmount)}</span> — {STATS.lastPayoutDate}
+              {d.lastPayment}: <span className="text-foreground">{tryFmt(STATS.lastPayoutAmount)}</span> — {STATS.lastPayoutDate}
             </div>
           </div>
 
@@ -571,15 +594,15 @@ export default function SaticiDashboardPage() {
           <div className="rounded-2xl border border-border/80 bg-card p-5">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Aylık Hedef</p>
+                <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">{d.monthlyGoal}</p>
                 <p className="mt-2 font-display text-2xl font-medium text-foreground">{tryFmt(STATS.monthlySales)}</p>
-                <p className="mt-1 text-[12px] text-muted">Hedef: {tryFmt(STATS.monthlyTarget)}</p>
+                <p className="mt-1 text-[12px] text-muted">{d.goal}: {tryFmt(STATS.monthlyTarget)}</p>
               </div>
               <Target size={18} className="text-muted" strokeWidth={1.75} />
             </div>
             <div className="mt-4">
               <div className="mb-1.5 flex items-center justify-between text-[11px]">
-                <span className="text-muted">İlerleme</span>
+                <span className="text-muted">{d.progress}</span>
                 <span className={`font-medium ${monthlyProgress >= 80 ? "text-emerald-500" : monthlyProgress >= 50 ? "text-amber-500" : "text-red-500"}`}>
                   %{monthlyProgress}
                 </span>
@@ -590,7 +613,7 @@ export default function SaticiDashboardPage() {
                   style={{ width: `${Math.min(monthlyProgress, 100)}%` }} />
               </div>
               <p className="mt-2 text-[11px] text-muted">
-                Hedefe ulaşmak için <span className="font-medium text-foreground">{tryFmt(STATS.monthlyTarget - STATS.monthlySales)}</span> daha
+                {fmt(d.needMoreToGoal, { amount: tryFmt(STATS.monthlyTarget - STATS.monthlySales) })}
               </p>
             </div>
           </div>
@@ -600,7 +623,7 @@ export default function SaticiDashboardPage() {
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Bell size={16} className="text-muted" strokeWidth={1.75} />
-                <span className="font-display text-[15px] font-medium text-foreground">Bildirimler</span>
+                <span className="font-display text-[15px] font-medium text-foreground">{d.notifications}</span>
                 {unreadCount > 0 && (
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
                     {unreadCount}
@@ -609,12 +632,12 @@ export default function SaticiDashboardPage() {
               </div>
               <button onClick={() => setNotifOpen(!notifOpen)}
                 className="text-[12px] text-accent hover:text-accent/80">
-                {notifOpen ? "Gizle" : "Tümü"}
+                {notifOpen ? d.hide : d.showAll}
               </button>
             </div>
             <div className="space-y-2.5">
               {notifications.length === 0 ? (
-                <p className="py-4 text-center text-xs text-muted">Bildirim yok</p>
+                <p className="py-4 text-center text-xs text-muted">{d.noNotifications}</p>
               ) : (
                 notifications.map((n) => (
                   <div
@@ -632,7 +655,7 @@ export default function SaticiDashboardPage() {
                     <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${n.is_read ? "bg-transparent" : "bg-red-500"}`} />
                     <div>
                       <p className="text-xs text-foreground">{n.message}</p>
-                      <p className="mt-0.5 text-[10px] text-muted">{new Date(n.created_at).toLocaleString("tr-TR")}</p>
+                      <p className="mt-0.5 text-[10px] text-muted">{new Date(n.created_at).toLocaleString(dateLocale)}</p>
                     </div>
                   </div>
                 ))
@@ -643,37 +666,37 @@ export default function SaticiDashboardPage() {
 
         {/* ── KPI Satırı 1 ── */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <KpiCard label="Net Kazanç (Toplam)" value={tryFmt(dashboardData.totalRevenue)}
-            sub={`Komisyon sonrası (%12)`} icon={TrendingUp} accent
-            trend="Geçen aya +%12" trendUp />
-          <KpiCard label="Ortalama Sipariş (AOV)" value={tryFmt(STATS.aov)}
-            sub="Sipariş başına ortalama" icon={ShoppingBag}
-            vs={`Platform ort: ${tryFmt(1050)}`} />
-          <KpiCard label="Müşteri LTV" value={tryFmt(STATS.ltv)}
-            sub="Müşteri başına ömür boyu" icon={Users} />
-          <KpiCard label="Dönüşüm Oranı" value={`%${STATS.conversionRate}`}
-            sub="Ziyaret → Satış" icon={Target}
-            trend="Platform ort: %2.8 ✓" trendUp />
+          <KpiCard label={d.kpiNetTotal} value={tryFmt(dashboardData.totalRevenue)}
+            sub={d.kpiNetSub} icon={TrendingUp} accent
+            trend={d.kpiTrendUp} trendUp />
+          <KpiCard label={d.kpiAov} value={tryFmt(STATS.aov)}
+            sub={d.kpiAovSub} icon={ShoppingBag}
+            vs={`${d.kpiPlatformAvg}: ${tryFmt(1050)}`} />
+          <KpiCard label={d.kpiLtv} value={tryFmt(STATS.ltv)}
+            sub={d.kpiLtvSub} icon={Users} />
+          <KpiCard label={d.kpiConversion} value={`%${STATS.conversionRate}`}
+            sub={d.kpiConversionSub} icon={Target}
+            trend={d.kpiConversionTrend} trendUp />
         </div>
 
         {/* ── KPI Satırı 2 ── */}
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <KpiCard label="Bekleyen Sipariş" value={String(dashboardData.pendingOrders)}
-            sub={`${dashboardData.totalOrders} toplam`} icon={Clock} />
-          <KpiCard label="Müşteri Puanı" value={String(STATS.rating)}
-            sub={`${STATS.reviewCount} değerlendirme`} icon={Star}
-            trend={`Platform ort: ${STATS.platformAvgRating} ✓`} trendUp />
-          <KpiCard label="İade Oranı" value={`%${STATS.returnRate}`}
-            sub="Son 30 gün" icon={RotateCcw}
-            trend={`Platform ort: %${STATS.platformAvgReturnRate} ✓`} trendUp />
-          <KpiCard label="Tekrar Alışveriş" value={`%${STATS.repeatCustomers}`}
-            sub="Sadık müşteri oranı" icon={Award} />
+          <KpiCard label={d.kpiPendingOrders} value={String(dashboardData.pendingOrders)}
+            sub={fmt(d.kpiTotalOrders, { count: dashboardData.totalOrders })} icon={Clock} />
+          <KpiCard label={d.kpiRating} value={String(STATS.rating)}
+            sub={fmt(d.kpiReviews, { count: STATS.reviewCount })} icon={Star}
+            trend={fmt(d.kpiRatingTrend, { rating: String(STATS.platformAvgRating) })} trendUp />
+          <KpiCard label={d.kpiReturnRate} value={`%${STATS.returnRate}`}
+            sub={d.kpiReturnSub} icon={RotateCcw}
+            trend={fmt(d.kpiReturnTrend, { rate: String(STATS.platformAvgReturnRate) })} trendUp />
+          <KpiCard label={d.kpiRepeat} value={`%${STATS.repeatCustomers}`}
+            sub={d.kpiRepeatSub} icon={Award} />
         </div>
 
         {/* ── Grafik Satırı ── */}
         <div className="mt-6 grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <Card title="Haftalık Satış Trendi" action={<span className="text-[12px] text-muted">Son 7 gün</span>}>
+            <Card title={d.chartWeeklyTitle} action={<span className="text-[12px] text-muted">{d.chartLast7Days}</span>}>
               <ResponsiveContainer width="100%" height={200}>
                 <AreaChart data={weeklyChartData}>
                   <defs>
@@ -686,12 +709,12 @@ export default function SaticiDashboardPage() {
                   <XAxis dataKey="day" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => `₺${v}`} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Area type="monotone" dataKey="total" name="Satış" stroke="var(--color-accent)" strokeWidth={2} fill="url(#g1)" />
+                  <Area type="monotone" dataKey="total" name={d.chartSales} stroke="var(--color-accent)" strokeWidth={2} fill="url(#g1)" />
                 </AreaChart>
               </ResponsiveContainer>
             </Card>
           </div>
-          <Card title="Kategori Dağılımı" action={<span className="text-[12px] text-muted">Satış %</span>}>
+          <Card title={d.chartCategoryTitle} action={<span className="text-[12px] text-muted">{d.chartCategorySub}</span>}>
             <ResponsiveContainer width="100%" height={140}>
               <PieChart>
                 <Pie data={categoryChartData} cx="50%" cy="50%" outerRadius={60} dataKey="value">
@@ -726,22 +749,22 @@ export default function SaticiDashboardPage() {
 
         {/* ── En İyi Satış Saatleri + Aylık ── */}
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          <Card title="En İyi Satış Saatleri" action={<span className="text-[12px] text-muted">Bugün</span>}>
+          <Card title={d.chartHourlyTitle} action={<span className="text-[12px] text-muted">{d.chartToday}</span>}>
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={hourlyChartData} barSize={14}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" strokeOpacity={0.4} />
                 <XAxis dataKey="hour" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
                 <Tooltip />
-                <Bar dataKey="total" name="Sipariş" fill="var(--color-accent)" radius={[3, 3, 0, 0]} opacity={0.85} />
+                <Bar dataKey="total" name={d.chartOrders} fill="var(--color-accent)" radius={[3, 3, 0, 0]} opacity={0.85} />
               </BarChart>
             </ResponsiveContainer>
             <p className="mt-2 text-[12px] text-muted">
-              🔥 En yoğun saat: <span className="font-medium text-foreground">{bestHour?.hour ?? "-"}</span> — Kampanyalarınızı bu saate planlayın
+              {fmt(d.peakHourHint, { hour: bestHour?.hour ?? "-" })}
             </p>
           </Card>
 
-          <Card title="Aylık Satış" action={<span className="text-[12px] text-muted">Son 7 ay</span>}>
+          <Card title={d.chartMonthlyTitle} action={<span className="text-[12px] text-muted">{d.chartLast7Months}</span>}>
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={monthlyChartData} barSize={22}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" strokeOpacity={0.4} />
@@ -749,7 +772,7 @@ export default function SaticiDashboardPage() {
                 <YAxis tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false}
                   tickFormatter={v => `₺${(v/1000).toFixed(0)}K`} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="total" name="Satış" fill="var(--color-accent)" radius={[4, 4, 0, 0]} opacity={0.85} />
+                <Bar dataKey="total" name={d.chartSales} fill="var(--color-accent)" radius={[4, 4, 0, 0]} opacity={0.85} />
               </BarChart>
             </ResponsiveContainer>
           </Card>
@@ -757,12 +780,12 @@ export default function SaticiDashboardPage() {
 
         {/* ── Ürün Performansı + Stok ── */}
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          <Card title="Ürün Performansı" action={<Link href="/satici/urunlerim" className="text-[12px] text-accent">Tümü →</Link>}>
+          <Card title={d.productPerformance} action={<Link href="/satici/urunlerim" className="text-[12px] text-accent">{d.viewAllOrders}</Link>}>
             <div className="space-y-1">
               <div className="grid grid-cols-3 pb-2 text-[10px] font-medium uppercase tracking-[0.08em] text-muted">
-                <span>Ürün</span>
-                <span className="text-center">Gelir</span>
-                <span className="text-center">Sipariş</span>
+                <span>{d.productCol}</span>
+                <span className="text-center">{d.revenueCol}</span>
+                <span className="text-center">{d.orderCol}</span>
               </div>
               {topProductsData.map((p, i) => (
                 <div key={i} className="grid grid-cols-3 items-center rounded-xl px-2 py-3 transition-colors hover:bg-surface-alt/50">
@@ -778,10 +801,10 @@ export default function SaticiDashboardPage() {
           </Card>
 
           {/* Son Değerlendirmeler */}
-          <Card title="Son Değerlendirmeler" action={<span className="text-[12px] text-muted">{STATS.rating} ⭐ ort.</span>}>
+          <Card title={d.recentReviews} action={<span className="text-[12px] text-muted">{fmt(d.avgStars, { rating: String(STATS.rating) })}</span>}>
             <div className="space-y-3">
               {reviews.length === 0 ? (
-                <p className="py-8 text-center text-xs text-muted">Henüz değerlendirme yok</p>
+                <p className="py-8 text-center text-xs text-muted">{d.noReviews}</p>
               ) : (
                 reviews.map((r, i) => (
                   <div key={i} className="border-b border-border/20 pb-3 last:border-0">
@@ -791,7 +814,7 @@ export default function SaticiDashboardPage() {
                       ))}
                     </div>
                     <p className="text-xs text-foreground">{r.comment}</p>
-                    <p className="mt-1 text-[10px] text-muted">{new Date(r.created_at).toLocaleDateString("tr-TR")}</p>
+                    <p className="mt-1 text-[10px] text-muted">{new Date(r.created_at).toLocaleDateString(dateLocale)}</p>
                   </div>
                 ))
               )}
@@ -801,45 +824,45 @@ export default function SaticiDashboardPage() {
 
         {/* ── Sepet Terk + Reklam ── */}
         <div className="mt-6 grid gap-6 lg:grid-cols-3">
-          <Card title="Sepette Terk Edilen"
-            action={<span className="flex items-center gap-1 text-[12px] text-amber-500"><AlertCircle size={12} /> Fırsat</span>}>
-            <p className="mb-4 text-[12px] text-muted">Kampanya ile geri kazanabilirsiniz.</p>
+          <Card title={d.abandonedCart}
+            action={<span className="flex items-center gap-1 text-[12px] text-amber-500"><AlertCircle size={12} /> {d.opportunity}</span>}>
+            <p className="mb-4 text-[12px] text-muted">{d.abandonedHint}</p>
             <div>
               {abandonedCart.length === 0 ? (
-                <p className="py-4 text-center text-xs text-muted">Henüz terk edilen sepet yok</p>
+                <p className="py-4 text-center text-xs text-muted">{d.noAbandoned}</p>
               ) : (
                 abandonedCart.map((item, i) => (
                   <div key={i} className="flex items-center justify-between border-b border-border/20 py-2 last:border-0">
                     <span className="text-xs text-foreground">{item.name}</span>
-                    <span className="text-xs text-muted">{item.count} kez</span>
+                    <span className="text-xs text-muted">{item.count} {d.timesSuffix}</span>
                   </div>
                 ))
               )}
             </div>
           </Card>
 
-          <Card title="Reklam Performansı">
+          <Card title={d.adPerformance}>
             <div className="space-y-3">
               <div className="flex items-center justify-between rounded-xl border border-border/60 bg-surface-alt/50 px-4 py-3">
-                <div><p className="text-[11px] text-muted">Harcama</p>
+                <div><p className="text-[11px] text-muted">{d.spend}</p>
                   <p className="font-display text-lg font-medium text-foreground">{tryFmt(totalAdSpend)}</p></div>
                 <Megaphone size={16} className="text-muted" strokeWidth={1.5} />
               </div>
               <div className="flex items-center justify-between rounded-xl border border-border/60 bg-surface-alt/50 px-4 py-3">
-                <div><p className="text-[11px] text-muted">Gelir</p>
+                <div><p className="text-[11px] text-muted">{d.revenue}</p>
                   <p className="font-display text-lg font-medium text-emerald-500">{tryFmt(totalAdRevenue)}</p></div>
                 <TrendingUp size={16} className="text-emerald-500" strokeWidth={1.5} />
               </div>
               <div className="flex items-center justify-between rounded-xl border border-accent/20 bg-accent/[0.05] px-4 py-3">
-                <div><p className="text-[11px] text-muted">ROAS</p>
+                <div><p className="text-[11px] text-muted">{d.roas}</p>
                   <p className="font-display text-lg font-medium text-accent">{roas}x</p>
-                  <p className="text-[11px] text-muted">₺1 → ₺{roas}</p></div>
+                  <p className="text-[11px] text-muted">{fmt(d.roasPerLira, { value: roas })}</p></div>
                 <Target size={16} className="text-accent" strokeWidth={1.5} />
               </div>
             </div>
           </Card>
 
-          <Card title="Trafik Kaynakları">
+          <Card title={d.trafficSources}>
             <div className="space-y-2">
               {trafficChartData.map((s, i) => {
                 const sharePct = trafficTotal > 0 ? (s.value / trafficTotal) * 100 : 0;
@@ -862,13 +885,13 @@ export default function SaticiDashboardPage() {
 
         {/* ── Platform Karşılaştırması ── */}
         <div className="mt-6">
-          <Card title="Platform Ortalamasıyla Karşılaştırma"
-            action={<span className="flex items-center gap-1 text-[12px] text-emerald-500"><Award size={12} /> Performansın</span>}>
+          <Card title={d.platformCompareTitle}
+            action={<span className="flex items-center gap-1 text-[12px] text-emerald-500"><Award size={12} /> {d.yourPerformance}</span>}>
             <div className="grid gap-4 sm:grid-cols-3">
               {[
-                { label: "Dönüşüm Oranı", yours: STATS.conversionRate, platform: STATS.platformAvgConversion, unit: "%", higherBetter: true },
-                { label: "Müşteri Puanı",  yours: STATS.rating,         platform: STATS.platformAvgRating,      unit: "",  higherBetter: true },
-                { label: "İade Oranı",     yours: STATS.returnRate,     platform: STATS.platformAvgReturnRate,  unit: "%", higherBetter: false },
+                { label: d.metricConversion, yours: STATS.conversionRate, platform: STATS.platformAvgConversion, unit: "%", higherBetter: true },
+                { label: d.metricRating,  yours: STATS.rating,         platform: STATS.platformAvgRating,      unit: "",  higherBetter: true },
+                { label: d.metricReturn,     yours: STATS.returnRate,     platform: STATS.platformAvgReturnRate,  unit: "%", higherBetter: false },
               ].map(item => {
                 const better = item.higherBetter ? item.yours > item.platform : item.yours < item.platform;
                 return (
@@ -879,16 +902,16 @@ export default function SaticiDashboardPage() {
                         <p className={`font-display text-xl font-medium ${better ? "text-emerald-500" : "text-amber-500"}`}>
                           {item.unit}{item.yours}
                         </p>
-                        <p className="text-[11px] text-muted">Senin değerin</p>
+                        <p className="text-[11px] text-muted">{d.yourValue}</p>
                       </div>
                       <div className="text-right">
                         <p className="font-display text-xl font-medium text-muted">{item.unit}{item.platform}</p>
-                        <p className="text-[11px] text-muted">Platform ort.</p>
+                        <p className="text-[11px] text-muted">{d.platformAvg}</p>
                       </div>
                     </div>
                     <div className={`mt-3 flex items-center gap-1 text-[12px] font-medium ${better ? "text-emerald-500" : "text-amber-500"}`}>
                       {better ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
-                      {better ? "Platformun üzerinde ✓" : "Geliştirme fırsatı"}
+                      {better ? d.abovePlatform : d.improveOpportunity}
                     </div>
                   </div>
                 );
@@ -899,19 +922,19 @@ export default function SaticiDashboardPage() {
 
         {/* ── Son Siparişler ── */}
         <div className="mt-6">
-          <Card title="Son Siparişler" action={<Link href="/satici/siparislerim" className="text-[12px] text-accent">Tümünü gör →</Link>}>
+          <Card title={d.recentOrdersTitle} action={<Link href="/satici/siparislerim" className="text-[12px] text-accent">{d.viewAllOrders}</Link>}>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px] text-left text-[13px]">
                 <thead>
                   <tr className="border-b border-border/60">
-                    {["No", "Ürün", "Müşteri", "Tutar", "Durum", "Tarih"].map(h => (
+                    {[d.thNo, d.thProduct, d.thCustomer, d.thAmount, d.thStatus, d.thDate].map((h) => (
                       <th key={h} className="pb-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
                   {dashboardData.recentOrders.length === 0 ? (
-                    <tr><td colSpan={6} className="py-8 text-center text-sm text-muted">Henüz sipariş yok</td></tr>
+                    <tr><td colSpan={6} className="py-8 text-center text-sm text-muted">{d.noOrdersYet}</td></tr>
                   ) : dashboardData.recentOrders.map(order => (
                     <tr key={order.id} className="transition-colors hover:bg-white/[0.02]">
                       <td className="py-3.5 pr-4 font-medium text-foreground">{order.id.slice(0, 8)}</td>
@@ -920,10 +943,10 @@ export default function SaticiDashboardPage() {
                       <td className="py-3.5 pr-4 text-foreground">{tryFmt(order.amount)}</td>
                       <td className="py-3.5 pr-4">
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${order.payment_status === "paid" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
-                          {order.payment_status === "paid" ? "Tamamlandı" : "Bekliyor"}
+                          {order.payment_status === "paid" ? d.statusCompleted : d.statusPending}
                         </span>
                       </td>
-                      <td className="py-3.5 text-muted">{new Date(order.created_at).toLocaleDateString("tr-TR")}</td>
+                      <td className="py-3.5 text-muted">{new Date(order.created_at).toLocaleDateString(dateLocale)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -935,10 +958,10 @@ export default function SaticiDashboardPage() {
         {/* ── Sipariş Özeti ── */}
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { label: "Bekliyor",   value: dashboardData.pendingOrders,   color: "text-amber-500",   bg: "bg-amber-500/10 border-amber-500/20",    icon: Clock },
-            { label: "Kargoda",    value: STATS.shippedOrders,   color: "text-blue-500",    bg: "bg-blue-500/10 border-blue-500/20",      icon: Truck },
-            { label: "Tamamlanan", value: dashboardData.recentOrders.filter(o => o.payment_status === "paid").length, color: "text-emerald-500", bg: "bg-emerald-500/10 border-emerald-500/20", icon: CheckCircle },
-            { label: "İptal",      value: STATS.cancelledOrders, color: "text-red-500",     bg: "bg-red-500/10 border-red-500/20",        icon: AlertCircle },
+            { label: d.summaryPending,   value: dashboardData.pendingOrders,   color: "text-amber-500",   bg: "bg-amber-500/10 border-amber-500/20",    icon: Clock },
+            { label: d.summaryShipped,    value: STATS.shippedOrders,   color: "text-blue-500",    bg: "bg-blue-500/10 border-blue-500/20",      icon: Truck },
+            { label: d.summaryCompleted, value: dashboardData.recentOrders.filter(o => o.payment_status === "paid").length, color: "text-emerald-500", bg: "bg-emerald-500/10 border-emerald-500/20", icon: CheckCircle },
+            { label: d.summaryCancelled,      value: STATS.cancelledOrders, color: "text-red-500",     bg: "bg-red-500/10 border-red-500/20",        icon: AlertCircle },
           ].map(item => (
             <div key={item.label} className={`flex items-center gap-4 rounded-2xl border px-5 py-4 ${item.bg}`}>
               <item.icon size={20} className={item.color} strokeWidth={1.75} />

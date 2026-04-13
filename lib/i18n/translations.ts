@@ -1,5 +1,6 @@
 import { deMessages } from "./locale-de";
 import { ruMessages } from "./locale-ru";
+import { siteLocales } from "./site-pages";
 
 export const SUPPORTED_LOCALES = ["tr", "en", "de", "ru"] as const;
 export type Locale = (typeof SUPPORTED_LOCALES)[number];
@@ -37,6 +38,25 @@ export const translations = {
       trust1: "El İşçiliği",
       trust2: "Özel Tasarım",
       trust3: "Güvenli Teslimat",
+    },
+    home: {
+      remauraSectionTitle: "Remaura Store",
+      featuredModels: "Öne Çıkan Modeller",
+      viewAll: "Tümünü Gör",
+      featuredModelsEmpty: "Henüz yayınlanmış model yok.",
+      noThumbnail: "Görsel yok",
+      step1Title: "Ürünleri Keşfet",
+      step1Desc: "Hazır koleksiyonları inceleyin ve size uygun tasarımı keşfedin.",
+      step2Title: "Özel Sipariş",
+      step2Desc: "Size özel bir mücevher tasarlayalım ve üretelim.",
+      step3Title: "Remaura AI",
+      step3Desc: "Yapay zeka destekli tasarım ve görsel üretim araçlarını kullanın.",
+      whyTitle: "Benzersiz Tasarımlar, Üstün Kalite",
+      whyDesc:
+        "Trend Mücevher olarak, her parçayı özenle tasarlıyor ve üretiyoruz. Geleneksel zanaat ile modern tasarımı bir araya getirerek, size özel mücevherler sunuyoruz. Özel siparişlerinizde hayalinizdeki tasarımı gerçeğe dönüştürüyoruz.",
+      aiSectionTitle: "Yapay Zeka ile Mücevher Tasarımı",
+      sellerSectionTitle: "Platformumuzda Satıcı Olun",
+      faqTitle: "Sıkça Sorulan Sorular",
     },
     valueProp: {
       title: "Benzersiz Tasarımlar, Üstün Kalite",
@@ -316,6 +336,7 @@ export const translations = {
       noAccount: "Hesabınız yok mu?",
       hasAccount: "Zaten hesabınız var mı?",
     },
+    site: siteLocales.tr,
     remauraNedir: {
       title: "REMAURA AI Nedir?",
       hero: "Tasarımdan satışa tek platform",
@@ -423,6 +444,25 @@ export const translations = {
       trust1: "Handcrafted",
       trust2: "Custom Design",
       trust3: "Secure Delivery",
+    },
+    home: {
+      remauraSectionTitle: "Remaura Store",
+      featuredModels: "Featured models",
+      viewAll: "View all",
+      featuredModelsEmpty: "No published models yet.",
+      noThumbnail: "No image",
+      step1Title: "Explore products",
+      step1Desc: "Browse our ready-made collections and find a design that suits you.",
+      step2Title: "Custom order",
+      step2Desc: "Let us design and craft a unique piece of jewelry for you.",
+      step3Title: "Remaura AI",
+      step3Desc: "Use AI-powered design and visual creation tools.",
+      whyTitle: "Unique designs, superior quality",
+      whyDesc:
+        "At Trend Mücevher, we carefully design and craft each piece. We bring together traditional craftsmanship and modern design to offer you exclusive jewelry. We turn your dream design into reality with custom orders.",
+      aiSectionTitle: "Jewelry design with artificial intelligence",
+      sellerSectionTitle: "Sell on our platform",
+      faqTitle: "Frequently asked questions",
     },
     valueProp: {
       title: "Unique Designs, Superior Quality",
@@ -700,6 +740,7 @@ export const translations = {
       noAccount: "Don't have an account?",
       hasAccount: "Already have an account?",
     },
+    site: siteLocales.en,
     remauraNedir: {
       title: "What is REMAURA AI?",
       hero: "One platform from design to sale",

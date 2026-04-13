@@ -13,7 +13,7 @@ export function SellerSection() {
             <div className="aspect-[4/3] rounded-2xl border border-border/70 bg-surface-alt shadow-[0_2px_8px_rgba(30,28,26,0.04)] dark:border-border dark:bg-foreground/[0.04] dark:shadow-none" />
           </div>
           <div className="order-1 lg:order-2">
-            <h2 className="section-title">{t.seller.title}</h2>
+            <h2 className="section-title">{t.home.sellerSectionTitle}</h2>
             <p className="section-subtitle max-w-lg">{t.seller.description}</p>
             <ul className="mt-8 space-y-4">
               {[t.seller.item1, t.seller.item2, t.seller.item3].map((item, i) => (
