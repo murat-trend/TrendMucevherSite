@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
+import {
+  buildProductTranslationsFromSource,
+  normalizeContentSourceLocale,
+  productTranslationsToDbPatch,
+} from '@/lib/modeller/product-translations-anthropic'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60 // büyük dosyalar için timeout
@@ -23,7 +28,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Slug eksik' }, { status: 400 })
   }
 
-  const payload: { slug: string; glbUrl?: string; stlUrl?: string } = { slug }
+  const nameField = typeof formData.get('name') === 'string' ? (formData.get('name') as string) : ''
+  const storyField = typeof formData.get('story') === 'string' ? (formData.get('story') as string) : ''
+  const sourceLang = normalizeContentSourceLocale(
+    typeof formData.get('sourceLang') === 'string' ? (formData.get('sourceLang') as string) : 'tr',
+  )
+
+  const payload: {
+    slug: string
+    glbUrl?: string
+    stlUrl?: string
+    translations?: Record<string, { name: string; story: string }> | null
+    translationPatch?: ReturnType<typeof productTranslationsToDbPatch> | null
+  } = { slug }
 
   if (glb) {
     const buffer = Buffer.from(await glb.arrayBuffer())
@@ -47,6 +64,18 @@ export async function POST(req: NextRequest) {
       ContentType: 'model/stl',
     }))
     payload.stlUrl = `${process.env.R2_PUBLIC_BASE_URL}/${key}`
+  }
+
+  if (nameField.trim()) {
+    try {
+      const built = await buildProductTranslationsFromSource(sourceLang, nameField, storyField)
+      if (built) {
+        payload.translations = built
+        payload.translationPatch = productTranslationsToDbPatch(built, sourceLang)
+      }
+    } catch (e) {
+      console.warn('[upload-model] translations skipped', e)
+    }
   }
 
   return NextResponse.json(payload)

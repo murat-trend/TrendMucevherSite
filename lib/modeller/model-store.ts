@@ -57,5 +57,7 @@ export type Stored3DModel = {
   thumbnailViewFileNames?: Partial<Record<ThumbnailViewKey, string | null>>;
   isPublished: boolean;
   publishTargets: PublishTargets;
+  /** Satıcı metin kaynağı: tr | en | de | ru */
+  contentSourceLocale?: string | null;
 };
 

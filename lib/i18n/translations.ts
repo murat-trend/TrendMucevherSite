@@ -552,6 +552,9 @@ export const translations = {
       downloadStl: "STL ZIP indir",
       convertFailed: "Dönüşüm başarısız",
       unexpectedError: "Beklenmeyen hata",
+      serverPayloadLimit:
+        "Dosya sunucu istek limitini aşıyor (~4 MB). Büyük GLB’ler otomatik olarak depoya yüklenir; sorun sürerse R2 CORS ayarlarını kontrol edin.",
+      directUploadFailed: "Dosya depoya yüklenemedi (CORS veya ağ). Cloudflare R2 bucket’ta PUT için site adresinize izin verildiğinden emin olun.",
     },
     auth: {
       login: "Giriş Yap",
@@ -1181,6 +1184,10 @@ export const translations = {
       downloadStl: "Download STL ZIP",
       convertFailed: "Conversion failed",
       unexpectedError: "Unexpected error",
+      serverPayloadLimit:
+        "File exceeds the hosting request limit (~4 MB). Large GLBs are uploaded to storage automatically; if this persists, check your R2 bucket CORS for PUT.",
+      directUploadFailed:
+        "Could not upload the file to storage (CORS or network). Ensure your Cloudflare R2 bucket allows PUT from your site origin.",
     },
     auth: {
       login: "Log in",

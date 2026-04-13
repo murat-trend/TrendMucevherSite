@@ -14,7 +14,8 @@ const ModellerStlPreview = dynamicImport(
   { ssr: false },
 )
 import { createClient } from '@/utils/supabase/client'
-import { type DbProduct3D, getLocalizedProduct, mapDbProductToUi } from '@/lib/modeller/supabase'
+import { pickLocalizedProductText } from '@/lib/modeller/product-translations-anthropic'
+import { type DbProduct3D, mapDbProductToUi } from '@/lib/modeller/supabase'
 
 function getDetailCopy(locale: string) {
   if (locale === 'en') {
@@ -119,7 +120,6 @@ export default function ModelDetayPage({
   const copy = getDetailCopy(locale)
   const { slug } = use(params)
   const [dbProduct, setDbProduct] = useState<ReturnType<typeof mapDbProductToUi> | null>(null)
-  const [dbProductRow, setDbProductRow] = useState<DbProduct3D | null>(null)
   const [sellerEmail, setSellerEmail] = useState<string | null>(null)
   const [storeName, setStoreName] = useState<string | null>(null)
   const [sellerAvatar, setSellerAvatar] = useState<string | null>(null)
@@ -148,7 +148,6 @@ export default function ModelDetayPage({
         console.error('[modeller:detail] supabase error', error)
         if (alive) {
           setDbProduct(null)
-          setDbProductRow(null)
           setSellerEmail(null)
           setStoreName(null)
         }
@@ -156,8 +155,6 @@ export default function ModelDetayPage({
       }
       if (!alive) return
       const row = data as (DbProduct3D & { seller_email?: string | null }) | null
-      const dbRow = data ? (data as DbProduct3D) : null
-      setDbProductRow(dbRow)
       setDbProduct(
         data
           ? ({
@@ -348,7 +345,17 @@ export default function ModelDetayPage({
       </main>
     )
   }
-  const { name: localizedName, story: localizedStory } = getLocalizedProduct(dbProductRow!, locale)
+  const model = dbProduct!
+  const { name: productName, story: productStory } = pickLocalizedProductText(locale, model.translations, {
+    name: model.name,
+    story: model.story,
+    name_en: model.name_en,
+    name_de: model.name_de,
+    name_ru: model.name_ru,
+    story_en: model.story_en,
+    story_de: model.story_de,
+    story_ru: model.story_ru,
+  })
   const localizedProduct = {
     ...product,
     tags: [jewelryTypeLabel(dynamic?.jewelryType ?? 'Pandant', locale)],
@@ -519,7 +526,7 @@ export default function ModelDetayPage({
                   <model-viewer
                     key={glbUrl}
                     src={glbUrl}
-                    alt={localizedName}
+                    alt={productName}
                     suppressHydrationWarning
                     auto-rotate
                     rotation-per-second="30deg"
@@ -874,7 +881,7 @@ export default function ModelDetayPage({
               marginBottom: '2rem',
             }}
           >
-            {localizedName}
+            {productName}
           </h1>
 
           {/* Fiyat */}
@@ -932,7 +939,7 @@ export default function ModelDetayPage({
                 whiteSpace: 'pre-line',
               }}
             >
-              {localizedStory ?? ''}
+              {productStory}
             </p>
           </div>
 
@@ -1098,7 +1105,7 @@ export default function ModelDetayPage({
               <button type="button" onClick={() => setShowMessageModal(false)} className="text-muted hover:text-foreground">✕</button>
             </div>
             {storeName && <p className="mb-3 text-xs text-muted">Alıcı: <span className="text-foreground font-medium">{storeName}</span></p>}
-            <p className="mb-3 text-xs text-muted">Ürün: <span className="text-foreground font-medium">{localizedName}</span></p>
+            <p className="mb-3 text-xs text-muted">Ürün: <span className="text-foreground font-medium">{productName}</span></p>
             {messageSent ? (
               <p className="text-center text-sm text-emerald-400 py-4">✓ Mesajınız gönderildi!</p>
             ) : (

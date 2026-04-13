@@ -6,11 +6,16 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { Plus, Package, X, Upload, LogOut } from "lucide-react";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
+import {
+  normalizeContentSourceLocale,
+  type ContentSourceLocale,
+} from "@/lib/modeller/product-translations-anthropic";
 
 type JewelryType = "Yüzük" | "Kolye" | "Bilezik" | "Küpe" | "Pandant" | "Broş";
 
 type ProductForm = {
   name: string;
+  contentSourceLang: ContentSourceLocale;
   jewelryType: JewelryType;
   price: string;
   width: string;
@@ -31,7 +36,7 @@ type ProductForm = {
 };
 
 const EMPTY_FORM: ProductForm = {
-  name: "", jewelryType: "Yüzük", price: "",
+  name: "", contentSourceLang: "tr", jewelryType: "Yüzük", price: "",
   width: "", height: "", depth: "", weight: "",
   story: "",
   glbFile: null, stlFile: null,
@@ -82,6 +87,7 @@ export default function SaticiUrunlerimPage() {
       personal_price: number;
       jewelry_type: string;
       story: string | null;
+      content_source_locale: string | null;
     }>
   >([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
@@ -106,7 +112,12 @@ export default function SaticiUrunlerimPage() {
   const [replyText, setReplyText] = useState<Record<string, string>>({});
   const [replySending, setReplySending] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<{ name: string; story: string; personal_price: number } | null>(null);
+  const [editForm, setEditForm] = useState<{
+    name: string;
+    story: string;
+    personal_price: number;
+    contentSourceLang: ContentSourceLocale;
+  } | null>(null);
   const [editSaving, setEditSaving] = useState(false);
 
   const handleLogout = useCallback(async () => {
@@ -266,7 +277,7 @@ export default function SaticiUrunlerimPage() {
     }
     const { data } = await supabase
       .from("products_3d")
-      .select("id, name, slug, thumbnail_url, is_published, personal_price, jewelry_type, story")
+      .select("id, name, slug, thumbnail_url, is_published, personal_price, jewelry_type, story, content_source_locale")
       .eq("seller_id", user.id)
       .order("created_at", { ascending: false });
     setProducts(
@@ -279,6 +290,7 @@ export default function SaticiUrunlerimPage() {
         personal_price: number;
         jewelry_type: string;
         story: string | null;
+        content_source_locale: string | null;
       }>,
     );
     setLoadingProducts(false);
@@ -302,33 +314,29 @@ export default function SaticiUrunlerimPage() {
     if (!editingId || !editForm || editSaving) return;
     setEditSaving(true);
     try {
-      let storyEn = "", storyDe = "", storyRu = "";
-      let nameEn = "", nameDe = "", nameRu = "";
+      let trPatch: {
+        translations: Record<string, { name: string; story: string }>;
+        content_source_locale: string;
+        name_en: string;
+        name_de: string;
+        name_ru: string;
+        story_en: string;
+        story_de: string;
+        story_ru: string;
+      } | null = null;
       try {
-        const [storyRes, nameRes] = await Promise.all([
-          fetch("/api/translate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: editForm.story, sourceLang: "tr" }),
+        const trRes = await fetch("/api/product-translations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            name: editForm.name,
+            story: editForm.story,
+            sourceLang: editForm.contentSourceLang,
           }),
-          fetch("/api/translate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: editForm.name, sourceLang: "tr" }),
-          }),
-        ]);
-        const storyData = await storyRes.json();
-        const nameData = await nameRes.json();
-        if (storyData.ok) {
-          storyEn = storyData.translations.en;
-          storyDe = storyData.translations.de;
-          storyRu = storyData.translations.ru;
-        }
-        if (nameData.ok) {
-          nameEn = nameData.translations.en;
-          nameDe = nameData.translations.de;
-          nameRu = nameData.translations.ru;
-        }
+        });
+        const trJson = (await trRes.json()) as { ok?: boolean; patch?: typeof trPatch };
+        if (trJson.ok && trJson.patch) trPatch = trJson.patch;
       } catch {
         /* çeviri opsiyonel */
       }
@@ -340,12 +348,8 @@ export default function SaticiUrunlerimPage() {
           name: editForm.name,
           story: editForm.story,
           personal_price: editForm.personal_price,
-          story_en: storyEn || null,
-          story_de: storyDe || null,
-          story_ru: storyRu || null,
-          name_en: nameEn || null,
-          name_de: nameDe || null,
-          name_ru: nameRu || null,
+          ...(trPatch ?? {}),
+          content_source_locale: editForm.contentSourceLang,
         })
         .eq("id", editingId);
 
@@ -386,6 +390,9 @@ export default function SaticiUrunlerimPage() {
 
       const fd = new FormData();
       fd.set("slug", slug);
+      fd.set("name", name);
+      fd.set("story", form.story.trim());
+      fd.set("sourceLang", form.contentSourceLang);
       if (form.glbFile) fd.set("glb", form.glbFile);
       if (form.stlFile) fd.set("stl", form.stlFile);
       const res = await fetch("/api/upload-model", { method: "POST", body: fd });
@@ -393,7 +400,20 @@ export default function SaticiUrunlerimPage() {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(body.error ?? tp.errUploadModel);
       }
-      const data = await res.json() as { glbUrl?: string; stlUrl?: string };
+      const data = await res.json() as {
+        glbUrl?: string;
+        stlUrl?: string;
+        translationPatch?: {
+          translations: Record<string, { name: string; story: string }>;
+          content_source_locale: string;
+          name_en: string;
+          name_de: string;
+          name_ru: string;
+          story_en: string;
+          story_de: string;
+          story_ru: string;
+        } | null;
+      };
       glbUrl = data.glbUrl ?? null;
       stlUrl = data.stlUrl ?? null;
 
@@ -426,36 +446,23 @@ export default function SaticiUrunlerimPage() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      // Hikaye ve ismi otomatik çevir
-      let storyEn = "", storyDe = "", storyRu = "";
-      let nameEn = "", nameDe = "", nameRu = "";
-      try {
-        const [storyRes, nameRes] = await Promise.all([
-          fetch("/api/translate", {
+      let trPatch = data.translationPatch ?? null;
+      if (!trPatch) {
+        try {
+          const trRes = await fetch("/api/product-translations", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: form.story.trim(), sourceLang: "tr" }),
-          }),
-          fetch("/api/translate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: name, sourceLang: "tr" }),
-          }),
-        ]);
-        const storyData = await storyRes.json();
-        const nameData = await nameRes.json();
-        if (storyData.ok) {
-          storyEn = storyData.translations.en;
-          storyDe = storyData.translations.de;
-          storyRu = storyData.translations.ru;
+            credentials: "include",
+            body: JSON.stringify({ name, story: form.story.trim(), sourceLang: form.contentSourceLang }),
+          });
+          const trJson = (await trRes.json()) as {
+            ok?: boolean;
+            patch?: typeof trPatch;
+          };
+          if (trJson.ok && trJson.patch) trPatch = trJson.patch;
+        } catch {
+          /* çeviri opsiyonel */
         }
-        if (nameData.ok) {
-          nameEn = nameData.translations.en;
-          nameDe = nameData.translations.de;
-          nameRu = nameData.translations.ru;
-        }
-      } catch {
-        /* çeviri başarısız olsa da ürün kaydedilsin */
       }
 
       const { error: dbError } = await supabase.from("products_3d").insert({
@@ -463,12 +470,16 @@ export default function SaticiUrunlerimPage() {
         name,
         slug,
         story: form.story.trim(),
-        story_en: storyEn || null,
-        story_de: storyDe || null,
-        story_ru: storyRu || null,
-        name_en: nameEn || null,
-        name_de: nameDe || null,
-        name_ru: nameRu || null,
+        ...(trPatch ?? {
+          story_en: null,
+          story_de: null,
+          story_ru: null,
+          name_en: null,
+          name_de: null,
+          name_ru: null,
+          translations: null,
+        }),
+        content_source_locale: form.contentSourceLang,
         jewelry_type: form.jewelryType,
         personal_price: form.licensePersonal ? Number(form.licensePersonalPrice) || price : price,
         commercial_price: form.licenseCommercial ? Number(form.licenseCommercialPrice) || null : null,
@@ -650,6 +661,7 @@ export default function SaticiUrunlerimPage() {
                       name: p.name,
                       story: p.story ?? "",
                       personal_price: p.personal_price ?? 0,
+                      contentSourceLang: normalizeContentSourceLocale(p.content_source_locale),
                     });
                   }}
                   className="mt-2 inline-flex items-center gap-1 rounded-md border border-amber-400/60 bg-amber-400 px-2 py-1 text-[11px] font-medium text-neutral-900 hover:bg-amber-300 hover:border-amber-300 transition-colors"
@@ -719,6 +731,22 @@ export default function SaticiUrunlerimPage() {
                 <Field label={tp.fieldStory} span2>
                   <textarea rows={3} className={inputCls} placeholder={tp.storyPlaceholder}
                     value={form.story} onChange={(e) => set("story", e.target.value)} />
+                </Field>
+
+                <Field label={tp.fieldContentLanguage} span2>
+                  <p className="mb-2 text-[11px] leading-relaxed text-muted">{tp.contentLanguageHint}</p>
+                  <select
+                    className={inputCls}
+                    value={form.contentSourceLang}
+                    onChange={(e) =>
+                      set("contentSourceLang", normalizeContentSourceLocale(e.target.value))
+                    }
+                  >
+                    <option value="tr">{tp.contentLangTr}</option>
+                    <option value="en">{tp.contentLangEn}</option>
+                    <option value="de">{tp.contentLangDe}</option>
+                    <option value="ru">{tp.contentLangRu}</option>
+                  </select>
                 </Field>
 
                 <Field label={tp.fieldGlb}>
@@ -874,6 +902,24 @@ export default function SaticiUrunlerimPage() {
               <label className="block">
                 <span className="text-xs text-muted mb-1 block">{tp.fieldStoryLabel}</span>
                 <textarea value={editForm.story} onChange={(e) => setEditForm({ ...editForm, story: e.target.value })} rows={4} className="w-full rounded-lg border border-border/40 bg-black/20 px-3 py-2 text-sm text-foreground outline-none resize-none" />
+              </label>
+              <label className="block">
+                <span className="text-xs text-muted mb-1 block">{tp.fieldContentLanguage}</span>
+                <select
+                  className="w-full rounded-lg border border-border/40 bg-black/20 px-3 py-2 text-sm text-foreground outline-none"
+                  value={editForm.contentSourceLang}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      contentSourceLang: normalizeContentSourceLocale(e.target.value),
+                    })
+                  }
+                >
+                  <option value="tr">{tp.contentLangTr}</option>
+                  <option value="en">{tp.contentLangEn}</option>
+                  <option value="de">{tp.contentLangDe}</option>
+                  <option value="ru">{tp.contentLangRu}</option>
+                </select>
               </label>
               <label className="block">
                 <span className="text-xs text-muted mb-1 block">{tp.fieldPrice}</span>

@@ -28,6 +28,7 @@ import {
   type ThumbnailViewKey,
 } from "@/lib/modeller/model-store";
 import { createClient } from "@/utils/supabase/client";
+import { normalizeContentSourceLocale, type ContentSourceLocale } from "@/lib/modeller/product-translations-anthropic";
 import { type DbProduct3D, mapDbProductToUi } from "@/lib/modeller/supabase";
 import { MODERATION_STATUS_LABEL_TR, type ProductModerationStatus } from "./product-moderation-detail-data";
 
@@ -200,6 +201,7 @@ function toModelRow(row: DbProduct3D): Model3DRow {
       homeFeatured: ui.showOnHome,
       urunler: false,
     },
+    contentSourceLocale: ui.contentSourceLocale ?? "tr",
   };
 }
 
@@ -426,6 +428,7 @@ export function ProductsModerationPage() {
       homeFeatured: true,
       urunler: false,
     },
+    contentSourceLang: "tr" as ContentSourceLocale,
   });
 
   const scrollPageToTop = useCallback(() => {
@@ -666,6 +669,7 @@ export function ProductsModerationPage() {
         homeFeatured: true,
         urunler: false,
       },
+      contentSourceLang: "tr",
     });
   }, []);
 
@@ -704,6 +708,7 @@ export function ProductsModerationPage() {
         homeFeatured: true,
         urunler: false,
       },
+      contentSourceLang: normalizeContentSourceLocale(row.contentSourceLocale),
     });
     setIsModelModalOpen(true);
   }, []);
@@ -782,9 +787,24 @@ export function ProductsModerationPage() {
       return;
     }
 
+    type TranslationPatch = {
+      translations: Record<string, { name: string; story: string }>;
+      content_source_locale: string;
+      name_en: string;
+      name_de: string;
+      name_ru: string;
+      story_en: string;
+      story_de: string;
+      story_ru: string;
+    };
+    let translationPatch: TranslationPatch | null = null;
+
     if (modelForm.glbFile || modelForm.stlFile) {
       const uploadFd = new FormData();
       uploadFd.set("slug", slug);
+      uploadFd.set("name", name);
+      uploadFd.set("story", modelForm.story.trim());
+      uploadFd.set("sourceLang", modelForm.contentSourceLang);
       if (modelForm.glbFile) uploadFd.set("glb", modelForm.glbFile);
       if (modelForm.stlFile) uploadFd.set("stl", modelForm.stlFile);
       const uploadRes = await fetch("/api/upload-model", { method: "POST", body: uploadFd });
@@ -793,9 +813,32 @@ export function ProductsModerationPage() {
         window.alert(errJson.error ?? "Model dosyası yüklenemedi. Lütfen tekrar deneyin.");
         return;
       }
-      const uploadData = (await uploadRes.json()) as { glbUrl?: string | null; stlUrl?: string | null };
+      const uploadData = (await uploadRes.json()) as {
+        glbUrl?: string | null;
+        stlUrl?: string | null;
+        translationPatch?: TranslationPatch | null;
+      };
       if (uploadData.glbUrl) glbUrl = uploadData.glbUrl;
       if (uploadData.stlUrl) stlUrl = uploadData.stlUrl;
+      if (uploadData.translationPatch) translationPatch = uploadData.translationPatch;
+    }
+
+    if (!translationPatch) {
+      try {
+        const trRes = await fetch("/api/product-translations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name,
+            story: modelForm.story.trim(),
+            sourceLang: modelForm.contentSourceLang,
+          }),
+        });
+        const trJson = (await trRes.json()) as { ok?: boolean; patch?: TranslationPatch };
+        if (trJson.ok && trJson.patch) translationPatch = trJson.patch;
+      } catch {
+        /* çeviri atlanır */
+      }
     }
 
     for (const view of THUMBNAIL_VIEWS) {
@@ -855,6 +898,7 @@ export function ProductsModerationPage() {
       },
       isPublished: modelForm.publish,
       publishTargets: modelForm.publishTargets,
+      contentSourceLocale: modelForm.contentSourceLang,
     };
     const dbPayload = {
       sku: modelRowPayload.sku,
@@ -877,6 +921,8 @@ export function ProductsModerationPage() {
       is_published: modelRowPayload.isPublished,
       show_on_home: modelRowPayload.publishTargets.homeFeatured,
       show_on_modeller: modelRowPayload.publishTargets.modeller,
+      ...(translationPatch ?? {}),
+      content_source_locale: modelForm.contentSourceLang,
     };
     const supabase = createClient();
     if (editingRow) {
@@ -1586,6 +1632,30 @@ export function ProductsModerationPage() {
                   className="w-full resize-y rounded-xl border border-white/[0.08] bg-[#07080a] px-3 py-2.5 text-sm text-zinc-200 outline-none ring-[#c69575]/30 focus:border-[#c69575]/30 focus:ring-2"
                   placeholder="Model hikayesini yazın..."
                 />
+              </label>
+
+              <label className="sm:col-span-2">
+                <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+                  Metin dili (çeviri kaynağı)
+                </span>
+                <p className="mb-2 text-[11px] leading-relaxed text-zinc-500">
+                  Ad ve hikayeyi hangi dilde yazdığınızı seçin; vitrin dilleri otomatik doldurulur.
+                </p>
+                <select
+                  value={modelForm.contentSourceLang}
+                  onChange={(e) =>
+                    setModelForm((p) => ({
+                      ...p,
+                      contentSourceLang: normalizeContentSourceLocale(e.target.value),
+                    }))
+                  }
+                  className="w-full cursor-pointer rounded-xl border border-white/[0.08] bg-[#07080a] px-3 py-2.5 text-sm text-zinc-200 outline-none ring-[#c69575]/30 focus:border-[#c69575]/30 focus:ring-2"
+                >
+                  <option value="tr">Türkçe</option>
+                  <option value="en">English</option>
+                  <option value="de">Deutsch</option>
+                  <option value="ru">Русский</option>
+                </select>
               </label>
 
               <label>

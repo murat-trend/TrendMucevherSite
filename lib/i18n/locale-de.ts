@@ -546,6 +546,10 @@ export const deMessages = {
     downloadStl: "STL-ZIP herunterladen",
     convertFailed: "Konvertierung fehlgeschlagen",
     unexpectedError: "Unerwarteter Fehler",
+    serverPayloadLimit:
+      "Die Datei überschreitet das Hosting-Request-Limit (~4 MB). Große GLBs werden automatisch in den Speicher geladen; bei anhaltenden Problemen R2-CORS für PUT prüfen.",
+    directUploadFailed:
+      "Upload in den Speicher fehlgeschlagen (CORS oder Netzwerk). R2-Bucket: PUT von Ihrer Website-Origin erlauben.",
   },
   site: siteLocales.de,
   auth: {

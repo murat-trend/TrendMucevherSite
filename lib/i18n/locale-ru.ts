@@ -546,6 +546,10 @@ export const ruMessages = {
     downloadStl: "Скачать STL ZIP",
     convertFailed: "Конвертация не удалась",
     unexpectedError: "Неожиданная ошибка",
+    serverPayloadLimit:
+      "Файл превышает лимит запроса хостинга (~4 МБ). Большие GLB загружаются в хранилище автоматически; при ошибке проверьте CORS R2 для PUT.",
+    directUploadFailed:
+      "Не удалось загрузить файл в хранилище (CORS или сеть). В bucket R2 разрешите PUT с домена сайта.",
   },
   site: siteLocales.ru,
   auth: {

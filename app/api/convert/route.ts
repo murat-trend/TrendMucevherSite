@@ -2,7 +2,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import JSZip from "jszip";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
 import type { Document } from "@gltf-transform/core";
 import { NodeIO } from "@gltf-transform/core";
@@ -10,6 +10,7 @@ import { KHRDracoMeshCompression } from "@gltf-transform/extensions";
 import { draco } from "@gltf-transform/functions";
 import draco3d from "draco3dgltf";
 import { debitCredits } from "@/lib/billing/store";
+import { getConvertR2Client } from "@/lib/modeller/r2-convert-storage";
 import { requireRemauraUserAndCredits } from "@/lib/remaura/api-billing-guard";
 
 export const runtime = "nodejs";
@@ -32,25 +33,8 @@ function safeBaseName(name: string): string {
   return stem.toLowerCase().replace(/[^a-z0-9-_]+/g, "-").replace(/^-+|-+$/g, "") || "model";
 }
 
-function getR2Client(): { s3: S3Client; bucket: string; publicBase: string } {
-  const endpoint = process.env.R2_ENDPOINT?.trim();
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID?.trim();
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY?.trim();
-  const bucket = process.env.R2_BUCKET_NAME?.trim();
-  const publicBase = process.env.R2_PUBLIC_BASE_URL?.replace(/\/$/, "").trim();
-  if (!endpoint || !accessKeyId || !secretAccessKey || !bucket || !publicBase) {
-    throw new Error("R2 yapılandırması eksik (R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_PUBLIC_BASE_URL).");
-  }
-  const s3 = new S3Client({
-    region: "auto",
-    endpoint,
-    credentials: { accessKeyId, secretAccessKey },
-  });
-  return { s3, bucket, publicBase };
-}
-
 async function uploadFromTmpFile(localPath: string, key: string, contentType: string): Promise<{ url: string; size: number }> {
-  const { s3, bucket, publicBase } = getR2Client();
+  const { s3, bucket, publicBase } = getConvertR2Client();
   const body = await readFile(localPath);
   await s3.send(
     new PutObjectCommand({
@@ -203,29 +187,39 @@ async function convertGlbToStlBuffer(input: Buffer): Promise<Buffer> {
   return buildBinaryStlFromDocument(document);
 }
 
-export async function POST(req: NextRequest) {
+async function s3ObjectToBuffer(body: unknown): Promise<Buffer> {
+  if (body instanceof Uint8Array) return Buffer.from(body);
+  if (Buffer.isBuffer(body)) return body;
+  const stream = body as {
+    transformToByteArray?: () => Promise<Uint8Array>;
+  } & AsyncIterable<Uint8Array>;
+  if (typeof stream.transformToByteArray === "function") {
+    return Buffer.from(await stream.transformToByteArray());
+  }
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+async function runConvertPipeline(args: {
+  input: Buffer;
+  originalFileName: string;
+  userId: string;
+  doDraco: boolean;
+  doStl: boolean;
+}): Promise<NextResponse> {
+  const { input, originalFileName, userId, doDraco, doStl } = args;
+  if (!doDraco && !doStl) {
+    return NextResponse.json({ error: "En az bir donusum secmelisiniz." }, { status: 400 });
+  }
+
   let workDir: string | null = null;
   try {
-    const form = await req.formData();
-    const billing = await requireRemauraUserAndCredits(String(form.get("userId") ?? ""));
-    if (!billing.ok) return billing.response;
-    const { userId } = billing;
-
-    const file = form.get("file");
-    const doDraco = String(form.get("draco") ?? "false") === "true";
-    const doStl = String(form.get("stl") ?? "false") === "true";
-
-    if (!(file instanceof File)) {
-      return NextResponse.json({ error: "GLB dosyasi gerekli." }, { status: 400 });
-    }
-    if (!doDraco && !doStl) {
-      return NextResponse.json({ error: "En az bir donusum secmelisiniz." }, { status: 400 });
-    }
-
-    const input = Buffer.from(await file.arrayBuffer());
     const originalSize = input.byteLength;
     const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    const base = safeBaseName(file.name);
+    const base = safeBaseName(originalFileName);
 
     workDir = path.join(tmpdir(), `convert-${nonce}`);
     await mkdir(workDir, { recursive: true });
@@ -274,5 +268,83 @@ export async function POST(req: NextRequest) {
     if (workDir) {
       await rm(workDir, { recursive: true, force: true }).catch(() => {});
     }
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const contentType = req.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    let body: { userId?: string; key?: string; draco?: boolean; stl?: boolean };
+    try {
+      body = (await req.json()) as typeof body;
+    } catch {
+      return NextResponse.json({ error: "Geçersiz JSON." }, { status: 400 });
+    }
+
+    const billing = await requireRemauraUserAndCredits(String(body.userId ?? ""));
+    if (!billing.ok) return billing.response;
+    const { userId } = billing;
+
+    const key = String(body.key ?? "").trim();
+    const expectedPrefix = `convert/uploads/${userId}/`;
+    if (!key.startsWith(expectedPrefix)) {
+      return NextResponse.json({ error: "Geçersiz dosya yolu." }, { status: 400 });
+    }
+
+    const { s3, bucket } = getConvertR2Client();
+    let input: Buffer;
+    try {
+      const out = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      if (!out.Body) {
+        await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })).catch(() => {});
+        return NextResponse.json({ error: "Dosya bulunamadı veya boş." }, { status: 400 });
+      }
+      input = await s3ObjectToBuffer(out.Body);
+    } catch (e) {
+      console.error("[convert] GetObject", e);
+      await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })).catch(() => {});
+      return NextResponse.json({ error: "Geçici dosya okunamadı." }, { status: 502 });
+    }
+
+    const nameFromKey = key.split("/").pop() ?? "model.glb";
+    try {
+      return await runConvertPipeline({
+        input,
+        originalFileName: nameFromKey,
+        userId,
+        doDraco: Boolean(body.draco),
+        doStl: Boolean(body.stl),
+      });
+    } finally {
+      await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })).catch(() => {});
+    }
+  }
+
+  try {
+    const form = await req.formData();
+    const billing = await requireRemauraUserAndCredits(String(form.get("userId") ?? ""));
+    if (!billing.ok) return billing.response;
+    const { userId } = billing;
+
+    const file = form.get("file");
+    const doDraco = String(form.get("draco") ?? "false") === "true";
+    const doStl = String(form.get("stl") ?? "false") === "true";
+
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "GLB dosyasi gerekli." }, { status: 400 });
+    }
+
+    const input = Buffer.from(await file.arrayBuffer());
+    return runConvertPipeline({
+      input,
+      originalFileName: file.name,
+      userId,
+      doDraco,
+      doStl,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Donusum hatasi";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -18,6 +18,40 @@ type ConvertResponse = {
   };
 };
 
+/** Vercel ~4.5MB istek limiti; multipart ek yükü için güvenli eşik */
+const CONVERT_DIRECT_UPLOAD_THRESHOLD_BYTES = 3_800_000;
+
+function shouldUseConvertDirectUpload(fileSize: number): boolean {
+  if (typeof window === "undefined") return false;
+  const h = window.location.hostname;
+  if (h === "localhost" || h === "127.0.0.1") return false;
+  return fileSize > CONVERT_DIRECT_UPLOAD_THRESHOLD_BYTES;
+}
+
+async function readConvertApiJson<T>(
+  res: Response,
+  copy: { convertFailed: string; unexpectedError: string; serverPayloadLimit: string },
+): Promise<{ ok: true; data: T } | { ok: false; message: string }> {
+  const ct = res.headers.get("content-type") ?? "";
+  if (ct.includes("application/json")) {
+    try {
+      const data = (await res.json()) as T & { error?: string };
+      if (!res.ok) {
+        return { ok: false, message: data.error || copy.convertFailed };
+      }
+      return { ok: true, data: data as T };
+    } catch {
+      return { ok: false, message: copy.unexpectedError };
+    }
+  }
+  const text = await res.text();
+  const snippet = text.slice(0, 240).trim();
+  if (res.status === 413 || /entity too large|payload too large|FUNCTION_PAYLOAD/i.test(snippet)) {
+    return { ok: false, message: copy.serverPayloadLimit };
+  }
+  return { ok: false, message: snippet || copy.convertFailed };
+}
+
 function bytesToMb(size: number): string {
   return `${(size / (1024 * 1024)).toFixed(2)} MB`;
 }
@@ -73,16 +107,61 @@ function ConvertPageInner() {
     setError(null);
     setResult(null);
     try {
-      const form = new FormData();
-      form.set("file", file);
-      form.set("draco", String(draco));
-      form.set("stl", String(stlZip));
-      form.set("userId", user.id);
-      const res = await fetch("/api/convert", { method: "POST", body: form });
-      if (await remauraHandleBillingApiResponse(res, billingUi)) return;
-      const data = (await res.json()) as ConvertResponse & { error?: string };
-      if (!res.ok) throw new Error(data.error || c.convertFailed);
-      setResult(data);
+      const useDirect = shouldUseConvertDirectUpload(file.size);
+
+      if (useDirect) {
+        const pres = await fetch("/api/convert/presign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            userId: user.id,
+            fileName: file.name,
+            fileSize: file.size,
+          }),
+        });
+        if (await remauraHandleBillingApiResponse(pres, billingUi)) return;
+
+        const presParsed = await readConvertApiJson<{ uploadUrl: string; key: string; error?: string }>(pres, c);
+        if (!presParsed.ok) throw new Error(presParsed.message);
+
+        const putRes = await fetch(presParsed.data.uploadUrl, {
+          method: "PUT",
+          body: file,
+          headers: { "Content-Type": "model/gltf-binary" },
+        });
+        if (!putRes.ok) {
+          const putSnippet = (await putRes.text().catch(() => "")).slice(0, 160).trim();
+          throw new Error(putSnippet || c.directUploadFailed);
+        }
+
+        const res = await fetch("/api/convert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            userId: user.id,
+            key: presParsed.data.key,
+            draco,
+            stl: stlZip,
+          }),
+        });
+        if (await remauraHandleBillingApiResponse(res, billingUi)) return;
+        const out = await readConvertApiJson<ConvertResponse>(res, c);
+        if (!out.ok) throw new Error(out.message);
+        setResult(out.data);
+      } else {
+        const form = new FormData();
+        form.set("file", file);
+        form.set("draco", String(draco));
+        form.set("stl", String(stlZip));
+        form.set("userId", user.id);
+        const res = await fetch("/api/convert", { method: "POST", body: form, credentials: "include" });
+        if (await remauraHandleBillingApiResponse(res, billingUi)) return;
+        const out = await readConvertApiJson<ConvertResponse>(res, c);
+        if (!out.ok) throw new Error(out.message);
+        setResult(out.data);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : c.unexpectedError);
     } finally {
