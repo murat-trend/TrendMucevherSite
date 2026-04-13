@@ -4,6 +4,13 @@ export type DbProduct3D = {
   name: string;
   slug: string;
   story: string | null;
+  translations?: Record<string, { name?: string; story?: string }> | null;
+  name_en: string | null;
+  name_de: string | null;
+  name_ru: string | null;
+  story_en: string | null;
+  story_de: string | null;
+  story_ru: string | null;
   jewelry_type: string | null;
   personal_price: number | null;
   commercial_price: number | null;
@@ -58,6 +65,14 @@ function normalizeJewelryType(value: string): Ui3DModel["jewelryType"] {
   return "Yüzük";
 }
 
+export function getLocalizedProduct(product: DbProduct3D, locale: string) {
+  const t = product.translations?.[locale as "en" | "de" | "ru"];
+  return {
+    name: locale !== "tr" && t?.name ? t.name : product.name,
+    story: locale !== "tr" && t?.story ? t.story : product.story,
+  };
+}
+
 export function mapDbProductToUi(row: DbProduct3D): Ui3DModel {
   const rawDimensions = (row.dimensions ?? {}) as Record<string, unknown>;
   const width = Number(rawDimensions.width ?? 0);
@@ -79,12 +94,12 @@ export function mapDbProductToUi(row: DbProduct3D): Ui3DModel {
     name: row.name,
     slug: row.slug,
     story: row.story ?? "",
-    story_en: (row as any).story_en ?? null,
-    story_de: (row as any).story_de ?? null,
-    story_ru: (row as any).story_ru ?? null,
-    name_en: (row as any).name_en ?? null,
-    name_de: (row as any).name_de ?? null,
-    name_ru: (row as any).name_ru ?? null,
+    story_en: row.story_en ?? null,
+    story_de: row.story_de ?? null,
+    story_ru: row.story_ru ?? null,
+    name_en: row.name_en ?? null,
+    name_de: row.name_de ?? null,
+    name_ru: row.name_ru ?? null,
     jewelryType: normalizeJewelryType(row.jewelry_type ?? ""),
     price: Number(row.personal_price ?? 0),
     licensePersonalPrice: row.personal_price ?? null,

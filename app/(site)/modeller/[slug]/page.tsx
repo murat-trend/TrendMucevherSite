@@ -14,81 +14,7 @@ const ModellerStlPreview = dynamicImport(
   { ssr: false },
 )
 import { createClient } from '@/utils/supabase/client'
-import { type DbProduct3D, mapDbProductToUi } from '@/lib/modeller/supabase'
-
-const mockProducts: Record<
-  string,
-  {
-    name: string
-    story: string
-    price: number
-    tags: string[]
-    dimensions: { width: number; height: number; depth: number }
-    weight: number
-    glbFile: string
-  }
-> = {
-  'melek-yuzuk': {
-    name: 'Melek Yüzüğü',
-    story:
-      'Bizans döneminin mistik sanatından ilham alınan bu yüzük, koruyucu melek figürünü derin kabartma tekniğiyle işliyor. Her kanat tüyü, her kumaş kıvrımı ustalıkla modellenmiş. Takıyı takan kişiye güç ve koruma getireceğine inanılan bu tasarım, hem estetik hem de sembolik bir anlam taşıyor.',
-    price: 1200,
-    tags: ['Yüzük', 'Gümüş', 'Figüratif'],
-    dimensions: { width: 22, height: 28, depth: 12 },
-    weight: 8,
-    glbFile: 'remaura-deneme',
-  },
-  'kurt-yuzuk': {
-    name: 'Kurt Başı Yüzük',
-    story:
-      'Bozkurt efsanesinden doğan bu tasarım, Türk mitolojisinin en güçlü sembolünü modern kuyumculukla buluşturuyor. Derin kabartma tekniğiyle işlenen kurt başı, her detayıyla etkileyici bir görünüm sunar.',
-    price: 950,
-    tags: ['Yüzük', 'Altın', 'Hayvan'],
-    dimensions: { width: 24, height: 26, depth: 14 },
-    weight: 10,
-    glbFile: 'remaura-deneme',
-  },
-  'ejderha-kolye': {
-    name: 'Ejderha Kolye',
-    story:
-      'Doğu mitolojisinin en güçlü yaratığından ilham alınan bu kolye, üç boyutlu ejderha figürünü benzersiz bir ustalıkla işliyor.',
-    price: 1500,
-    tags: ['Kolye', 'Gümüş', 'Mitoloji'],
-    dimensions: { width: 35, height: 40, depth: 8 },
-    weight: 12,
-    glbFile: 'remaura-deneme',
-  },
-  'aslan-yuzuk': {
-    name: 'Aslan Yüzüğü',
-    story:
-      'Güç ve cesaretin simgesi aslan, bu yüzükte detaylı kabartma tekniğiyle hayat buluyor.',
-    price: 1100,
-    tags: ['Yüzük', 'Altın', 'Hayvan'],
-    dimensions: { width: 25, height: 28, depth: 13 },
-    weight: 9,
-    glbFile: 'remaura-deneme',
-  },
-  'melek-kolye': {
-    name: 'Koruyucu Melek Kolye',
-    story:
-      'Azizlerin ruhunu koruyan kanatlar — gotik detaylarla işlenmiş bu kolye, ruhani bir güzellik taşıyor.',
-    price: 1350,
-    tags: ['Kolye', 'Gümüş', 'Figüratif'],
-    dimensions: { width: 30, height: 38, depth: 7 },
-    weight: 11,
-    glbFile: 'remaura-deneme',
-  },
-  'kafatasi-yuzuk': {
-    name: 'Vanitas Yüzük',
-    story:
-      'Rönesans döneminin ölümlülük sembolizmi, modern kuyumculukla buluşuyor. Derin felsefi anlam taşıyan bu tasarım.',
-    price: 880,
-    tags: ['Yüzük', 'Okside', 'Sembolik'],
-    dimensions: { width: 20, height: 22, depth: 11 },
-    weight: 7,
-    glbFile: 'remaura-deneme',
-  },
-}
+import { type DbProduct3D, getLocalizedProduct, mapDbProductToUi } from '@/lib/modeller/supabase'
 
 function getDetailCopy(locale: string) {
   if (locale === 'en') {
@@ -184,137 +110,6 @@ function getDetailCopy(locale: string) {
   }
 }
 
-function localizeDetailProduct(
-  slug: string,
-  product: {
-    name: string
-    story: string
-    tags: string[]
-    price: number
-    dimensions: { width: number; height: number; depth: number }
-    weight: number
-    glbFile: string
-  },
-  locale: string,
-) {
-  const map: Record<string, Record<string, { name: string; story: string; tags: string[] }>> = {
-    en: {
-      'melek-yuzuk': {
-        name: 'Angel Ring',
-        story:
-          'Inspired by Byzantine mysticism, this ring features guardian angel relief details with layered wing textures and symbolic depth.',
-        tags: ['Ring', 'Silver', 'Figurative'],
-      },
-      'kurt-yuzuk': {
-        name: 'Wolf Head Ring',
-        story:
-          'A bold wolf-head signet inspired by Turkic mythology, shaped with deep relief carving and strong masculine character.',
-        tags: ['Ring', 'Gold', 'Animal'],
-      },
-      'ejderha-kolye': {
-        name: 'Dragon Pendant',
-        story:
-          'An eastern-mythology dragon pendant with sculptural depth and expressive three-dimensional detailing.',
-        tags: ['Pendant', 'Silver', 'Mythology'],
-      },
-      'aslan-yuzuk': {
-        name: 'Lion Ring',
-        story:
-          'A lion signet symbolizing strength and courage, designed with high-relief facial and mane textures.',
-        tags: ['Ring', 'Gold', 'Animal'],
-      },
-      'melek-kolye': {
-        name: 'Guardian Angel Pendant',
-        story: 'A gothic angel-wing pendant carrying spiritual symbolism with refined relief craftsmanship.',
-        tags: ['Pendant', 'Silver', 'Figurative'],
-      },
-      'kafatasi-yuzuk': {
-        name: 'Vanitas Ring',
-        story:
-          'A Vanitas-inspired ring blending mortality symbolism with modern jewelry interpretation and sculptural detail.',
-        tags: ['Ring', 'Oxidized', 'Symbolic'],
-      },
-    },
-    de: {
-      'melek-yuzuk': {
-        name: 'Engelsring',
-        story:
-          'Ein von byzantinischer Mystik inspirierter Ring mit Schutzengel-Relief, fein ausgearbeiteten Flügelstrukturen und symbolischer Tiefe.',
-        tags: ['Ring', 'Silber', 'Figurativ'],
-      },
-      'kurt-yuzuk': {
-        name: 'Wolfskopf-Ring',
-        story:
-          'Ein markanter Ring im Stil der Wolfslegende, mit tiefem Relief und kraftvollem Charakter.',
-        tags: ['Ring', 'Gold', 'Tier'],
-      },
-      'ejderha-kolye': {
-        name: 'Drachen-Anhänger',
-        story:
-          'Ein Anhänger mit Drachenfigur aus der östlichen Mythologie, modelliert mit plastischer Tiefe.',
-        tags: ['Anhänger', 'Silber', 'Mythologie'],
-      },
-      'aslan-yuzuk': {
-        name: 'Löwenring',
-        story:
-          'Ein Löwenring als Symbol für Stärke und Mut, mit detailliertem Relief in Mähne und Gesicht.',
-        tags: ['Ring', 'Gold', 'Tier'],
-      },
-      'melek-kolye': {
-        name: 'Schutzengel-Anhänger',
-        story: 'Ein gotischer Anhänger mit Engelsflügeln und spiritueller Bedeutung in feiner Reliefarbeit.',
-        tags: ['Anhänger', 'Silber', 'Figurativ'],
-      },
-      'kafatasi-yuzuk': {
-        name: 'Vanitas-Ring',
-        story:
-          'Ein Vanitas-inspirierter Ring, der Symbolik der Vergänglichkeit mit modernem Schmuckdesign verbindet.',
-        tags: ['Ring', 'Oxidiert', 'Symbolisch'],
-      },
-    },
-    ru: {
-      'melek-yuzuk': {
-        name: 'Кольцо Ангела',
-        story:
-          'Кольцо в духе византийской мистики с рельефом ангела-хранителя, крыльями и выразительной символикой.',
-        tags: ['Кольцо', 'Серебро', 'Фигуратив'],
-      },
-      'kurt-yuzuk': {
-        name: 'Кольцо Голова Волка',
-        story:
-          'Массивное кольцо по мотивам легенды о волке, с глубоким рельефом и сильным характером формы.',
-        tags: ['Кольцо', 'Золото', 'Животное'],
-      },
-      'ejderha-kolye': {
-        name: 'Кулон Дракон',
-        story:
-          'Кулон с драконом в стиле восточной мифологии, с объёмной пластикой и выразительной детализацией.',
-        tags: ['Кулон', 'Серебро', 'Мифология'],
-      },
-      'aslan-yuzuk': {
-        name: 'Кольцо Лев',
-        story:
-          'Кольцо с образом льва как символа силы и смелости, с детальной рельефной проработкой.',
-        tags: ['Кольцо', 'Золото', 'Животное'],
-      },
-      'melek-kolye': {
-        name: 'Кулон Ангел-Хранитель',
-        story: 'Готический кулон с крыльями ангела и духовным смыслом, выполненный в рельефной технике.',
-        tags: ['Кулон', 'Серебро', 'Фигуратив'],
-      },
-      'kafatasi-yuzuk': {
-        name: 'Кольцо Vanitas',
-        story:
-          'Кольцо в эстетике Vanitas, объединяющее символику бренности и современный ювелирный подход.',
-        tags: ['Кольцо', 'Оксид', 'Символика'],
-      },
-    },
-  }
-  const localized = map[locale]?.[slug]
-  if (!localized) return product
-  return { ...product, ...localized }
-}
-
 export default function ModelDetayPage({
   params,
 }: {
@@ -324,6 +119,7 @@ export default function ModelDetayPage({
   const copy = getDetailCopy(locale)
   const { slug } = use(params)
   const [dbProduct, setDbProduct] = useState<ReturnType<typeof mapDbProductToUi> | null>(null)
+  const [dbProductRow, setDbProductRow] = useState<DbProduct3D | null>(null)
   const [sellerEmail, setSellerEmail] = useState<string | null>(null)
   const [storeName, setStoreName] = useState<string | null>(null)
   const [sellerAvatar, setSellerAvatar] = useState<string | null>(null)
@@ -352,6 +148,7 @@ export default function ModelDetayPage({
         console.error('[modeller:detail] supabase error', error)
         if (alive) {
           setDbProduct(null)
+          setDbProductRow(null)
           setSellerEmail(null)
           setStoreName(null)
         }
@@ -359,6 +156,8 @@ export default function ModelDetayPage({
       }
       if (!alive) return
       const row = data as (DbProduct3D & { seller_email?: string | null }) | null
+      const dbRow = data ? (data as DbProduct3D) : null
+      setDbProductRow(dbRow)
       setDbProduct(
         data
           ? ({
@@ -549,19 +348,11 @@ export default function ModelDetayPage({
       </main>
     )
   }
-  const fallbackLocalized = localizeDetailProduct(slug, product, locale)
+  const { name: localizedName, story: localizedStory } = getLocalizedProduct(dbProductRow!, locale)
   const localizedProduct = {
     ...product,
-    story: dynamic?.story?.trim() ? dynamic?.story : fallbackLocalized.story,
-    name: dynamic?.name?.trim() ? dynamic?.name : fallbackLocalized.name,
     tags: [jewelryTypeLabel(dynamic?.jewelryType ?? 'Pandant', locale)],
   }
-  const localizedStory = (() => {
-    if (locale === 'en' && (dbProduct as any)?.story_en) return (dbProduct as any).story_en
-    if (locale === 'de' && (dbProduct as any)?.story_de) return (dbProduct as any).story_de
-    if (locale === 'ru' && (dbProduct as any)?.story_ru) return (dbProduct as any).story_ru
-    return dbProduct?.story ?? ''
-  })()
   const personalPrice =
     dynamic?.licensePersonalPrice && dynamic.licensePersonalPrice > 0
       ? dynamic.licensePersonalPrice
@@ -728,7 +519,7 @@ export default function ModelDetayPage({
                   <model-viewer
                     key={glbUrl}
                     src={glbUrl}
-                    alt={localizedProduct.name}
+                    alt={localizedName}
                     suppressHydrationWarning
                     auto-rotate
                     rotation-per-second="30deg"
@@ -1083,7 +874,7 @@ export default function ModelDetayPage({
               marginBottom: '2rem',
             }}
           >
-            {localizedProduct.name}
+            {localizedName}
           </h1>
 
           {/* Fiyat */}
@@ -1141,7 +932,7 @@ export default function ModelDetayPage({
                 whiteSpace: 'pre-line',
               }}
             >
-              {localizedStory}
+              {localizedStory ?? ''}
             </p>
           </div>
 
@@ -1307,7 +1098,7 @@ export default function ModelDetayPage({
               <button type="button" onClick={() => setShowMessageModal(false)} className="text-muted hover:text-foreground">✕</button>
             </div>
             {storeName && <p className="mb-3 text-xs text-muted">Alıcı: <span className="text-foreground font-medium">{storeName}</span></p>}
-            <p className="mb-3 text-xs text-muted">Ürün: <span className="text-foreground font-medium">{dbProduct?.name}</span></p>
+            <p className="mb-3 text-xs text-muted">Ürün: <span className="text-foreground font-medium">{localizedName}</span></p>
             {messageSent ? (
               <p className="text-center text-sm text-emerald-400 py-4">✓ Mesajınız gönderildi!</p>
             ) : (

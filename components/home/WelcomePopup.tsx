@@ -1,22 +1,53 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+
+const SESSION_KEY = "welcome_popup_seen";
+const DISCOUNT_CODE = "HOSGELDIN10";
 
 export default function WelcomePopup() {
   const [show, setShow] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const seen = localStorage.getItem("welcome_popup_seen");
-    if (!seen) {
+    try {
+      const seen = sessionStorage.getItem(SESSION_KEY);
+      if (!seen) {
+        const timer = setTimeout(() => setShow(true), 3000);
+        return () => clearTimeout(timer);
+      }
+    } catch {
       const timer = setTimeout(() => setShow(true), 3000);
       return () => clearTimeout(timer);
     }
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
+
   const handleClose = () => {
-    localStorage.setItem("welcome_popup_seen", "1");
+    try {
+      sessionStorage.setItem(SESSION_KEY, "1");
+    } catch {
+      /* ignore */
+    }
     setShow(false);
+  };
+
+  const handleCopyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(DISCOUNT_CODE);
+      setCopied(true);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setCopied(false);
+    }
   };
 
   if (!show) return null;
@@ -46,6 +77,19 @@ export default function WelcomePopup() {
             <p className="mb-1 text-xs uppercase tracking-widest text-muted">Özel Teklif</p>
             <p className="text-lg font-semibold text-[#c9a84c]">İlk Alışverişinizde %10 İndirim</p>
             <p className="mt-1 text-xs text-muted">Üye olun, indirimi kazanın</p>
+
+            <div className="mt-4 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-center sm:gap-3">
+              <code className="rounded-lg border border-[#c9a84c]/35 bg-black/40 px-3 py-2 font-mono text-sm tracking-wider text-[#f0d080]">
+                {DISCOUNT_CODE}
+              </code>
+              <button
+                type="button"
+                onClick={() => void handleCopyCode()}
+                className="rounded-lg border border-[#c9a84c]/50 bg-[#c9a84c]/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#c9a84c] transition-colors hover:bg-[#c9a84c]/30"
+              >
+                {copied ? "Kopyalandı!" : "Kopyala"}
+              </button>
+            </div>
           </div>
 
           <div className="flex flex-col gap-3">

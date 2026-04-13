@@ -922,8 +922,9 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
         <p className="mt-1 text-xs text-muted sm:text-sm">{t.hint}</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="rounded-xl border border-white/10 bg-black/20 p-3 sm:p-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:gap-6">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 rounded-xl border border-white/10 bg-black/20 p-3 sm:p-4">
+          <div className="order-2 flex flex-col gap-2 md:order-1">
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -1038,11 +1039,12 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
           )}
 
           <p className="mt-2 text-[11px] text-muted">{t.uploadImageHint}</p>
+          </div>
 
-          <div className="mt-4 flex min-h-[320px] items-center justify-center rounded-lg border border-white/10 bg-black/30 p-2">
+          <div className="order-1 flex min-h-[min(48svh,440px)] w-full items-center justify-center rounded-lg border border-white/10 bg-black/30 p-2 md:order-2 md:mt-0 md:min-h-[320px]">
             {imageSrc ? (
                 <div
-                  className={`relative h-[min(65vh,560px)] w-full select-none rounded-md ${
+                  className={`relative h-[min(58svh,560px)] min-h-[min(36svh,280px)] w-full max-w-full select-none rounded-md md:h-[min(65vh,560px)] md:min-h-0 ${
                     zoom > 100 ? "overflow-auto" : "overflow-hidden"
                   }`}
                   onContextMenu={(e) => e.preventDefault()}
@@ -1215,7 +1217,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
           </div>
 
           {imageSrc && (
-            <div className="mt-3 rounded-xl border border-white/10 bg-black/25 p-3">
+            <div className="order-3 mt-0 rounded-xl border border-white/10 bg-black/25 p-3 md:mt-3">
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">
                   Önce / Sonra Karşılaştırma
@@ -1258,7 +1260,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
           )}
         </div>
 
-        <aside className="rounded-xl border border-white/10 bg-black/20 p-4">
+        <aside className="w-full max-h-48 shrink-0 overflow-x-hidden overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-4 md:max-h-[min(90dvh,56rem)] md:w-80 md:overflow-y-auto">
           <div className="space-y-4">
             <div>
               <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Hizli Presetler</p>
