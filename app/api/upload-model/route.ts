@@ -9,6 +9,9 @@ import { requireSeller } from '@/lib/auth/seller'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
+export const dynamic = 'force-dynamic'
+export const maxRequestBodySize = '150mb'
+export const fetchCache = 'force-no-store'
 
 const MAX_GLB_SIZE = 50 * 1024 * 1024
 const MAX_STL_SIZE = 100 * 1024 * 1024

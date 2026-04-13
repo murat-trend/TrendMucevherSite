@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
     },
   },
   turbopack: {},
-  serverExternalPackages: ["draco3dgltf"],
+  serverExternalPackages: ["draco3dgltf", "sharp"],
   images: {
     remotePatterns: [
       {
