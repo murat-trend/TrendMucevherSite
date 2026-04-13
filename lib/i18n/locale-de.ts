@@ -59,9 +59,6 @@ export const deMessages = {
       mainTitle: "Schmuckvisuals mit Remaura AI in Minuten vorbereiten",
       mainSubtitle:
         "Hintergrund bereinigen, Metallton anpassen und mit einem Klick im passenden Format für E‑Commerce und Social Media herunterladen.",
-      cadCoachTitle: "Rhino Ring Tutor",
-      cadCoachSubtitle:
-        "Interaktiver Ringmodellierungs-Tutor für Rhino- und MatrixGold-Workflows. Lernen Sie Methode, Reihenfolge und Verbindungslogik Schritt für Schritt.",
       ctaWorkspace: "Tool sofort nutzen",
       ctaContact: "Kontakt für Sonderauftrag",
     },

@@ -59,9 +59,6 @@ export const ruMessages = {
       mainTitle: "Готовьте ювелирные визуалы за минуты с Remaura AI",
       mainSubtitle:
         "Очистите фон, настройте тон металла и скачайте в нужном формате для e‑commerce и соцсетей в один клик.",
-      cadCoachTitle: "Rhino Ring Tutor",
-      cadCoachSubtitle:
-        "Интерактивный тьютор по моделированию колец для Rhino и MatrixGold. Изучайте метод, порядок и логику связей шаг за шагом.",
       ctaWorkspace: "Использовать инструмент",
       ctaContact: "Связаться по индивидуальному заказу",
     },

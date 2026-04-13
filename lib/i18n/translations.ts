@@ -63,9 +63,6 @@ export const translations = {
         mainTitle: "Remaura AI ile Takı Görsellerini Dakikalar İçinde Hazırla",
         mainSubtitle:
           "Arka planı temizle, metal tonunu düzelt, e-ticaret ve sosyal medya için tek tıkla doğru formatta indir.",
-        cadCoachTitle: "Rhino Ring Tutor",
-        cadCoachSubtitle:
-          "Rhino ve MatrixGold akışları için etkileşimli yüzük modelleme eğitmeni. Yöntemi, sırayı ve bağlantı mantığını adım adım öğrenin.",
         ctaWorkspace: "Aracı Hemen Kullan",
         ctaContact: "Özel Sipariş İçin İletişime Geç",
       },
@@ -620,9 +617,6 @@ export const translations = {
         mainTitle: "Prepare Jewelry Visuals in Minutes with Remaura AI",
         mainSubtitle:
           "Clean the background, tune metal tone, and download in the right format for ecommerce and social media in one click.",
-        cadCoachTitle: "Rhino Ring Tutor",
-        cadCoachSubtitle:
-          "Interactive ring modeling tutor for Rhino and MatrixGold workflows. Learn method, order, and connection logic step by step.",
         ctaWorkspace: "Use Tool Now",
         ctaContact: "Contact for Custom Order",
       },

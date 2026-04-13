@@ -3,7 +3,7 @@
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { RemauraLandingHeader } from "@/components/remaura/RemauraLandingHeader";
 
-type HeaderVariant = "main" | "photoEdit" | "backgroundRemoval" | "cadCoach";
+type HeaderVariant = "main" | "photoEdit" | "backgroundRemoval";
 
 export function RemauraLocalizedLandingHeader({ variant }: { variant: HeaderVariant }) {
   const { t } = useLanguage();
@@ -17,9 +17,6 @@ export function RemauraLocalizedLandingHeader({ variant }: { variant: HeaderVari
     if (variant === "backgroundRemoval") {
       const c = t.remauraTools.bgRemove;
       return { title: c.title, description: c.subtitle };
-    }
-    if (variant === "cadCoach") {
-      return { title: landing.cadCoachTitle, description: landing.cadCoachSubtitle };
     }
     return { title: landing.mainTitle, description: landing.mainSubtitle };
   })();

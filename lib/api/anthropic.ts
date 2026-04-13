@@ -1,5 +1,5 @@
 /**
- * Anthropic API – ortak yardımcılar (Remaura CAD koçu vb.)
+ * Anthropic API – ortak yardımcılar (blog AI, çeviri vb.)
  */
 
 export function getAnthropicApiKey(): string {
