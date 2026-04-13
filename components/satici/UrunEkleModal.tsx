@@ -78,6 +78,13 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
   const set = (key: keyof ProductForm, value: unknown) =>
     setForm((p) => ({ ...p, [key]: value }))
 
+  const showError = useCallback((message: string) => {
+    setError(message)
+    if (typeof window !== 'undefined') {
+      window.alert(message)
+    }
+  }, [])
+
   const handleSave = useCallback(async () => {
     setError(null)
     const name   = form.name.trim()
@@ -87,11 +94,11 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
     const depth  = Number(form.depth)
     const weight = Number(form.weight)
 
-    if (!name)                                    return setError('Ürün adı zorunludur')
-    if (!price || price <= 0)                     return setError('Geçerli bir fiyat girin')
-    if (!width || !height || !depth || !weight)   return setError('Tüm ölçüler zorunludur')
-    if (!form.licensePersonal && !form.licenseCommercial) return setError('En az bir lisans seçin')
-    if (!form.glbFile && !form.stlFile)           return setError('En az bir model dosyası gerekli')
+    if (!name) return showError('Ürün adı zorunludur')
+    if (!price || price <= 0) return showError('Geçerli bir fiyat girin')
+    if (!width || !height || !depth || !weight) return showError('Tüm ölçüler zorunludur')
+    if (!form.licensePersonal && !form.licenseCommercial) return showError('En az bir lisans seçin')
+    if (!form.glbFile && !form.stlFile) return showError('En az bir model dosyası gerekli')
 
     setSaving(true)
     try {
@@ -140,7 +147,17 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
         tfd.set('view', key)
         tfd.set('file', file)
         const tres = await fetch('/api/upload-thumbnail', { method: 'POST', credentials: 'include', body: tfd })
-        if (!tres.ok) throw new Error(`${key} görseli yüklenemedi`)
+        if (!tres.ok) {
+          const text = await tres.text()
+          let errMsg = `${key} görseli yüklenemedi (HTTP ${tres.status})`
+          try {
+            const b = JSON.parse(text) as { error?: string }
+            if (b.error) errMsg = b.error
+          } catch {
+            if (text.length < 200) errMsg = text || errMsg
+          }
+          throw new Error(errMsg)
+        }
         const td = await tres.json() as { url?: string }
         thumbViews[key] = td.url ?? null
       }
@@ -208,11 +225,11 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
         onClose()
       }, 1500)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Bir hata oluştu')
+      showError(e instanceof Error ? e.message : 'Bir hata oluştu')
     } finally {
       setSaving(false)
     }
-  }, [form, onSuccess, onClose])
+  }, [form, onSuccess, onClose, showError])
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-foreground/20 backdrop-blur-sm">
