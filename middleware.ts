@@ -8,9 +8,9 @@ const AUTH_ROUTES   = ['/giris', '/kayit', '/sifremi-unuttum']
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // 1. Basic Auth (staging)
+  // 1. Basic Auth (staging) — API route'ları muaf
   const password = process.env.BASIC_AUTH_PASSWORD
-  if (password) {
+  if (password && !pathname.startsWith('/api/')) {
     const auth = request.headers.get('authorization')
     if (!auth?.startsWith('Basic ')) {
       return new NextResponse('Authentication required', {

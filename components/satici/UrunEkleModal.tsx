@@ -106,10 +106,17 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
       if (form.glbFile) fd.set('glb', form.glbFile)
       if (form.stlFile) fd.set('stl', form.stlFile)
 
-      const uploadRes = await fetch('/api/upload-model', { method: 'POST', body: fd })
+      const uploadRes = await fetch('/api/upload-model', { method: 'POST', credentials: 'include', body: fd })
       if (!uploadRes.ok) {
-        const b = await uploadRes.json().catch(() => ({})) as { error?: string }
-        throw new Error(b.error ?? 'Model yüklenemedi')
+        const text = await uploadRes.text()
+        let errMsg = `Model yüklenemedi (HTTP ${uploadRes.status})`
+        try {
+          const b = JSON.parse(text) as { error?: string }
+          if (b.error) errMsg = b.error
+        } catch {
+          if (text.length < 200) errMsg = text || errMsg
+        }
+        throw new Error(errMsg)
       }
       const uploadData = await uploadRes.json() as {
         glbUrl?: string
@@ -132,7 +139,7 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
         tfd.set('slug', slug)
         tfd.set('view', key)
         tfd.set('file', file)
-        const tres = await fetch('/api/upload-thumbnail', { method: 'POST', body: tfd })
+        const tres = await fetch('/api/upload-thumbnail', { method: 'POST', credentials: 'include', body: tfd })
         if (!tres.ok) throw new Error(`${key} görseli yüklenemedi`)
         const td = await tres.json() as { url?: string }
         thumbViews[key] = td.url ?? null

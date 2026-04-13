@@ -19,7 +19,17 @@ const s3 = new S3Client({
 })
 
 export async function POST(req: NextRequest) {
-  const formData = await req.formData()
+  let formData: FormData
+  try {
+    formData = await req.formData()
+  } catch (e) {
+    console.error('[upload-model] formData parse failed:', e)
+    return NextResponse.json(
+      { error: 'Form verisi okunamadı. Dosya çok büyük olabilir.' },
+      { status: 400 }
+    )
+  }
+
   const slug = formData.get('slug') as string | null
   const glb = formData.get('glb') as File | null
   const stl = formData.get('stl') as File | null
@@ -41,28 +51,36 @@ export async function POST(req: NextRequest) {
     translationPatch?: ReturnType<typeof productTranslationsToDbPatch> | null
   } = { slug }
 
-  if (glb) {
-    const buffer = Buffer.from(await glb.arrayBuffer())
-    const key = `models/${slug}.glb`
-    await s3.send(new PutObjectCommand({
-      Bucket: process.env.R2_BUCKET_NAME!,
-      Key: key,
-      Body: buffer,
-      ContentType: 'model/gltf-binary',
-    }))
-    payload.glbUrl = `${process.env.R2_PUBLIC_BASE_URL}/${key}`
-  }
+  try {
+    if (glb) {
+      const buffer = Buffer.from(await glb.arrayBuffer())
+      const key = `models/${slug}.glb`
+      await s3.send(new PutObjectCommand({
+        Bucket: process.env.R2_BUCKET_NAME!,
+        Key: key,
+        Body: buffer,
+        ContentType: 'model/gltf-binary',
+      }))
+      payload.glbUrl = `${process.env.R2_PUBLIC_BASE_URL}/${key}`
+    }
 
-  if (stl) {
-    const buffer = Buffer.from(await stl.arrayBuffer())
-    const key = `models/${slug}.stl`
-    await s3.send(new PutObjectCommand({
-      Bucket: process.env.R2_BUCKET_NAME!,
-      Key: key,
-      Body: buffer,
-      ContentType: 'model/stl',
-    }))
-    payload.stlUrl = `${process.env.R2_PUBLIC_BASE_URL}/${key}`
+    if (stl) {
+      const buffer = Buffer.from(await stl.arrayBuffer())
+      const key = `models/${slug}.stl`
+      await s3.send(new PutObjectCommand({
+        Bucket: process.env.R2_BUCKET_NAME!,
+        Key: key,
+        Body: buffer,
+        ContentType: 'model/stl',
+      }))
+      payload.stlUrl = `${process.env.R2_PUBLIC_BASE_URL}/${key}`
+    }
+  } catch (e) {
+    console.error('[upload-model] R2 upload failed:', e)
+    return NextResponse.json(
+      { error: 'Model dosyası yüklenemedi (depolama hatası)' },
+      { status: 502 }
+    )
   }
 
   if (nameField.trim()) {
