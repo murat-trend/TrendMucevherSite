@@ -229,9 +229,21 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
             </button>
           </div>
 
+          {error && (
+            <div className="mx-6 mt-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-[13px] text-red-400">
+              <X size={14} className="shrink-0" /> {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="mx-6 mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3 text-[13px] text-emerald-400">
+              Ürün başarıyla eklendi!
+            </div>
+          )}
+
           <div
             className="grid grid-cols-1 gap-5 overflow-y-auto p-6 pb-4 sm:grid-cols-2"
-            style={{ maxHeight: '75vh' }}
+            style={{ maxHeight: '70vh' }}
           >
             <Field label="Ürün Adı" span2>
               <input type="text" className={inputCls} placeholder="Ürün adını girin"
@@ -342,17 +354,6 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
               </div>
             </Field>
 
-            {error && (
-              <div className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-[13px] text-red-400 sm:col-span-2">
-                <X size={14} /> {error}
-              </div>
-            )}
-
-            {success && (
-              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3 text-[13px] text-emerald-400 sm:col-span-2">
-                Ürün başarıyla eklendi!
-              </div>
-            )}
           </div>
 
           <div className="flex justify-end gap-3 border-t border-border/60 px-6 py-4">
