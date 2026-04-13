@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ComponentType } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
+import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { Loader2, Megaphone, ImageIcon, Percent, Sparkles, ChevronRight, ChevronLeft } from "lucide-react";
 
 type CampaignType = "discount" | "featured" | "banner";
@@ -31,16 +32,29 @@ const dateInputFmt = (d: Date) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-const dateFmtTr = (iso: string | null | undefined) => {
-  if (!iso) return "—";
-  try {
-    return new Intl.DateTimeFormat("tr-TR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(iso));
-  } catch {
-    return "—";
-  }
-};
-
 export default function KampanyaYonetimi() {
+  const { t, locale } = useLanguage();
+  const sc = t.sellerCampaigns;
+  const dateLocale = locale === "tr" ? "tr-TR" : locale === "de" ? "de-DE" : locale === "ru" ? "ru-RU" : "en-US";
+  const dateFmt = (iso: string | null | undefined) => {
+    if (!iso) return "—";
+    try {
+      return new Intl.DateTimeFormat(dateLocale, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(iso));
+    } catch {
+      return "—";
+    }
+  };
+  const getDefaultName = (ct: CampaignType) => {
+    if (ct === "discount") return sc.defaultNameDiscount;
+    if (ct === "featured") return sc.defaultNameFeatured;
+    return sc.defaultNameBanner;
+  };
+  const campaignTypeLabel = (ct: string | null | undefined) => {
+    if (ct === "discount") return sc.typeLabelDiscount;
+    if (ct === "featured") return sc.typeLabelFeatured;
+    if (ct === "banner") return sc.typeLabelBanner;
+    return ct ?? "—";
+  };
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [campaignType, setCampaignType] = useState<CampaignType | null>(null);
   const [campaignName, setCampaignName] = useState("");
@@ -134,7 +148,7 @@ export default function KampanyaYonetimi() {
       const res = await fetch("/api/satici/kampanya/upload-banner", { method: "POST", body: fd });
       const data = (await res.json()) as { url?: string; error?: string };
       if (!res.ok) {
-        window.alert(data.error ?? "Yükleme başarısız.");
+        window.alert(data.error ?? sc.alertUploadFail);
         return false;
       }
       setBannerUrl(data.url ?? null);
@@ -148,22 +162,22 @@ export default function KampanyaYonetimi() {
     setSubmitError(null);
     if (!campaignType) return;
     if (!startsAt || !endsAt) {
-      window.alert("Başlangıç ve bitiş tarihlerini seçin.");
+      window.alert(sc.alertPickDates);
       return;
     }
     if ((campaignType === "discount" || campaignType === "featured") && selectedIds.length === 0) {
-      window.alert("En az bir ürün seçin.");
+      window.alert(sc.alertSelectProduct);
       return;
     }
     if (campaignType === "discount") {
       const v = Number(discountValue);
       if (!Number.isFinite(v) || v <= 0) {
-        window.alert("Geçerli bir indirim değeri girin.");
+        window.alert(sc.alertDiscountValue);
         return;
       }
     }
     if (campaignType === "banner" && !bannerFile && !bannerUrl) {
-      window.alert("Banner için görsel yükleyin.");
+      window.alert(sc.alertBannerImage);
       return;
     }
     if (campaignType === "banner") {
@@ -179,7 +193,7 @@ export default function KampanyaYonetimi() {
     setSubmitError(null);
     try {
       const body: Record<string, unknown> = {
-        name: campaignName.trim() || defaultName(campaignType),
+        name: campaignName.trim() || getDefaultName(campaignType),
         campaign_type: campaignType,
         product_ids: campaignType === "banner" ? [] : selectedIds,
         starts_at: new Date(startsAt).toISOString(),
@@ -205,20 +219,20 @@ export default function KampanyaYonetimi() {
       const data = (await res.json()) as { success?: boolean; error?: string; campaignId?: string; wallet?: { balanceCredits?: number } };
 
       if (res.status === 402) {
-        setSubmitError(data.error ?? "Yetersiz kredi.");
+        setSubmitError(data.error ?? sc.errorInsufficientCredits);
         if (data.wallet && typeof data.wallet.balanceCredits === "number") {
           setWalletBalance(data.wallet.balanceCredits);
         }
         return;
       }
       if (!res.ok) {
-        setSubmitError(data.error ?? "Kayıt başarısız.");
+        setSubmitError(data.error ?? sc.errorSaveFailed);
         return;
       }
 
       await loadWallet(userId);
       await loadCampaignsApi();
-      window.alert("Kampanyanız kaydedildi (durum: onay bekliyor).");
+      window.alert(sc.alertSaved);
       resetWizard();
     } finally {
       setSubmitting(false);
@@ -242,7 +256,7 @@ export default function KampanyaYonetimi() {
     return (
       <div className="flex items-center justify-center gap-2 py-20 text-muted">
         <Loader2 className="h-5 w-5 animate-spin text-accent" />
-        Yükleniyor…
+        {sc.loading}
       </div>
     );
   }
@@ -250,14 +264,14 @@ export default function KampanyaYonetimi() {
   return (
     <div className="space-y-10">
       <div>
-        <h2 className="font-display text-2xl font-medium tracking-[-0.02em] text-foreground">Kampanya oluştur</h2>
-        <p className="mt-1 text-sm text-muted">Üç adımda kampanyanızı tanımlayın; kredi gerektiren türlerde bakiyeniz düşer.</p>
+        <h2 className="font-display text-2xl font-medium tracking-[-0.02em] text-foreground">{sc.heroTitle}</h2>
+        <p className="mt-1 text-sm text-muted">{sc.heroSubtitle}</p>
       </div>
 
       <div className="flex items-center gap-2 text-xs text-muted">
         {[1, 2, 3].map((s) => (
           <span key={s} className={`rounded-full px-2.5 py-1 font-medium ${step === s ? "bg-accent/15 text-accent" : "bg-surface-alt text-muted"}`}>
-            {s}. {s === 1 ? "Tür" : s === 2 ? "Detaylar" : "Özet"}
+            {s}. {s === 1 ? sc.stepType : s === 2 ? sc.stepDetails : sc.stepSummary}
           </span>
         ))}
       </div>
@@ -266,8 +280,8 @@ export default function KampanyaYonetimi() {
         <div className="grid gap-4 sm:grid-cols-3">
           <TypeCard
             icon={Percent}
-            title="İndirim"
-            desc="Seçtiğiniz ürünlerde yüzde veya TL indirimi. Kredi harcamaz."
+            title={sc.typeDiscountTitle}
+            desc={sc.typeDiscountDesc}
             selected={campaignType === "discount"}
             onSelect={() => {
               setCampaignType("discount");
@@ -279,8 +293,8 @@ export default function KampanyaYonetimi() {
           />
           <TypeCard
             icon={Sparkles}
-            title="Öne çıkar"
-            desc="Ürünleri vitrinde öne alın. Süre ve ürün sayısına göre kredi."
+            title={sc.typeFeaturedTitle}
+            desc={sc.typeFeaturedDesc}
             selected={campaignType === "featured"}
             onSelect={() => {
               setCampaignType("featured");
@@ -292,8 +306,8 @@ export default function KampanyaYonetimi() {
           />
           <TypeCard
             icon={ImageIcon}
-            title="Banner"
-            desc="Banner görseli yükleyin. Süreye göre sabit kredi."
+            title={sc.typeBannerTitle}
+            desc={sc.typeBannerDesc}
             selected={campaignType === "banner"}
             onSelect={() => {
               setCampaignType("banner");
@@ -310,7 +324,7 @@ export default function KampanyaYonetimi() {
               onClick={() => setStep(2)}
               className="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground disabled:opacity-40"
             >
-              Devam <ChevronRight className="h-4 w-4" />
+              {sc.continue} <ChevronRight className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -319,11 +333,11 @@ export default function KampanyaYonetimi() {
       {step === 2 && campaignType && (
         <div className="rounded-2xl border border-border/80 bg-card p-6 space-y-6">
           <div>
-            <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">Kampanya adı</label>
+            <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">{sc.campaignNameLabel}</label>
             <input
               value={campaignName}
               onChange={(e) => setCampaignName(e.target.value)}
-              placeholder={defaultName(campaignType)}
+              placeholder={getDefaultName(campaignType)}
               className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/50 focus:ring-2 focus:ring-accent/10"
             />
           </div>
@@ -331,7 +345,7 @@ export default function KampanyaYonetimi() {
           {(campaignType === "discount" || campaignType === "featured") && (
             <div>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[11px] font-medium uppercase tracking-wider text-muted">Ürünler</span>
+                <span className="text-[11px] font-medium uppercase tracking-wider text-muted">{sc.productsLabel}</span>
                 <label className="flex items-center gap-2 text-sm text-foreground">
                   <input
                     type="checkbox"
@@ -339,11 +353,11 @@ export default function KampanyaYonetimi() {
                     onChange={(e) => toggleAll(e.target.checked)}
                     className="accent-accent"
                   />
-                  Tümünü seç
+                  {sc.selectAll}
                 </label>
               </div>
               {products.length === 0 ? (
-                <p className="text-sm text-muted">Önce ürün ekleyin.</p>
+                <p className="text-sm text-muted">{sc.addProductsFirst}</p>
               ) : (
                 <ul className="max-h-56 space-y-2 overflow-y-auto rounded-xl border border-border/60 bg-background/40 p-3">
                   {products.map((p) => (
@@ -368,19 +382,19 @@ export default function KampanyaYonetimi() {
           {campaignType === "discount" && (
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">İndirim türü</label>
+                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">{sc.discountKindLabel}</label>
                 <select
                   value={discountKind}
                   onChange={(e) => setDiscountKind(e.target.value as "percent" | "try")}
                   className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground"
                 >
-                  <option value="percent">Yüzde (%)</option>
-                  <option value="try">TL</option>
+                  <option value="percent">{sc.discountPercentOption}</option>
+                  <option value="try">{sc.discountTryOption}</option>
                 </select>
               </div>
               <div>
                 <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">
-                  {discountKind === "percent" ? "İndirim oranı (%)" : "İndirim (₺)"}
+                  {discountKind === "percent" ? sc.discountRatePercentLabel : sc.discountAmountTryLabel}
                 </label>
                 <input
                   type="number"
@@ -396,13 +410,13 @@ export default function KampanyaYonetimi() {
 
           {campaignType === "featured" && creditRates && (
             <div>
-              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">Süre</label>
+              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">{sc.durationLabel}</label>
               <div className="flex flex-wrap gap-2">
                 {(
                   [
-                    ["week1", `1 hafta — ${creditRates.featuredPerProduct.week1} kr. / ürün`],
-                    ["week2", `2 hafta — ${creditRates.featuredPerProduct.week2} kr. / ürün`],
-                    ["month1", `1 ay — ${creditRates.featuredPerProduct.month1} kr. / ürün`],
+                    ["week1", sc.featuredWeek1.replace("{credits}", String(creditRates.featuredPerProduct.week1))],
+                    ["week2", sc.featuredWeek2.replace("{credits}", String(creditRates.featuredPerProduct.week2))],
+                    ["month1", sc.featuredMonth1.replace("{credits}", String(creditRates.featuredPerProduct.month1))],
                   ] as const
                 ).map(([k, label]) => (
                   <button
@@ -423,7 +437,7 @@ export default function KampanyaYonetimi() {
           {campaignType === "banner" && creditRates && (
             <div className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">Banner görseli</label>
+                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">{sc.bannerImageLabel}</label>
                 <input
                   type="file"
                   accept="image/*"
@@ -433,10 +447,10 @@ export default function KampanyaYonetimi() {
                   }}
                   className="block w-full text-sm text-muted file:mr-3 file:rounded-lg file:border-0 file:bg-surface-alt file:px-3 file:py-1.5 file:text-xs file:text-foreground"
                 />
-                {bannerUrl && <p className="mt-2 text-xs text-emerald-500">Görsel hazır (WebP olarak yüklendi).</p>}
+                {bannerUrl && <p className="mt-2 text-xs text-emerald-500">{sc.bannerImageReady}</p>}
               </div>
               <div>
-                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">Süre</label>
+                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">{sc.durationLabel}</label>
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -445,7 +459,7 @@ export default function KampanyaYonetimi() {
                       bannerDuration === "week1" ? "border-accent bg-accent/10 text-accent" : "border-border/80 text-muted"
                     }`}
                   >
-                    1 hafta — {creditRates.banner.week1} kredi
+                    {sc.bannerWeek1.replace("{credits}", String(creditRates.banner.week1))}
                   </button>
                   <button
                     type="button"
@@ -454,7 +468,7 @@ export default function KampanyaYonetimi() {
                       bannerDuration === "month1" ? "border-accent bg-accent/10 text-accent" : "border-border/80 text-muted"
                     }`}
                   >
-                    1 ay — {creditRates.banner.month1} kredi
+                    {sc.bannerMonth1.replace("{credits}", String(creditRates.banner.month1))}
                   </button>
                 </div>
               </div>
@@ -463,7 +477,7 @@ export default function KampanyaYonetimi() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">Başlangıç</label>
+              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">{sc.startLabel}</label>
               <input
                 type="datetime-local"
                 value={startsAt}
@@ -472,7 +486,7 @@ export default function KampanyaYonetimi() {
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">Bitiş</label>
+              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted">{sc.endLabel}</label>
               <input
                 type="datetime-local"
                 value={endsAt}
@@ -488,7 +502,7 @@ export default function KampanyaYonetimi() {
               onClick={() => setStep(1)}
               className="inline-flex items-center gap-1 rounded-full border border-border px-4 py-2 text-sm text-muted hover:text-foreground"
             >
-              <ChevronLeft className="h-4 w-4" /> Geri
+              <ChevronLeft className="h-4 w-4" /> {sc.back}
             </button>
             <button
               type="button"
@@ -498,11 +512,11 @@ export default function KampanyaYonetimi() {
             >
               {uploadingBanner ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Yükleniyor…
+                  <Loader2 className="h-4 w-4 animate-spin" /> {sc.uploading}
                 </>
               ) : (
                 <>
-                  Özete geç <ChevronRight className="h-4 w-4" />
+                  {sc.goSummary} <ChevronRight className="h-4 w-4" />
                 </>
               )}
             </button>
@@ -512,44 +526,49 @@ export default function KampanyaYonetimi() {
 
       {step === 3 && campaignType && (
         <div className="rounded-2xl border border-border/80 bg-card p-6 space-y-6">
-          <h3 className="font-display text-lg font-medium text-foreground">Özet</h3>
+          <h3 className="font-display text-lg font-medium text-foreground">{sc.summaryTitle}</h3>
           <ul className="space-y-2 text-sm text-muted">
             <li>
-              <span className="text-foreground font-medium">Tür:</span>{" "}
-              {campaignType === "discount" ? "İndirim" : campaignType === "featured" ? "Öne çıkar" : "Banner"}
+              <span className="text-foreground font-medium">{sc.summaryType}</span>{" "}
+              {campaignType === "discount"
+                ? sc.typeLabelDiscount
+                : campaignType === "featured"
+                  ? sc.typeLabelFeatured
+                  : sc.typeLabelBanner}
             </li>
             <li>
-              <span className="text-foreground font-medium">Ad:</span> {campaignName.trim() || defaultName(campaignType)}
+              <span className="text-foreground font-medium">{sc.summaryName}</span> {campaignName.trim() || getDefaultName(campaignType)}
             </li>
             {(campaignType === "discount" || campaignType === "featured") && (
               <li>
-                <span className="text-foreground font-medium">Seçilen ürünler:</span> {selectedIds.length} adet
+                <span className="text-foreground font-medium">{sc.summarySelectedProducts}</span>{" "}
+                {sc.summaryProductCount.replace("{count}", String(selectedIds.length))}
               </li>
             )}
             {campaignType === "discount" && (
               <li>
-                <span className="text-foreground font-medium">İndirim:</span>{" "}
+                <span className="text-foreground font-medium">{sc.summaryDiscount}</span>{" "}
                 {discountKind === "percent" ? `%${discountValue}` : `₺${discountValue}`}
               </li>
             )}
             <li>
-              <span className="text-foreground font-medium">Tarih:</span> {startsAt} → {endsAt}
+              <span className="text-foreground font-medium">{sc.summaryDate}</span> {startsAt} → {endsAt}
             </li>
             <li>
-              <span className="text-foreground font-medium">Toplam kredi maliyeti:</span>{" "}
+              <span className="text-foreground font-medium">{sc.summaryTotalCredits}</span>{" "}
               <span className="tabular-nums text-accent">{totalCreditCost}</span>
             </li>
             <li>
-              <span className="text-foreground font-medium">Mevcut bakiye:</span>{" "}
+              <span className="text-foreground font-medium">{sc.summaryBalance}</span>{" "}
               <span className="tabular-nums">{walletBalance ?? "—"}</span>
             </li>
           </ul>
 
           {insufficient && (
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-              Kredi bakiyeniz bu kampanya için yetersiz.{" "}
+              {sc.insufficientCredits}{" "}
               <Link href="/fiyatlandirma" className="font-medium underline underline-offset-2 hover:text-red-100">
-                Kredi satın al
+                {sc.buyCredits}
               </Link>
             </div>
           )}
@@ -564,7 +583,7 @@ export default function KampanyaYonetimi() {
               onClick={() => setStep(2)}
               className="inline-flex items-center gap-1 rounded-full border border-border px-4 py-2 text-sm text-muted"
             >
-              <ChevronLeft className="h-4 w-4" /> Geri
+              <ChevronLeft className="h-4 w-4" /> {sc.back}
             </button>
             <button
               type="button"
@@ -573,7 +592,7 @@ export default function KampanyaYonetimi() {
               className="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground disabled:opacity-40"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />}
-              Kampanya oluştur
+              {sc.createCampaign}
             </button>
           </div>
         </div>
@@ -581,30 +600,30 @@ export default function KampanyaYonetimi() {
 
       <section className="rounded-2xl border border-border/80 bg-card">
         <div className="border-b border-border/60 px-5 py-4">
-          <h3 className="font-display text-[15px] font-medium text-foreground">Kampanyalarınız</h3>
+          <h3 className="font-display text-[15px] font-medium text-foreground">{sc.yourCampaigns}</h3>
         </div>
         <div className="overflow-x-auto p-4">
           {campaigns.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted">Henüz kampanya yok.</p>
+            <p className="py-6 text-center text-sm text-muted">{sc.noCampaignsYet}</p>
           ) : (
             <table className="w-full min-w-[640px] text-left text-sm">
               <thead className="text-[11px] uppercase tracking-wider text-muted">
                 <tr>
-                  <th className="px-3 py-2">Ad</th>
-                  <th className="px-3 py-2">Tür</th>
-                  <th className="px-3 py-2">Durum</th>
-                  <th className="px-3 py-2">Kredi</th>
-                  <th className="px-3 py-2">Başlangıç</th>
+                  <th className="px-3 py-2">{sc.tableName}</th>
+                  <th className="px-3 py-2">{sc.tableType}</th>
+                  <th className="px-3 py-2">{sc.tableStatus}</th>
+                  <th className="px-3 py-2">{sc.tableCredit}</th>
+                  <th className="px-3 py-2">{sc.tableStart}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60 text-foreground/90">
                 {campaigns.map((c) => (
                   <tr key={c.id}>
                     <td className="px-3 py-2 font-medium">{c.name}</td>
-                    <td className="px-3 py-2 text-muted">{c.campaign_type ?? "—"}</td>
+                    <td className="px-3 py-2 text-muted">{campaignTypeLabel(c.campaign_type)}</td>
                     <td className="px-3 py-2 text-muted">{c.status ?? "—"}</td>
                     <td className="px-3 py-2 tabular-nums">{c.credit_cost ?? 0}</td>
-                    <td className="px-3 py-2 text-muted">{dateFmtTr(c.starts_at ?? c.created_at)}</td>
+                    <td className="px-3 py-2 text-muted">{dateFmt(c.starts_at ?? c.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -614,12 +633,6 @@ export default function KampanyaYonetimi() {
       </section>
     </div>
   );
-}
-
-function defaultName(t: CampaignType): string {
-  if (t === "discount") return "İndirim kampanyası";
-  if (t === "featured") return "Öne çıkarma kampanyası";
-  return "Banner kampanyası";
 }
 
 function TypeCard({
