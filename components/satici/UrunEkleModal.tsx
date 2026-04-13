@@ -113,13 +113,13 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
       if (form.glbFile) fd.set('glb', form.glbFile)
       if (form.stlFile) fd.set('stl', form.stlFile)
 
-      const uploadRes = await fetch('/api/upload-model', { method: 'POST', credentials: 'include', body: fd })
+      const uploadRes = await fetch('https://trend-mucevher-site.vercel.app/api/upload-model', { method: 'POST', body: fd })
       if (!uploadRes.ok) {
         const text = await uploadRes.text()
-        let errMsg = `Model yüklenemedi (HTTP ${uploadRes.status})`
+        let errMsg = `Model yükleme hatası (HTTP ${uploadRes.status})`
         try {
           const b = JSON.parse(text) as { error?: string }
-          if (b.error) errMsg = b.error
+          if (b.error) errMsg = `Model yükleme hatası: ${b.error} (HTTP ${uploadRes.status})`
         } catch {
           if (text.length < 200) errMsg = text || errMsg
         }
@@ -130,6 +130,7 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
         stlUrl?: string
         translationPatch?: Record<string, unknown> | null
       }
+      console.log('uploadData', uploadData)
 
       // Thumbnail'lar
       const thumbKeys = ['on', 'arka', 'kenar', 'ust'] as const
@@ -152,7 +153,7 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
           let errMsg = `${key} görseli yüklenemedi (HTTP ${tres.status})`
           try {
             const b = JSON.parse(text) as { error?: string }
-            if (b.error) errMsg = b.error
+            if (b.error) errMsg = `${key} görseli: ${b.error} (HTTP ${tres.status})`
           } catch {
             if (text.length < 200) errMsg = text || errMsg
           }
@@ -163,6 +164,7 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
       }
 
       const thumbnailUrl = thumbViews.on ?? thumbViews.arka ?? thumbViews.kenar ?? thumbViews.ust ?? null
+      console.log('thumbViews', thumbViews)
 
       // Çeviri patch yoksa ayrıca çek
       let trPatch = uploadData.translationPatch ?? null
@@ -180,13 +182,14 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
           if (trJson.ok && trJson.patch) trPatch = trJson.patch
         } catch { /* çeviri opsiyonel */ }
       }
+      console.log('trPatch', trPatch)
 
       // Supabase insert
       const { createClient } = await import('@/utils/supabase/client')
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
 
-      const { error: dbError } = await supabase.from('products_3d').insert({
+      const payload = {
         sku:          `TM-3D-${Date.now()}`,
         name,
         slug,
@@ -214,9 +217,12 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
         show_on_modeller: true,
         seller_id:     user?.id ?? null,
         seller_email:  user?.email ?? null,
-      })
+      }
+      console.log('insert payload', payload)
 
-      if (dbError) throw new Error(dbError.message)
+      const { error: dbError } = await supabase.from('products_3d').insert(payload)
+
+      if (dbError) throw new Error(`Supabase insert hatası: ${dbError.message}`)
 
       setSuccess(true)
       setTimeout(() => {
@@ -225,6 +231,7 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
         onClose()
       }, 1500)
     } catch (e) {
+      console.error('[UrunEkleModal] handleSave failed:', e)
       showError(e instanceof Error ? e.message : 'Bir hata oluştu')
     } finally {
       setSaving(false)
