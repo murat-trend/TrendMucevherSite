@@ -70,8 +70,7 @@ export const metadata: Metadata = {
     images: ["/og-image.jpg"],
   },
   verification: {
-    google: "google-site-verification-code",
-    yandex: "yandex-verification-code",
+    google: "hKL6TwPwVVRZ6D4TiTqImlpWqgDNT9agjK1hQg1C0Gk",
   },
   alternates: {
     canonical: siteUrl,
