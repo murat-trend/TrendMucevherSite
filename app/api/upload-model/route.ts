@@ -91,9 +91,6 @@ export async function POST(req: NextRequest) {
 
   if (glb) {
     const buffer = Buffer.from(await glb.arrayBuffer())
-    if (buffer.readUInt32LE(0) !== 0x46546c67) {
-      return NextResponse.json({ error: 'Geçersiz GLB dosya formatı' }, { status: 400 })
-    }
     const key = `models/${auth.session.userId}/${slug}.glb`
     await s3.send(new PutObjectCommand({
       Bucket: process.env.R2_BUCKET_NAME!,
