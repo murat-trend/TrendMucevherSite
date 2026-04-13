@@ -92,12 +92,6 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // 5. Zaten girişli kullanıcı auth sayfasına gelirse
-  const isAuthRoute = AUTH_ROUTES.some(r => pathname.startsWith(r))
-  if (isAuthRoute && user) {
-    return NextResponse.redirect(new URL('/satici/dashboard', request.url))
-  }
-
   return response
 }
 

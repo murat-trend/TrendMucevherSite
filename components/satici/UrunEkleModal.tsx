@@ -44,9 +44,7 @@ const inputCls = 'w-full rounded-xl border border-border bg-background px-3.5 py
 const fileCls  = 'block w-full cursor-pointer rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted file:mr-3 file:rounded-lg file:border-0 file:bg-surface-alt file:px-3 file:py-1 file:text-xs file:text-foreground'
 
 function Field({ label, children, span2 = false }: {
-  label: string
-  children: React.ReactNode
-  span2?: boolean
+  label: string; children: React.ReactNode; span2?: boolean
 }) {
   return (
     <div className={span2 ? 'sm:col-span-2' : ''}>
@@ -64,26 +62,65 @@ const slugify = (s: string) =>
     .replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 
+// Presign → R2'ye direkt yükle
+async function uploadViaPresign(
+  slug: string,
+  file: File,
+  kind: 'glb' | 'stl' | 'thumbnail',
+  view?: string
+): Promise<string> {
+  const presignRes = await fetch('/api/create-upload-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      slug,
+      fileName: file.name,
+      contentType: file.type || (kind === 'glb' ? 'model/gltf-binary' : kind === 'stl' ? 'model/stl' : 'image/jpeg'),
+      size: file.size,
+      kind,
+      ...(view ? { view } : {}),
+    }),
+  })
+
+  if (!presignRes.ok) {
+    const err = await presignRes.json().catch(() => ({})) as { error?: string }
+    throw new Error(err.error ?? 'Presign URL alınamadı')
+  }
+
+  const { uploadUrl, publicUrl } = await presignRes.json() as {
+    uploadUrl: string
+    publicUrl: string
+  }
+
+  // Doğrudan R2'ye yükle — Vercel bypass
+  const uploadRes = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  })
+
+  if (!uploadRes.ok) {
+    throw new Error(`R2 yükleme hatası: ${uploadRes.status}`)
+  }
+
+  return publicUrl
+}
+
 interface Props {
   onClose: () => void
   onSuccess: () => void
 }
 
 export function UrunEkleModal({ onClose, onSuccess }: Props) {
-  const [form, setForm]       = useState<ProductForm>(EMPTY_FORM)
-  const [saving, setSaving]   = useState(false)
-  const [error, setError]     = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
+  const [form, setForm]         = useState<ProductForm>(EMPTY_FORM)
+  const [saving, setSaving]     = useState(false)
+  const [error, setError]       = useState<string | null>(null)
+  const [success, setSuccess]   = useState(false)
+  const [progress, setProgress] = useState<string>('')
 
   const set = (key: keyof ProductForm, value: unknown) =>
     setForm((p) => ({ ...p, [key]: value }))
-
-  const showError = useCallback((message: string) => {
-    setError(message)
-    if (typeof window !== 'undefined') {
-      window.alert(message)
-    }
-  }, [])
 
   const handleSave = useCallback(async () => {
     setError(null)
@@ -94,102 +131,70 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
     const depth  = Number(form.depth)
     const weight = Number(form.weight)
 
-    if (!name) return showError('Ürün adı zorunludur')
-    if (!price || price <= 0) return showError('Geçerli bir fiyat girin')
-    if (!width || !height || !depth || !weight) return showError('Tüm ölçüler zorunludur')
-    if (!form.licensePersonal && !form.licenseCommercial) return showError('En az bir lisans seçin')
-    if (!form.glbFile && !form.stlFile) return showError('En az bir model dosyası gerekli')
+    if (!name)                                          return setError('Ürün adı zorunludur')
+    if (!price || price <= 0)                           return setError('Geçerli bir fiyat girin')
+    if (!width || !height || !depth || !weight)         return setError('Tüm ölçüler zorunludur')
+    if (!form.licensePersonal && !form.licenseCommercial) return setError('En az bir lisans seçin')
+    if (!form.glbFile && !form.stlFile)                 return setError('En az bir model dosyası gerekli')
 
     setSaving(true)
     try {
       const slug = slugify(name) || `urun-${Date.now()}`
 
-      // Model + çeviri yükle
-      const fd = new FormData()
-      fd.set('slug', slug)
-      fd.set('name', name)
-      fd.set('story', form.story.trim())
-      fd.set('sourceLang', form.contentSourceLang)
-      if (form.glbFile) fd.set('glb', form.glbFile)
-      if (form.stlFile) fd.set('stl', form.stlFile)
-
-      const uploadRes = await fetch('https://trend-mucevher-site.vercel.app/api/upload-model', { method: 'POST', body: fd })
-      if (!uploadRes.ok) {
-        const text = await uploadRes.text()
-        let errMsg = `Model yükleme hatası (HTTP ${uploadRes.status})`
-        try {
-          const b = JSON.parse(text) as { error?: string }
-          if (b.error) errMsg = `Model yükleme hatası: ${b.error} (HTTP ${uploadRes.status})`
-        } catch {
-          if (text.length < 200) errMsg = text || errMsg
-        }
-        throw new Error(errMsg)
+      // 1. GLB yükle
+      let glbUrl: string | null = null
+      if (form.glbFile) {
+        setProgress('GLB modeli yükleniyor...')
+        glbUrl = await uploadViaPresign(slug, form.glbFile, 'glb')
       }
-      const uploadData = await uploadRes.json() as {
-        glbUrl?: string
-        stlUrl?: string
-        translationPatch?: Record<string, unknown> | null
-      }
-      console.log('uploadData', uploadData)
 
-      // Thumbnail'lar
-      const thumbKeys = ['on', 'arka', 'kenar', 'ust'] as const
-      const thumbFormKeys: Record<string, keyof ProductForm> = {
-        on: 'thumbnailOn', arka: 'thumbnailArka',
-        kenar: 'thumbnailKenar', ust: 'thumbnailUst',
+      // 2. STL yükle
+      let stlUrl: string | null = null
+      if (form.stlFile) {
+        setProgress('STL modeli yükleniyor...')
+        stlUrl = await uploadViaPresign(slug, form.stlFile, 'stl')
       }
-      const thumbViews: Record<string, string | null> = { on: null, arka: null, kenar: null, ust: null }
 
-      for (const key of thumbKeys) {
-        const file = form[thumbFormKeys[key]] as File | null
+      // 3. Thumbnail'lar
+      setProgress('Görseller yükleniyor...')
+      const thumbViews: Record<string, string | null> = {
+        on: null, arka: null, kenar: null, ust: null
+      }
+      const thumbEntries = [
+        { key: 'on',    file: form.thumbnailOn },
+        { key: 'arka',  file: form.thumbnailArka },
+        { key: 'kenar', file: form.thumbnailKenar },
+        { key: 'ust',   file: form.thumbnailUst },
+      ]
+      for (const { key, file } of thumbEntries) {
         if (!file) continue
-        const tfd = new FormData()
-        tfd.set('slug', slug)
-        tfd.set('view', key)
-        tfd.set('file', file)
-        const tres = await fetch('/api/upload-thumbnail', { method: 'POST', credentials: 'include', body: tfd })
-        if (!tres.ok) {
-          const text = await tres.text()
-          let errMsg = `${key} görseli yüklenemedi (HTTP ${tres.status})`
-          try {
-            const b = JSON.parse(text) as { error?: string }
-            if (b.error) errMsg = `${key} görseli: ${b.error} (HTTP ${tres.status})`
-          } catch {
-            if (text.length < 200) errMsg = text || errMsg
-          }
-          throw new Error(errMsg)
-        }
-        const td = await tres.json() as { url?: string }
-        thumbViews[key] = td.url ?? null
+        thumbViews[key] = await uploadViaPresign(slug, file, 'thumbnail', key)
       }
-
       const thumbnailUrl = thumbViews.on ?? thumbViews.arka ?? thumbViews.kenar ?? thumbViews.ust ?? null
-      console.log('thumbViews', thumbViews)
 
-      // Çeviri patch yoksa ayrıca çek
-      let trPatch = uploadData.translationPatch ?? null
-      if (!trPatch) {
-        try {
-          const trRes = await fetch('/api/product-translations', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-              name, story: form.story.trim(), sourceLang: form.contentSourceLang,
-            }),
-          })
-          const trJson = await trRes.json() as { ok?: boolean; patch?: typeof trPatch }
-          if (trJson.ok && trJson.patch) trPatch = trJson.patch
-        } catch { /* çeviri opsiyonel */ }
-      }
-      console.log('trPatch', trPatch)
+      // 4. Çeviri
+      setProgress('Çeviriler hazırlanıyor...')
+      let trPatch = null
+      try {
+        const trRes = await fetch('/api/product-translations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            name, story: form.story.trim(), sourceLang: form.contentSourceLang,
+          }),
+        })
+        const trJson = await trRes.json() as { ok?: boolean; patch?: typeof trPatch }
+        if (trJson.ok && trJson.patch) trPatch = trJson.patch
+      } catch { /* çeviri opsiyonel */ }
 
-      // Supabase insert
+      // 5. DB'ye kaydet
+      setProgress('Ürün kaydediliyor...')
       const { createClient } = await import('@/utils/supabase/client')
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
 
-      const payload = {
+      const { error: dbError } = await supabase.from('products_3d').insert({
         sku:          `TM-3D-${Date.now()}`,
         name,
         slug,
@@ -207,8 +212,8 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
         commercial_price: form.licenseCommercial
           ? Number(form.licenseCommercialPrice) || null
           : null,
-        glb_url:       uploadData.glbUrl ?? null,
-        stl_url:       uploadData.stlUrl ?? null,
+        glb_url:       glbUrl,
+        stl_url:       stlUrl,
         thumbnail_url: thumbnailUrl,
         images:        thumbViews,
         dimensions:    { width, height, depth, weight },
@@ -217,26 +222,24 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
         show_on_modeller: true,
         seller_id:     user?.id ?? null,
         seller_email:  user?.email ?? null,
-      }
-      console.log('insert payload', payload)
+      })
 
-      const { error: dbError } = await supabase.from('products_3d').insert(payload)
-
-      if (dbError) throw new Error(`Supabase insert hatası: ${dbError.message}`)
+      if (dbError) throw new Error(dbError.message)
 
       setSuccess(true)
+      setProgress('')
       setTimeout(() => {
         setSuccess(false)
         onSuccess()
         onClose()
       }, 1500)
     } catch (e) {
-      console.error('[UrunEkleModal] handleSave failed:', e)
-      showError(e instanceof Error ? e.message : 'Bir hata oluştu')
+      setError(e instanceof Error ? e.message : 'Bir hata oluştu')
+      setProgress('')
     } finally {
       setSaving(false)
     }
-  }, [form, onSuccess, onClose, showError])
+  }, [form, onSuccess, onClose])
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-foreground/20 backdrop-blur-sm">
@@ -245,30 +248,14 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
 
           <div className="flex items-center justify-between border-b border-border/60 px-6 py-4">
             <h2 className="font-display text-lg font-medium text-foreground">Yeni Ürün Ekle</h2>
-            <button
-              onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-alt hover:text-foreground"
-            >
+            <button onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-alt hover:text-foreground">
               <X size={16} />
             </button>
           </div>
 
-          {error && (
-            <div className="mx-6 mt-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-[13px] text-red-400">
-              <X size={14} className="shrink-0" /> {error}
-            </div>
-          )}
+          <div className="grid grid-cols-1 gap-5 overflow-y-auto p-6 pb-4 sm:grid-cols-2" style={{ maxHeight: '75vh' }}>
 
-          {success && (
-            <div className="mx-6 mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3 text-[13px] text-emerald-400">
-              Ürün başarıyla eklendi!
-            </div>
-          )}
-
-          <div
-            className="grid grid-cols-1 gap-5 overflow-y-auto p-6 pb-4 sm:grid-cols-2"
-            style={{ maxHeight: '70vh' }}
-          >
             <Field label="Ürün Adı" span2>
               <input type="text" className={inputCls} placeholder="Ürün adını girin"
                 value={form.name} onChange={(e) => set('name', e.target.value)} />
@@ -378,6 +365,27 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
               </div>
             </Field>
 
+            {progress && (
+              <div className="flex items-center gap-3 rounded-xl border border-accent/20 bg-accent/[0.06] px-4 py-3 text-[13px] text-accent sm:col-span-2">
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+                {progress}
+              </div>
+            )}
+
+            {error && (
+              <div className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-[13px] text-red-400 sm:col-span-2">
+                <X size={14} /> {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3 text-[13px] text-emerald-400 sm:col-span-2">
+                Ürün başarıyla eklendi!
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-3 border-t border-border/60 px-6 py-4">
@@ -393,7 +401,7 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                   </svg>
-                  Kaydediliyor...
+                  Yükleniyor...
                 </>
               ) : (
                 <><Upload size={14} /> Kaydet ve Gönder</>

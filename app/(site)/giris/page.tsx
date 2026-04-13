@@ -59,13 +59,14 @@ function GirisPageContent() {
         return;
       }
 
+      const r = redirectAfterLogin;
+      const safeRedirect =
+        r && r.startsWith("/") && !r.startsWith("//") ? r : null;
+
       if (kind === "buyer") {
-        const r = redirectAfterLogin;
-        const safe =
-          r && r.startsWith("/") && !r.startsWith("//") ? r : "/hesabim";
-        router.push(safe);
+        router.push(safeRedirect ?? "/hesabim");
       } else {
-        router.push("/satici/dashboard");
+        router.push(safeRedirect ?? "/satici/dashboard");
       }
     } catch {
       setError(g.errUnexpected);
