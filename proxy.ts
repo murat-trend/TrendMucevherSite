@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/utils/supabase/middleware";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const password = process.env.BASIC_AUTH_PASSWORD;
   if (password) {
     const auth = request.headers.get("authorization");
@@ -29,4 +29,3 @@ export const config = {
     "/((?!_next/static|_next/image|favicon.ico|api/mesh-optimize|.*\\.(?:svg|png|jpg|jpeg|gif|webp|glb|stl)$).*)",
   ],
 };
-
