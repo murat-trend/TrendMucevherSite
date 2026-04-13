@@ -6,6 +6,7 @@ import {
   useRemauraBillingModal,
 } from "@/components/remaura/RemauraBillingModalProvider";
 import { useRemauraCreditsCheck } from "@/hooks/useRemauraCreditsCheck";
+import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 
@@ -18,6 +19,8 @@ export default function WebmToMp4Page() {
 }
 
 function WebmToMp4PageInner() {
+  const { t } = useLanguage();
+  const w = t.remauraTools.webmToMp4;
   const billingUi = useRemauraBillingModal();
   const { checkCredits } = useRemauraCreditsCheck();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -40,7 +43,7 @@ function WebmToMp4PageInner() {
     const name = f.name.toLowerCase();
     const typeOk = f.type === "video/webm" || name.endsWith(".webm");
     if (!typeOk) {
-      setError("Lütfen bir WebM dosyası seçin.");
+      setError(w.errorWebmOnly);
       return;
     }
     setError(null);
@@ -54,7 +57,7 @@ function WebmToMp4PageInner() {
 
     setLoading(true);
     setError(null);
-    setProgress("FFmpeg yükleniyor…");
+    setProgress(w.progressLoadFfmpeg);
 
     try {
       if (!ffmpegRef.current) {
@@ -69,7 +72,7 @@ function WebmToMp4PageInner() {
       const ffmpeg = ffmpegRef.current;
       if (!ffmpeg) return;
 
-      setProgress("Dönüştürülüyor…");
+      setProgress(w.progressConverting);
       await ffmpeg.writeFile("input.webm", await fetchFile(file));
       await ffmpeg.exec([
         "-i",
@@ -98,21 +101,21 @@ function WebmToMp4PageInner() {
       await ffmpeg.deleteFile("input.webm").catch(() => {});
       await ffmpeg.deleteFile("output.mp4").catch(() => {});
 
-      setProgress("Tamamlandı — indirme başlatıldı.");
+      setProgress(w.progressDone);
     } catch (e) {
       console.error(e);
-      setError(e instanceof Error ? e.message : "Dönüşüm başarısız.");
+      setError(e instanceof Error ? e.message : w.errorConvert);
       setProgress("");
     } finally {
       setLoading(false);
     }
-  }, [billingUi, checkCredits, file]);
+  }, [billingUi, checkCredits, file, w.progressLoadFfmpeg, w.progressConverting, w.progressDone, w.errorConvert]);
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] px-4 py-10 text-[#e8e0d0] sm:px-6">
       <div className="mx-auto max-w-xl rounded-2xl border border-white/10 bg-[#101114] p-6">
-        <h1 className="font-display text-2xl font-semibold">WebM → MP4</h1>
-        <p className="mt-1 text-sm text-zinc-400">WebM video yükleyin; tarayıcıda MP4&apos;e dönüştürün.</p>
+        <h1 className="font-display text-2xl font-semibold">{w.title}</h1>
+        <p className="mt-1 text-sm text-zinc-400">{w.subtitle}</p>
 
         <div
           onDragOver={(e) => {
@@ -134,7 +137,7 @@ function WebmToMp4PageInner() {
             dragging ? "border-[#c9a84c]/60 bg-[#c9a84c]/10" : "border-white/15 hover:border-white/25"
           }`}
         >
-          <p className="text-sm text-zinc-300">{file ? file.name : "Tıklayın veya WebM sürükleyin"}</p>
+          <p className="text-sm text-zinc-300">{file ? file.name : w.uploadLabel}</p>
           <input
             ref={fileInputRef}
             type="file"
@@ -156,7 +159,7 @@ function WebmToMp4PageInner() {
           disabled={!file || loading}
           className="mt-6 w-full rounded-xl border border-[#c9a84c]/60 bg-[#c9a84c]/10 py-3 text-sm font-medium text-[#f0dcc8] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {loading ? "Dönüştürülüyor…" : "MP4&apos;e dönüştür ve indir"}
+          {loading ? w.converting : w.processButton}
         </button>
       </div>
     </main>

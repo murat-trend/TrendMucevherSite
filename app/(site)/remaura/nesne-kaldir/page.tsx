@@ -7,6 +7,7 @@ import {
   useRemauraBillingModal,
 } from "@/components/remaura/RemauraBillingModalProvider";
 import { useRemauraCreditsCheck } from "@/hooks/useRemauraCreditsCheck";
+import { useLanguage } from "@/components/i18n/LanguageProvider";
 
 const BRUSH_MIN = 2;
 const BRUSH_MAX = 80;
@@ -139,6 +140,8 @@ function paintDot(
 }
 
 function NesneKaldirPageContent() {
+  const { t } = useLanguage();
+  const om = t.remauraTools.objectRemove;
   const billingUi = useRemauraBillingModal();
   const { checkCredits } = useRemauraCreditsCheck();
   const [activeTab, setActiveTab] = useState<TabId>("remove");
@@ -366,12 +369,12 @@ function NesneKaldirPageContent() {
 
   const handleSubmit = async () => {
     if (!image) {
-      setError("Görsel gerekli");
+      setError(om.errImageRequired);
       return;
     }
     const maskCanvas = maskRef.current;
     if (!maskCanvas || !hasPaint) {
-      setError("Kaldırmak istediğiniz bölgeyi kırmızı fırçayla işaretleyin");
+      setError(om.errPaintRegion);
       return;
     }
 
@@ -384,7 +387,7 @@ function NesneKaldirPageContent() {
 
     try {
       const maskBlob: Blob = await new Promise((resolve, reject) => {
-        maskCanvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Maske oluşturulamadı"))), "image/png");
+        maskCanvas.toBlob((b) => (b ? resolve(b) : reject(new Error(om.errMaskBlob))), "image/png");
       });
 
       const fd = new FormData();
@@ -410,13 +413,13 @@ function NesneKaldirPageContent() {
           billingUi.openInsufficientCredits();
           return;
         }
-        throw new Error(data.error || "Hata oluştu");
+        throw new Error(data.error || om.genericError);
       }
 
       const blob = await res.blob();
       setResult(URL.createObjectURL(blob));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Bilinmeyen hata");
+      setError(err instanceof Error ? err.message : om.unknownError);
     } finally {
       setLoading(false);
     }
@@ -432,7 +435,7 @@ function NesneKaldirPageContent() {
 
   const handleNetlestir = async () => {
     if (!sharpFile) {
-      setSharpError("Önce bir görsel yükleyin");
+      setSharpError(om.errNeedImage);
       return;
     }
     const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
@@ -461,12 +464,12 @@ function NesneKaldirPageContent() {
           billingUi.openInsufficientCredits();
           return;
         }
-        throw new Error(data.error || "Netleştirme başarısız");
+        throw new Error(data.error || om.sharpenFail);
       }
       const blob = await res.blob();
       setSharpResult(URL.createObjectURL(blob));
     } catch (err: unknown) {
-      setSharpError(err instanceof Error ? err.message : "Bilinmeyen hata");
+      setSharpError(err instanceof Error ? err.message : om.unknownError);
     } finally {
       setSharpLoading(false);
     }
@@ -485,12 +488,12 @@ function NesneKaldirPageContent() {
   return (
     <main className="min-h-screen bg-[#0a0a0a] px-4 py-12 text-white">
       <div className="mx-auto max-w-3xl">
-        <h1 className="mb-6 text-center text-3xl font-bold">Görsel araçları</h1>
+        <h1 className="mb-6 text-center text-3xl font-bold">{om.title}</h1>
 
         <div
           className="mb-8 flex flex-wrap justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1"
           role="tablist"
-          aria-label="Araç seçimi"
+          aria-label={om.tablistAria}
         >
           <button
             type="button"
@@ -503,7 +506,7 @@ function NesneKaldirPageContent() {
                 : "text-gray-400 hover:text-gray-200"
             }`}
           >
-            Nesne Kaldır
+            {om.tab1}
           </button>
           <button
             type="button"
@@ -516,25 +519,21 @@ function NesneKaldirPageContent() {
                 : "text-gray-400 hover:text-gray-200"
             }`}
           >
-            Görseli Netleştir (4K)
+            {om.tab2}
           </button>
         </div>
 
         {activeTab === "remove" && (
           <>
-            <p className="mb-2 text-center text-gray-400">
-              Görseli yükleyin; kaldırmak istediğiniz alanı kırmızı fırçayla boyayın, yanlışları silgi ile düzeltin.
-            </p>
-            <p className="mb-8 text-center text-xs text-gray-500">
-              Maske ekran boyutunda üretilir (beyaz = silinecek). API tam çözünürlüklü orijinal görseli kullanır.
-            </p>
+            <p className="mb-2 text-center text-gray-400">{om.subtitle}</p>
+            <p className="mb-8 text-center text-xs text-gray-500">{om.removeDetail}</p>
 
             {!preview ? (
               <div
                 onClick={() => void openRemoveFilePicker()}
                 className="mb-6 cursor-pointer rounded-xl border-2 border-dashed border-gray-700 p-8 text-center transition hover:border-gray-500"
               >
-                <p className="text-gray-500">Görsel yüklemek için tıklayın (JPG, PNG, WEBP)</p>
+                <p className="text-gray-500">{om.uploadPrompt}</p>
                 <input
                   ref={inputRef}
                   type="file"
@@ -549,7 +548,7 @@ function NesneKaldirPageContent() {
                   <img
                     ref={imgRef}
                     src={preview}
-                    alt="Kaynak görsel"
+                    alt={om.altSource}
                     className="block max-h-[min(24rem,70vh)] w-auto max-w-full rounded-lg object-contain"
                     onLoad={handleImgLoad}
                     draggable={false}
@@ -570,7 +569,7 @@ function NesneKaldirPageContent() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                   <div className="flex min-w-0 flex-1 items-center gap-3">
                     <label htmlFor="brush-size" className="shrink-0 text-sm text-gray-400">
-                      Fırça
+                      {om.brushSize}
                     </label>
                     <input
                       id="brush-size"
@@ -596,7 +595,7 @@ function NesneKaldirPageContent() {
                           : "border-gray-600 text-gray-300 hover:border-gray-400"
                       }`}
                     >
-                      Fırça
+                      {om.brushTool}
                     </button>
                     <button
                       type="button"
@@ -607,7 +606,7 @@ function NesneKaldirPageContent() {
                           : "border-gray-600 text-gray-300 hover:border-gray-400"
                       }`}
                     >
-                      Sil
+                      {om.eraser}
                     </button>
                   </div>
                 </div>
@@ -618,7 +617,7 @@ function NesneKaldirPageContent() {
                     onClick={() => void openRemoveFilePicker()}
                     className="rounded-lg border border-gray-600 px-4 py-2 text-sm transition hover:border-gray-400"
                   >
-                    Başka görsel
+                    {om.anotherImage}
                   </button>
                   <button
                     type="button"
@@ -626,7 +625,7 @@ function NesneKaldirPageContent() {
                     disabled={!layoutSize}
                     className="rounded-lg border border-gray-600 px-4 py-2 text-sm transition hover:border-gray-400 disabled:opacity-40"
                   >
-                    Maskeyi Temizle
+                    {om.clearMask}
                   </button>
                   <input
                     ref={inputRef}
@@ -647,19 +646,19 @@ function NesneKaldirPageContent() {
               disabled={loading || !image || !hasPaint || layoutSize == null}
               className="w-full rounded-lg bg-gradient-to-r from-amber-600 to-yellow-500 py-3 font-semibold transition hover:opacity-90 disabled:opacity-40"
             >
-              {loading ? "İşleniyor..." : "Nesneyi Kaldır"}
+              {loading ? om.processing : om.processButton}
             </button>
 
             {result && (
               <div className="mt-10">
-                <h2 className="mb-4 text-center text-lg font-semibold">Sonuç</h2>
-                <img src={result} alt="Sonuç" className="mx-auto mb-4 max-h-96 rounded-xl object-contain" />
+                <h2 className="mb-4 text-center text-lg font-semibold">{om.resultHeading}</h2>
+                <img src={result} alt={om.altResultRemove} className="mx-auto mb-4 max-h-96 rounded-xl object-contain" />
                 <button
                   type="button"
                   onClick={handleDownload}
                   className="w-full rounded-lg border border-gray-600 py-3 transition hover:border-gray-400"
                 >
-                  PNG İndir
+                  {om.downloadButton}
                 </button>
               </div>
             )}
@@ -668,17 +667,14 @@ function NesneKaldirPageContent() {
 
         {activeTab === "sharpen" && (
           <>
-            <p className="mb-8 text-center text-sm text-gray-400">
-              Mücevher / ürün fotoğrafını yükleyin; conservative upscale ile daha keskin ve yüksek çözünürlüklü çıktı alın
-              (API limitlerine tabidir).
-            </p>
+            <p className="mb-8 text-center text-sm text-gray-400">{om.sharpenDetail}</p>
 
             {!sharpPreview ? (
               <div
                 onClick={() => void openSharpFilePicker()}
                 className="mb-6 cursor-pointer rounded-xl border-2 border-dashed border-sky-900/60 p-8 text-center transition hover:border-sky-600/50"
               >
-                <p className="text-gray-500">Netleştirilecek görseli seçin (JPG, PNG, WEBP)</p>
+                <p className="text-gray-500">{om.sharpenUploadPrompt}</p>
                 <input
                   ref={sharpInputRef}
                   type="file"
@@ -692,7 +688,7 @@ function NesneKaldirPageContent() {
                 <div className="flex justify-center">
                   <img
                     src={sharpPreview}
-                    alt="Netleştirilecek görsel"
+                    alt={om.altSharpSource}
                     className="max-h-[min(20rem,60vh)] rounded-lg object-contain"
                   />
                 </div>
@@ -702,7 +698,7 @@ function NesneKaldirPageContent() {
                     onClick={() => void openSharpFilePicker()}
                     className="rounded-lg border border-gray-600 px-4 py-2 text-sm transition hover:border-gray-400"
                   >
-                    Başka görsel
+                    {om.sharpenAnotherImage}
                   </button>
                   <input
                     ref={sharpInputRef}
@@ -719,7 +715,7 @@ function NesneKaldirPageContent() {
 
             {sharpLoading && (
               <p className="mb-4 text-center text-sm text-sky-300/90" aria-live="polite">
-                Netleştiriliyor… Bu işlem bir sürebilir.
+                {om.sharpenProcessingWait}
               </p>
             )}
 
@@ -729,19 +725,19 @@ function NesneKaldirPageContent() {
               disabled={sharpLoading || !sharpFile}
               className="w-full rounded-lg bg-gradient-to-r from-sky-600 to-cyan-500 py-3 font-semibold transition hover:opacity-90 disabled:opacity-40"
             >
-              {sharpLoading ? "Netleştiriliyor…" : "Netleştir"}
+              {sharpLoading ? om.sharpenProcessing : om.sharpenAction}
             </button>
 
             {sharpResult && (
               <div className="mt-10">
-                <h2 className="mb-4 text-center text-lg font-semibold">Sonuç</h2>
-                <img src={sharpResult} alt="Netleştirilmiş görsel" className="mx-auto mb-4 max-h-96 rounded-xl object-contain" />
+                <h2 className="mb-4 text-center text-lg font-semibold">{om.resultHeading}</h2>
+                <img src={sharpResult} alt={om.altSharpResult} className="mx-auto mb-4 max-h-96 rounded-xl object-contain" />
                 <button
                   type="button"
                   onClick={handleSharpDownload}
                   className="w-full rounded-lg border border-gray-600 py-3 transition hover:border-gray-400"
                 >
-                  PNG İndir
+                  {om.downloadButton}
                 </button>
               </div>
             )}

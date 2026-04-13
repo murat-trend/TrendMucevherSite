@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
+import { useLanguage } from "@/components/i18n/LanguageProvider";
 
 type OrderInfo = {
   product_name: string | null;
@@ -17,6 +18,8 @@ type OrderInfo = {
 
 export default function IndirPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
+  const { locale, t } = useLanguage();
+  const d = t.download;
   const [order, setOrder] = useState<OrderInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,13 +52,13 @@ export default function IndirPage({ params }: { params: Promise<{ token: string 
       }
 
       if (qError || !data) {
-        setError("Geçersiz veya süresi dolmuş indirme linki.");
+        setError(d.error);
         setLoading(false);
         return;
       }
 
       if (data.token_expires_at && new Date(data.token_expires_at) < new Date()) {
-        setError("Bu indirme linkinin süresi dolmuş.");
+        setError(d.expired);
         setLoading(false);
         return;
       }
@@ -63,7 +66,7 @@ export default function IndirPage({ params }: { params: Promise<{ token: string 
       const count = Number(data.download_count ?? 0);
       const max = Number(data.max_downloads ?? 3);
       if (count >= max) {
-        setError("Bu link maksimum indirme sayısına ulaştı.");
+        setError(d.errorLimit);
         setLoading(false);
         return;
       }
@@ -79,7 +82,7 @@ export default function IndirPage({ params }: { params: Promise<{ token: string 
       setLoading(false);
     };
     void load();
-  }, [token]);
+  }, [token, locale, d.error, d.expired, d.errorLimit]);
 
   const handleDownload = async (format: "glb" | "stl") => {
     if (downloading || !order) return;
@@ -127,7 +130,7 @@ export default function IndirPage({ params }: { params: Promise<{ token: string 
   if (loading)
     return (
       <main style={{ minHeight: "100vh", background: "#0a0a0a", color: "#e8e0d0", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <p>Yükleniyor...</p>
+        <p>{d.preparing}</p>
       </main>
     );
 
@@ -137,7 +140,7 @@ export default function IndirPage({ params }: { params: Promise<{ token: string 
         <div style={{ textAlign: "center" }}>
           <p style={{ color: "#f87171", fontSize: "16px" }}>{error}</p>
           <a href="/modeller" style={{ display: "inline-block", marginTop: "1rem", color: "#c9a84c", fontSize: "13px" }}>
-            Modellere Dön →
+            {d.backToModels}
           </a>
         </div>
       </main>
@@ -146,18 +149,21 @@ export default function IndirPage({ params }: { params: Promise<{ token: string 
   return (
     <main style={{ minHeight: "100vh", background: "#0a0a0a", color: "#e8e0d0", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
       <div style={{ maxWidth: "480px", width: "100%", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", background: "#101010", padding: "2rem" }}>
-        <h1 style={{ color: "#c9a84c", fontWeight: 300, letterSpacing: "0.08em", marginBottom: "1.5rem" }}>Modelinizi İndirin</h1>
+        <h1 style={{ color: "#c9a84c", fontWeight: 300, letterSpacing: "0.08em", marginBottom: "0.5rem" }}>{d.title}</h1>
+        <p style={{ color: "#8a8278", fontSize: "12px", marginBottom: "1.25rem" }}>{d.ready}</p>
         <div style={{ marginBottom: "1.5rem", display: "flex", flexDirection: "column", gap: "8px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
-            <span style={{ color: "#8a8278" }}>Ürün</span>
+            <span style={{ color: "#8a8278" }}>{d.labelProduct}</span>
             <span>{order?.product_name ?? "-"}</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
-            <span style={{ color: "#8a8278" }}>Lisans</span>
-            <span>{order?.license_type === "commercial" ? "Ticari" : "Kişisel"}</span>
+            <span style={{ color: "#8a8278" }}>{d.labelLicense}</span>
+            <span>
+              {order?.license_type === "commercial" ? d.licenseCommercial : d.licensePersonal}
+            </span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
-            <span style={{ color: "#8a8278" }}>Kalan İndirme</span>
+            <span style={{ color: "#8a8278" }}>{d.labelRemaining}</span>
             <span>
               {(order?.max_downloads ?? 3) - (order?.download_count ?? 0)} / {order?.max_downloads ?? 3}
             </span>
@@ -179,7 +185,7 @@ export default function IndirPage({ params }: { params: Promise<{ token: string 
               letterSpacing: "0.1em",
             }}
           >
-            GLB İndir (3D Görüntüleyici / AR)
+            {d.glbButton}
           </button>
           <button
             type="button"
@@ -196,12 +202,10 @@ export default function IndirPage({ params }: { params: Promise<{ token: string 
               letterSpacing: "0.1em",
             }}
           >
-            STL İndir (3D Baskı / CNC)
+            {d.stlButton}
           </button>
         </div>
-        <p style={{ marginTop: "1.5rem", color: "#8a8278", fontSize: "11px", textAlign: "center" }}>
-          Bu link 7 gün geçerlidir. Sorun yaşarsanız iletişime geçin.
-        </p>
+        <p style={{ marginTop: "1.5rem", color: "#8a8278", fontSize: "11px", textAlign: "center" }}>{d.footNote}</p>
       </div>
     </main>
   );

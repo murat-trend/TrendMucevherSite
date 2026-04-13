@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { MeshRealtimeViewer, type MeshRealtimeViewerHandle } from "@/components/remaura/MeshRealtimeViewer";
 import {
   RemauraBillingModalProvider,
   useRemauraBillingModal,
 } from "@/components/remaura/RemauraBillingModalProvider";
 import { useRemauraCreditsCheck } from "@/hooks/useRemauraCreditsCheck";
+import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import {
@@ -16,26 +17,8 @@ import {
 
 type RecordState = "idle" | "recording" | "processing" | "done";
 
-const BG_OPTIONS = [
-  { id: "transparent", label: "Şeffaf", cls: "bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABmJLR0QA/wD/AP+gvaeTAAAAH0lEQVQ4jWNgYGD4z8BQDwAAAP//AwBG7SMdAAAADklEQVQI12NgYGD4DwABBAEAWB0v7QAAAABJRU5ErkJggg==')] bg-repeat" },
-  { id: "black", label: "Siyah", cls: "bg-black" },
-  { id: "white", label: "Beyaz", cls: "bg-white" },
-  { id: "dark", label: "Koyu Gri", cls: "bg-[#1a1a1a]" },
-  { id: "gold", label: "Altın", cls: "bg-[#c9a84c22]" },
-];
-
-const DURATION_OPTIONS = [
-  { id: "5", label: "5 sn" },
-  { id: "10", label: "10 sn" },
-  { id: "15", label: "15 sn" },
-  { id: "30", label: "30 sn" },
-];
-
-const FORMAT_OPTIONS = [
-  { id: "square", label: "Kare (1:1)", w: 1080, h: 1080 },
-  { id: "portrait", label: "Dikey (9:16)", w: 1080, h: 1920 },
-  { id: "landscape", label: "Yatay (16:9)", w: 1920, h: 1080 },
-];
+const TRANSPARENT_BG =
+  "bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABmJLR0QA/wD/AP+gvaeTAAAAH0lEQVQ4jWNgYGD4z8BQDwAAAP//AwBG7SMdAAAADklEQVQI12NgYGD4DwABBAEAWB0v7QAAAABJRU5ErkJggg==')] bg-repeat";
 
 export default function VideoOptimizePage() {
   return (
@@ -46,6 +29,40 @@ export default function VideoOptimizePage() {
 }
 
 function VideoOptimizePageInner() {
+  const { locale, t } = useLanguage();
+  const vo = t.remauraTools.videoOptimize;
+  const numberLocale =
+    locale === "tr" ? "tr-TR" : locale === "de" ? "de-DE" : locale === "ru" ? "ru-RU" : "en-US";
+
+  const BG_OPTIONS = useMemo(
+    () => [
+      { id: "transparent", label: vo.bgTransparent, cls: TRANSPARENT_BG },
+      { id: "black", label: vo.bgBlack, cls: "bg-black" },
+      { id: "white", label: vo.bgWhite, cls: "bg-white" },
+      { id: "dark", label: vo.bgDarkGray, cls: "bg-[#1a1a1a]" },
+      { id: "gold", label: vo.bgGold, cls: "bg-[#c9a84c22]" },
+    ],
+    [locale, vo.bgTransparent, vo.bgBlack, vo.bgWhite, vo.bgDarkGray, vo.bgGold],
+  );
+
+  const DURATION_OPTIONS = useMemo(
+    () =>
+      (["5", "10", "15", "30"] as const).map((id) => ({
+        id,
+        label: vo.durationSec.replace("{n}", id),
+      })),
+    [locale, vo.durationSec],
+  );
+
+  const FORMAT_OPTIONS = useMemo(
+    () => [
+      { id: "square" as const, label: vo.formatSquare, w: 1080, h: 1080 },
+      { id: "portrait" as const, label: vo.formatPortrait, w: 1080, h: 1920 },
+      { id: "landscape" as const, label: vo.formatLandscape, w: 1920, h: 1080 },
+    ],
+    [locale, vo.formatSquare, vo.formatPortrait, vo.formatLandscape],
+  );
+
   const billingUi = useRemauraBillingModal();
   const { checkCredits } = useRemauraCreditsCheck();
   const [modelUrl, setModelUrl] = useState<string | null>(null);
@@ -163,7 +180,7 @@ function VideoOptimizePageInner() {
     } catch {
       setRecordState("idle");
     }
-  }, [billingUi, checkCredits, modelUrl, format, duration]);
+  }, [billingUi, checkCredits, modelUrl, format, duration, FORMAT_OPTIONS]);
 
   const download = () => {
     if (!outputUrl) return;
@@ -224,12 +241,12 @@ function VideoOptimizePageInner() {
       await ffmpeg.deleteFile("input.webm");
       await ffmpeg.deleteFile("output.mp4");
     } catch (err) {
-      console.error("MP4 dönüşüm hatası:", err);
-      alert("MP4 dönüşümü başarısız. Lütfen WebM olarak indirin.");
+      console.error(err);
+      alert(vo.alertMp4Fail);
     } finally {
       setMp4Converting(false);
     }
-  }, [outputBlob, mp4Url]);
+  }, [outputBlob, mp4Url, vo.alertMp4Fail]);
 
   const reset = () => {
     setModelUrl(null);
@@ -253,12 +270,8 @@ function VideoOptimizePageInner() {
     <main className="min-h-screen bg-background">
       <div className="border-b border-border/60 bg-card">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-          <h1 className="font-display text-2xl font-medium tracking-[-0.02em] text-foreground">
-            3D Model Video Kaydı
-          </h1>
-          <p className="mt-1 text-[13px] text-muted">
-            STL veya GLB modelinizi yükleyin, kamera etrafında döndürün ve video olarak kaydedin
-          </p>
+          <h1 className="font-display text-2xl font-medium tracking-[-0.02em] text-foreground">{vo.title}</h1>
+          <p className="mt-1 text-[13px] text-muted">{vo.subtitle}</p>
         </div>
       </div>
 
@@ -288,8 +301,8 @@ function VideoOptimizePageInner() {
             <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-border/60 bg-surface-alt">
               <Upload size={28} className="text-muted" strokeWidth={1.5} />
             </div>
-            <p className="text-[16px] font-medium text-foreground">STL veya GLB dosyası yükle</p>
-            <p className="mt-2 text-[13px] text-muted">Sürükle bırak veya tıkla</p>
+            <p className="text-[16px] font-medium text-foreground">{vo.uploadLabel}</p>
+            <p className="mt-2 text-[13px] text-muted">{vo.uploadHint}</p>
             <div className="mt-6 flex gap-3">
               {[".stl", ".glb"].map((ext) => (
                 <span key={ext} className="rounded-full border border-border/60 px-3 py-1 text-[11px] font-medium text-muted">
@@ -330,14 +343,18 @@ function VideoOptimizePageInner() {
                 {recordState === "recording" && (
                   <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full border border-red-500/30 bg-black/60 px-3 py-1.5 backdrop-blur-sm">
                     <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-                    <span className="text-[11px] font-medium text-white">Kaydediliyor %{progress}</span>
+                    <span className="text-[11px] font-medium text-white">
+                      {vo.recordingPercent.replace("{p}", String(progress))}
+                    </span>
                   </div>
                 )}
 
                 {meshStats && (
                   <div className="absolute bottom-4 left-4 flex items-center gap-2 rounded-full border border-white/10 bg-black/50 px-3 py-1.5 backdrop-blur-sm">
                     <span className="text-[11px] text-white/70">
-                      {meshStats.vertices.toLocaleString("tr-TR")} vertex · {meshStats.faces.toLocaleString("tr-TR")} yüz
+                      {vo.vertexFace
+                        .replace("{v}", meshStats.vertices.toLocaleString(numberLocale))
+                        .replace("{f}", meshStats.faces.toLocaleString(numberLocale))}
                     </span>
                   </div>
                 )}
@@ -356,7 +373,7 @@ function VideoOptimizePageInner() {
                   }}
                   className="rounded-lg border border-border/40 px-3 py-1.5 text-xs text-muted hover:text-foreground"
                 >
-                  Düz
+                  {vo.flat}
                 </button>
                 <button
                   type="button"
@@ -366,7 +383,7 @@ function VideoOptimizePageInner() {
                   }}
                   className="rounded-lg border border-border/40 px-3 py-1.5 text-xs text-muted hover:text-foreground"
                 >
-                  90° X
+                  {vo.rot90x}
                 </button>
                 <button
                   type="button"
@@ -376,7 +393,7 @@ function VideoOptimizePageInner() {
                   }}
                   className="rounded-lg border border-border/40 px-3 py-1.5 text-xs text-muted hover:text-foreground"
                 >
-                  180° X
+                  {vo.rot180x}
                 </button>
                 <button
                   type="button"
@@ -386,14 +403,16 @@ function VideoOptimizePageInner() {
                   }}
                   className="rounded-lg border border-border/40 px-3 py-1.5 text-xs text-muted hover:text-foreground"
                 >
-                  -90° X
+                  {vo.rotNeg90x}
                 </button>
               </div>
 
               {(recordState === "recording" || recordState === "processing") && (
                 <div className="rounded-xl border border-border/80 bg-card p-4">
                   <div className="mb-2 flex items-center justify-between text-[12px]">
-                    <span className="text-muted">{recordState === "recording" ? "Kaydediliyor..." : "İşleniyor..."}</span>
+                    <span className="text-muted">
+                      {recordState === "recording" ? vo.recording : vo.processing}
+                    </span>
                     <span className="font-medium text-foreground">%{progress}</span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-surface-alt">
@@ -406,7 +425,7 @@ function VideoOptimizePageInner() {
                 <div className="space-y-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] p-5">
                   <div className="flex items-center gap-2">
                     <CheckCircle size={16} className="text-emerald-500" strokeWidth={2} />
-                    <span className="text-[14px] font-medium text-foreground">Video hazır!</span>
+                    <span className="text-[14px] font-medium text-foreground">{vo.videoReady}</span>
                   </div>
                   <video src={outputUrl} controls className="max-h-[300px] w-full rounded-xl" />
                   <div className="flex gap-3">
@@ -414,22 +433,22 @@ function VideoOptimizePageInner() {
                       onClick={download}
                       className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 text-[13px] font-medium text-white hover:bg-emerald-400"
                     >
-                      <Download size={15} /> İndir (.webm)
+                      <Download size={15} /> {vo.downloadButton}
                     </button>
                     <button
                       onClick={() => void downloadMp4()}
                       disabled={mp4Converting}
                       className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border/80 py-3 text-[13px] font-medium text-foreground hover:border-accent/30 disabled:opacity-50"
-                      title={ffmpegLoaded ? "FFmpeg hazır" : "FFmpeg ilk kullanımda yüklenecek"}
+                      title={ffmpegLoaded ? vo.ffmpegReadyHint : vo.ffmpegLoadHint}
                     >
                       {mp4Converting ? (
-                        <><Loader2 size={15} className="animate-spin" /> MP4 hazırlanıyor...</>
+                        <><Loader2 size={15} className="animate-spin" /> {vo.mp4Preparing}</>
                       ) : (
-                        <><Download size={15} /> MP4 İndir</>
+                        <><Download size={15} /> {vo.mp4Download}</>
                       )}
                     </button>
                     {mp4Url && !mp4Converting && (
-                      <span className="text-[10px] text-emerald-500">✓ Hazır</span>
+                      <span className="text-[10px] text-emerald-500">✓ {vo.mp4ReadyBadge}</span>
                     )}
                     <button
                       onClick={() => {
@@ -439,7 +458,7 @@ function VideoOptimizePageInner() {
                       }}
                       className="flex items-center gap-2 rounded-xl border border-border/80 px-4 py-3 text-[13px] text-muted hover:text-foreground"
                     >
-                      <RotateCcw size={14} /> Tekrar
+                      <RotateCcw size={14} /> {vo.repeat}
                     </button>
                   </div>
                 </div>
@@ -448,7 +467,7 @@ function VideoOptimizePageInner() {
 
             <div className="space-y-5">
               <div className="rounded-2xl border border-border/80 bg-card p-5">
-                <h3 className="mb-4 text-[12px] font-medium uppercase tracking-wider text-muted">Arka Plan</h3>
+                <h3 className="mb-4 text-[12px] font-medium uppercase tracking-wider text-muted">{vo.panelBackground}</h3>
                 <div className="flex flex-wrap gap-2">
                   {BG_OPTIONS.map((entry) => (
                     <button
@@ -465,19 +484,19 @@ function VideoOptimizePageInner() {
               </div>
 
               <div className="rounded-2xl border border-border/80 bg-card p-5">
-                <h3 className="mb-4 text-[12px] font-medium uppercase tracking-wider text-muted">Grid</h3>
+                <h3 className="mb-4 text-[12px] font-medium uppercase tracking-wider text-muted">{vo.panelGrid}</h3>
                 <button
                   onClick={() => setShowGrid((prev) => !prev)}
                   className={`w-full rounded-xl border px-4 py-2.5 text-[13px] font-medium transition-all ${
                     showGrid ? "border-accent/30 bg-accent/[0.06] text-accent" : "border-border/60 text-foreground hover:border-accent/20"
                   }`}
                 >
-                  {showGrid ? "Grid Açık (Gizle)" : "Grid Kapalı (Göster)"}
+                  {showGrid ? vo.gridOn : vo.gridOff}
                 </button>
               </div>
 
               <div className="rounded-2xl border border-border/80 bg-card p-5">
-                <h3 className="mb-4 text-[12px] font-medium uppercase tracking-wider text-muted">Format</h3>
+                <h3 className="mb-4 text-[12px] font-medium uppercase tracking-wider text-muted">{vo.panelFormat}</h3>
                 <div className="space-y-2">
                   {FORMAT_OPTIONS.map((entry) => (
                     <button
@@ -495,7 +514,7 @@ function VideoOptimizePageInner() {
               </div>
 
               <div className="rounded-2xl border border-border/80 bg-card p-5">
-                <h3 className="mb-4 text-[12px] font-medium uppercase tracking-wider text-muted">Süre</h3>
+                <h3 className="mb-4 text-[12px] font-medium uppercase tracking-wider text-muted">{vo.panelDuration}</h3>
                 <div className="grid grid-cols-2 gap-2">
                   {DURATION_OPTIONS.map((entry) => (
                     <button
@@ -513,9 +532,7 @@ function VideoOptimizePageInner() {
 
               <div className="flex items-start gap-3 rounded-xl border border-border/60 bg-surface-alt p-4">
                 <Info size={14} className="mt-0.5 shrink-0 text-muted" strokeWidth={1.75} />
-                <p className="text-[11px] leading-relaxed text-muted">
-                  Kaydı başlatmadan önce modeli istediğin açıya getir. Kayıt sırasında fare ile döndürebilirsin.
-                </p>
+                <p className="text-[11px] leading-relaxed text-muted">{vo.sidebarHint}</p>
               </div>
 
               <div className="space-y-2">
@@ -524,7 +541,7 @@ function VideoOptimizePageInner() {
                     onClick={() => void startRecording()}
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-500 py-3.5 text-[14px] font-medium text-white transition-colors hover:bg-red-400"
                   >
-                    <Video size={16} /> Kaydı Başlat
+                    <Video size={16} /> {vo.processButton}
                   </button>
                 )}
                 {recordState === "recording" && (
@@ -533,7 +550,7 @@ function VideoOptimizePageInner() {
                     className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-red-500/50 py-3.5 text-[14px] font-medium text-white"
                   >
                     <span className="h-3 w-3 animate-pulse rounded-full bg-white" />
-                    Kaydediliyor... %{progress}
+                    {vo.recordingPercent.replace("{p}", String(progress))}
                   </button>
                 )}
                 {recordState === "processing" && (
@@ -541,14 +558,14 @@ function VideoOptimizePageInner() {
                     disabled
                     className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-surface-alt py-3.5 text-[14px] font-medium text-muted"
                   >
-                    <Loader2 size={16} className="animate-spin" /> İşleniyor...
+                    <Loader2 size={16} className="animate-spin" /> {vo.processing}
                   </button>
                 )}
                 <button
                   onClick={reset}
                   className="flex w-full items-center justify-center gap-2 rounded-xl border border-border/80 py-3 text-[13px] text-muted hover:text-foreground"
                 >
-                  <RotateCcw size={14} /> Farklı Model Yükle
+                  <RotateCcw size={14} /> {vo.differentModel}
                 </button>
               </div>
             </div>

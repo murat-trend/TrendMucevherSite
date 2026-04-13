@@ -7,6 +7,7 @@ import {
   useRemauraBillingModal,
 } from "@/components/remaura/RemauraBillingModalProvider"
 import { useRemauraCreditsCheck } from "@/hooks/useRemauraCreditsCheck"
+import { useLanguage } from "@/components/i18n/LanguageProvider"
 import { FFmpeg } from "@ffmpeg/ffmpeg"
 import { toBlobURL } from "@ffmpeg/util"
 
@@ -49,6 +50,8 @@ export default function SesStudioPage() {
 }
 
 function SesStudioPageInner() {
+  const { t } = useLanguage()
+  const s = t.studio
   const billingUi = useRemauraBillingModal()
   const { checkCredits } = useRemauraCreditsCheck()
   const sourceInputRef = useRef<HTMLInputElement>(null)
@@ -315,10 +318,8 @@ function SesStudioPageInner() {
         >
           Trend Mucevher
         </div>
-        <div style={{ fontSize: "1.4rem", fontFamily: "var(--font-serif)", fontWeight: 300 }}>Ses Studyosu</div>
-        <div style={{ fontSize: "11px", color: "#4a4642", marginTop: "4px" }}>
-          Video veya ses yukle · Kes · Ses ayarla · Videona ekle
-        </div>
+        <div style={{ fontSize: "1.4rem", fontFamily: "var(--font-serif)", fontWeight: 300 }}>{s.title}</div>
+        <div style={{ fontSize: "11px", color: "#4a4642", marginTop: "4px" }}>{s.subtitle}</div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem", maxWidth: "900px" }}>

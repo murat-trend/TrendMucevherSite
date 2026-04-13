@@ -10,23 +10,8 @@ type RemauraLandingHeaderProps = {
 };
 
 export function RemauraLandingHeader({ title, description }: RemauraLandingHeaderProps) {
-  const { locale } = useLanguage();
-  const ctaWorkspace =
-    locale === "en"
-      ? "Use Tool Now"
-      : locale === "de"
-        ? "Tool Sofort Nutzen"
-        : locale === "ru"
-          ? "Использовать Инструмент"
-          : "Aracı Hemen Kullan";
-  const ctaContact =
-    locale === "en"
-      ? "Contact for Custom Order"
-      : locale === "de"
-        ? "Kontakt fur Sonderauftrag"
-        : locale === "ru"
-          ? "Связаться по индивидуальному заказу"
-          : "Özel Sipariş İçin İletişime Geç";
+  const { t } = useLanguage();
+  const { ctaWorkspace, ctaContact } = t.remauraTools.landing;
   return (
     <section className="mx-auto w-full max-w-5xl px-4 pb-4 pt-8 text-center sm:px-6">
       <h1 className="text-balance text-2xl font-semibold text-foreground sm:text-3xl">{title}</h1>
@@ -50,4 +35,3 @@ export function RemauraLandingHeader({ title, description }: RemauraLandingHeade
     </section>
   );
 }
-
