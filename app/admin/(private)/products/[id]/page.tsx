@@ -36,7 +36,7 @@ async function fetchProductDetail(id: string): Promise<ProductDetailFull | null>
     ["on", "arka", "kenar", "ust"] as const
   )
     .filter((k) => typeof rawImages[k] === "string")
-    .map((k) => ({ id: `${id}-${k}`, alt: k }));
+    .map((k) => ({ id: `${id}-${k}`, alt: k, url: rawImages[k] as string }));
 
   return {
     id: row.id,

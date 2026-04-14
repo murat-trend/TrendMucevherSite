@@ -288,11 +288,19 @@ export function ProductModerationDetailView({ initial }: { initial: ProductDetai
               ) : (
                 <div className="space-y-4">
                   <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-br from-[#1c1914] via-[#12100d] to-[#0a0908]">
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center">
-                      <span className="text-xs font-medium uppercase tracking-widest text-zinc-500">Önizleme</span>
-                      <span className="font-display text-lg text-zinc-200">{primaryImage?.alt ?? "Görsel"}</span>
-                      <span className="font-mono text-[11px] text-zinc-500">{primaryImage?.id}</span>
-                    </div>
+                    {primaryImage?.url ? (
+                      <img
+                        src={primaryImage.url}
+                        alt={primaryImage.alt}
+                        className="absolute inset-0 h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center">
+                        <span className="text-xs font-medium uppercase tracking-widest text-zinc-500">Önizleme</span>
+                        <span className="font-display text-lg text-zinc-200">{primaryImage?.alt ?? "Görsel"}</span>
+                        <span className="font-mono text-[11px] text-zinc-500">{primaryImage?.id}</span>
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {product.images.map((im, i) => (

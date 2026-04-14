@@ -41,7 +41,7 @@ export type ProductDetailFull = {
   compareAtPrice: number | null;
   lowStockWarning: boolean;
   priceAnomaly: boolean;
-  images: { id: string; alt: string }[];
+  images: { id: string; alt: string; url?: string | null }[];
   variants: ProductVariantRow[];
   contentChecks: {
     descriptionOk: boolean;
