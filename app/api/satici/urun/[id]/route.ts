@@ -12,6 +12,7 @@ import {
 const PatchSchema = z.object({
   name:             z.string().min(1).max(200).optional(),
   story:            z.string().max(5000).optional(),
+  sellerNote:       z.string().max(2000).optional(),
   personal_price:   z.number().positive().optional(),
   commercial_price: z.number().positive().nullable().optional(),
   contentSourceLang: z.enum(['tr', 'en', 'de', 'ru']).optional(),
@@ -52,7 +53,7 @@ export async function PATCH(
     )
   }
 
-  const { name, story, personal_price, commercial_price, contentSourceLang } = parsed.data
+  const { name, story, sellerNote, personal_price, commercial_price, contentSourceLang } = parsed.data
 
   // 4. Mevcut kaydı çek (çeviri için gerekli)
   const cookieStore = await cookies()
@@ -60,7 +61,7 @@ export async function PATCH(
 
   const { data: current, error: fetchError } = await supabase
     .from('products_3d')
-    .select('name, story, content_source_locale')
+    .select('name, story, seller_note, content_source_locale')
     .eq('id', id)
     .single()
 
@@ -69,17 +70,18 @@ export async function PATCH(
   }
 
   // 5. Çeviri — isim veya hikaye değiştiyse yeniden üret
-  const finalName  = name  ?? current.name  ?? ''
-  const finalStory = story ?? current.story ?? ''
-  const finalLang  = normalizeContentSourceLocale(
+  const finalName       = name       ?? current.name       ?? ''
+  const finalStory      = story      ?? current.story      ?? ''
+  const finalSellerNote = sellerNote ?? current.seller_note ?? ''
+  const finalLang       = normalizeContentSourceLocale(
     contentSourceLang ?? current.content_source_locale ?? 'tr'
   )
 
   let trPatch = null
-  const textChanged = name !== undefined || story !== undefined || contentSourceLang !== undefined
+  const textChanged = name !== undefined || story !== undefined || sellerNote !== undefined || contentSourceLang !== undefined
   if (textChanged && finalName) {
     try {
-      const built = await buildProductTranslationsFromSource(finalLang, finalName, finalStory)
+      const built = await buildProductTranslationsFromSource(finalLang, finalName, finalStory, finalSellerNote)
       if (built) trPatch = productTranslationsToDbPatch(built, finalLang)
     } catch (e) {
       console.warn('[satici/urun PATCH] translations skipped:', e)
@@ -90,6 +92,7 @@ export async function PATCH(
   const updatePayload = {
     ...(name             !== undefined && { name }),
     ...(story            !== undefined && { story }),
+    ...(sellerNote       !== undefined && { seller_note: sellerNote || null }),
     ...(personal_price   !== undefined && { personal_price }),
     ...(commercial_price !== undefined && { commercial_price }),
     ...(contentSourceLang && { content_source_locale: contentSourceLang }),

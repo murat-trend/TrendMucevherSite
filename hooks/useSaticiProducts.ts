@@ -15,12 +15,14 @@ export type SaticiProduct = {
   personal_price: number
   jewelry_type: string
   story: string | null
+  seller_note: string | null
   content_source_locale: string | null
 }
 
 export type EditFormState = {
   name: string
   story: string
+  sellerNote: string
   personal_price: number
   contentSourceLang: ContentSourceLocale
 }
@@ -46,7 +48,7 @@ export function useSaticiProducts() {
       .from('products_3d')
       .select(`
         id, name, slug, thumbnail_url, is_published,
-        personal_price, jewelry_type, story,
+        personal_price, jewelry_type, story, seller_note,
         content_source_locale
       `)
       .eq('seller_id', user.id)
@@ -65,6 +67,7 @@ export function useSaticiProducts() {
     setEditForm({
       name: p.name,
       story: p.story ?? '',
+      sellerNote: p.seller_note ?? '',
       personal_price: p.personal_price ?? 0,
       contentSourceLang: normalizeContentSourceLocale(p.content_source_locale),
     })
@@ -90,6 +93,7 @@ export function useSaticiProducts() {
         body: JSON.stringify({
           name:              editForm.name,
           story:             editForm.story,
+          sellerNote:        editForm.sellerNote,
           personal_price:    editForm.personal_price,
           contentSourceLang: editForm.contentSourceLang,
         }),

@@ -57,6 +57,17 @@ export function UrunDuzenleModal({
           </label>
 
           <label className="block">
+            <span className="mb-1 block text-xs text-muted">Satıcı Notu</span>
+            <textarea
+              value={editForm.sellerNote}
+              onChange={(e) => onChange({ ...editForm, sellerNote: e.target.value })}
+              rows={2}
+              placeholder="Opsiyonel — alıcıya kısa pratik not"
+              className="w-full resize-none rounded-lg border border-border/40 bg-black/20 px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted/40"
+            />
+          </label>
+
+          <label className="block">
             <span className="mb-1 block text-xs text-muted">İçerik Dili</span>
             <p className="mb-1 text-[11px] text-muted/70">
               Yukarıdaki metni hangi dilde yazdığınızı seçin — diğer diller otomatik çevrilir.

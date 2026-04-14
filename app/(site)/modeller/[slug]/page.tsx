@@ -131,6 +131,12 @@ export default function ModelDetayPage({
   const [reviewSubmitting, setReviewSubmitting] = useState(false)
   const [reviewSuccess, setReviewSuccess] = useState(false)
   const [currentUser, setCurrentUser] = useState<string | null>(null)
+  const [sellerNoteRaw, setSellerNoteRaw] = useState<{
+    tr: string | null; en: string | null; de: string | null; ru: string | null
+  } | null>(null)
+  const localizedSellerNote = sellerNoteRaw
+    ? (locale === 'en' ? sellerNoteRaw.en : locale === 'de' ? sellerNoteRaw.de : locale === 'ru' ? sellerNoteRaw.ru : sellerNoteRaw.tr)?.trim() || null
+    : null
   useEffect(() => {
     let alive = true
     const loadProduct = async () => {
@@ -159,6 +165,17 @@ export default function ModelDetayPage({
             } as ReturnType<typeof mapDbProductToUi>)
           : null,
       )
+      if (alive && data) {
+        const r = data as Record<string, unknown>
+        setSellerNoteRaw({
+          tr: (r.seller_note   as string | null) ?? null,
+          en: (r.seller_note_en as string | null) ?? null,
+          de: (r.seller_note_de as string | null) ?? null,
+          ru: (r.seller_note_ru as string | null) ?? null,
+        })
+      } else if (alive) {
+        setSellerNoteRaw(null)
+      }
       const email = row?.seller_email?.trim() || null
       setSellerEmail(email)
       const sellerId = (row as any)?.seller_id
@@ -1069,6 +1086,12 @@ export default function ModelDetayPage({
           >
             {copy.buy} — ₺{selectedPrice.toLocaleString(copy.currencyLocale)}
           </button>
+
+          {localizedSellerNote && (
+            <div className="mt-4 rounded-xl border border-border/40 bg-white/[0.02] p-4 text-sm text-muted">
+              {localizedSellerNote}
+            </div>
+          )}
 
           {(storeName || sellerEmail) && (
             <div className="mt-4 rounded-xl border border-border/40 bg-white/[0.03] p-4">
