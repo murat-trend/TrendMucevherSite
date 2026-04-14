@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(tee /tmp/tsc_output.txt)",
+      "Bash(echo \"Exit code: $?\")",
+      "Bash(git checkout:*)",
+      "Bash(git merge:*)",
+      "Bash(git push:*)",
+      "Bash(vercel logs:*)",
+      "Bash(npx vercel:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(du -sh public/models/* public/convert-output/*)",
+      "Bash(git rm:*)"
+    ]
+  }
+}
