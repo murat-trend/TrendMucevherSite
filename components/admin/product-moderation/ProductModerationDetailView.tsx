@@ -30,14 +30,7 @@ import {
 const tryFmt = (n: number) =>
   new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 0 }).format(n);
 
-const dateFmt = (iso: string) =>
-  new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(iso));
+const dateFmt = (iso: string) => iso.replace("T", " ").slice(0, 16);
 
 const STATUS_BADGE: Record<ProductModerationStatus, string> = {
   pending: "border-amber-500/40 bg-amber-500/12 text-amber-200",
