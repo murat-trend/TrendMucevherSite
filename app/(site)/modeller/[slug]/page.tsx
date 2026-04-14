@@ -847,15 +847,7 @@ export default function ModelDetayPage({
               { label: copy.dimensions.weight, value: `~${product.weight}g` },
             ].map((item) => (
               <div key={item.label} style={{ textAlign: 'center' }}>
-                <div
-                  style={{
-                    fontSize: '9px',
-                    color: '#4a4642',
-                    letterSpacing: '0.1em',
-                    textTransform: 'uppercase',
-                    marginBottom: '4px',
-                  }}
-                >
+                <div className="text-xs text-foreground/50 uppercase tracking-widest mb-1">
                   {item.label}
                 </div>
                 <div
