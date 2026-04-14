@@ -519,11 +519,11 @@ export default function ModelDetayPage({
                 {sellerAvatar ? (
                   <img src={sellerAvatar} alt={storeName ?? ''} className="h-6 w-6 rounded-full object-cover" />
                 ) : storeName ? (
-                  <div className="h-6 w-6 rounded-full bg-amber-500/20 flex items-center justify-center text-[10px] font-bold text-amber-300">
+                  <div className="h-6 w-6 rounded-full bg-amber-500/20 flex items-center justify-center text-xs font-bold text-amber-300">
                     {storeName.charAt(0).toUpperCase()}
                   </div>
                 ) : null}
-                {storeName && <span className="text-xs text-muted">{storeName}</span>}
+                {storeName && <span className="text-xs text-foreground/60">{storeName}</span>}
               </div>
               {reviews.length > 0 && (
                 <span className="text-xs text-[#c9a84c]">
@@ -776,16 +776,16 @@ export default function ModelDetayPage({
                 )}
               </div>
             )}
-            {!currentUser && <p className="text-xs text-muted mb-3">Yorum için <a href="/giris" className="text-[#c9a84c]">giriş yapın</a>.</p>}
+            {!currentUser && <p className="text-xs text-foreground/60 mb-3">Yorum için <a href="/giris" className="text-[#c9a84c]">giriş yapın</a>.</p>}
             {reviews.length === 0 ? (
-              <p className="text-xs text-muted">Henüz değerlendirme yok.</p>
+              <p className="text-xs text-foreground/60">Henüz değerlendirme yok.</p>
             ) : (
               <div className="flex flex-col gap-3">
                 {reviews.map((r) => (
                   <div key={r.id} className="rounded-xl border border-border/40 bg-white/[0.02] p-4">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-sm text-[#c9a84c]">{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
-                      <span className="text-[10px] text-muted">{new Date(r.created_at).toLocaleDateString('tr-TR')}</span>
+                      <span className="text-xs text-foreground/60">{new Date(r.created_at).toLocaleDateString('tr-TR')}</span>
                     </div>
                     <p className="text-sm text-foreground">{r.comment}</p>
                   </div>
@@ -1100,7 +1100,7 @@ export default function ModelDetayPage({
           </button>
 
           {localizedSellerNote && (
-            <div className="mt-4 rounded-xl border border-border/40 bg-white/[0.02] p-4 text-sm text-muted">
+            <div className="mt-4 rounded-xl border border-border/40 bg-white/[0.02] p-4 text-sm text-foreground/60">
               {localizedSellerNote}
               <Link
                 href="/convert"
@@ -1113,7 +1113,7 @@ export default function ModelDetayPage({
 
           {(storeName || sellerEmail) && (
             <div className="mt-4 rounded-xl border border-border/40 bg-white/[0.03] p-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-2">Satıcı</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-foreground/60 mb-2">Satıcı</p>
               <button type="button" onClick={() => setShowMessageModal(true)} className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-border/40 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-white/[0.06]">
                 Mesaj Gönder
               </button>
@@ -1139,10 +1139,10 @@ export default function ModelDetayPage({
           <div className="w-full max-w-md rounded-2xl border border-border/40 bg-[#0f1117] p-6">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="font-semibold text-foreground">Satıcıya Mesaj Gönder</h3>
-              <button type="button" onClick={() => setShowMessageModal(false)} className="text-muted hover:text-foreground">✕</button>
+              <button type="button" onClick={() => setShowMessageModal(false)} className="text-foreground/60 hover:text-foreground">✕</button>
             </div>
-            {storeName && <p className="mb-3 text-xs text-muted">Alıcı: <span className="text-foreground font-medium">{storeName}</span></p>}
-            <p className="mb-3 text-xs text-muted">Ürün: <span className="text-foreground font-medium">{productName}</span></p>
+            {storeName && <p className="mb-3 text-xs text-foreground/60">Alıcı: <span className="text-foreground font-medium">{storeName}</span></p>}
+            <p className="mb-3 text-xs text-foreground/60">Ürün: <span className="text-foreground font-medium">{productName}</span></p>
             {messageSent ? (
               <p className="text-center text-sm text-emerald-400 py-4">✓ Mesajınız gönderildi!</p>
             ) : (
