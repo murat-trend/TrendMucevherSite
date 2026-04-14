@@ -34,6 +34,8 @@ function getDetailCopy(locale: string) {
       ],
       buy: '◆ Buy',
       footer: 'Instant download after payment · Secure delivery',
+      licensePersonal: 'Personal Use',
+      licenseCommercial: 'Commercial Use',
       currencyLocale: 'en-US',
       viewerNoGlb: 'No GLB or STL preview is available for this model yet.',
       viewerGlbChecking: 'Checking preview…',
@@ -56,6 +58,8 @@ function getDetailCopy(locale: string) {
       ],
       buy: '◆ Kaufen',
       footer: 'Sofortiger Download nach Zahlung · Sichere Lieferung',
+      licensePersonal: 'Persönliche Nutzung',
+      licenseCommercial: 'Kommerzielle Nutzung',
       currencyLocale: 'de-DE',
       viewerNoGlb: 'Für dieses Modell ist weder GLB- noch STL-Vorschau verknüpft.',
       viewerGlbChecking: 'Vorschau wird geprüft…',
@@ -78,6 +82,8 @@ function getDetailCopy(locale: string) {
       ],
       buy: '◆ Купить',
       footer: 'Мгновенная загрузка после оплаты · Безопасная доставка',
+      licensePersonal: 'Личное использование',
+      licenseCommercial: 'Коммерческое использование',
       currencyLocale: 'ru-RU',
       viewerNoGlb: 'Для этой модели нет привязки GLB или STL для превью.',
       viewerGlbChecking: 'Проверка превью…',
@@ -99,6 +105,8 @@ function getDetailCopy(locale: string) {
     ],
     buy: '◆ Satın Al',
     footer: 'Ödeme sonrası anında indir · Güvenli teslimat',
+    licensePersonal: 'Kişisel Kullanım',
+    licenseCommercial: 'Ticari Kullanım',
     currencyLocale: 'tr-TR',
     viewerNoGlb: 'Bu model için tanımlı GLB veya STL dosyası yok; önizleme gösterilemiyor.',
     viewerGlbChecking: 'Önizleme kontrol ediliyor…',
@@ -1034,7 +1042,7 @@ export default function ModelDetayPage({
                   checked={selectedLicense === 'personal'}
                   onChange={() => setSelectedLicense('personal')}
                 />
-                Kişisel Kullanım
+                {copy.licensePersonal}
               </span>
               <span style={{ color: '#c9a84c' }}>₺{personalPrice.toLocaleString(copy.currencyLocale)}</span>
             </label>
@@ -1055,7 +1063,7 @@ export default function ModelDetayPage({
                   checked={selectedLicense === 'commercial'}
                   onChange={() => setSelectedLicense('commercial')}
                 />
-                Ticari Kullanım
+                {copy.licenseCommercial}
               </span>
               <span style={{ color: '#c9a84c' }}>₺{commercialPrice.toLocaleString(copy.currencyLocale)}</span>
             </label>
