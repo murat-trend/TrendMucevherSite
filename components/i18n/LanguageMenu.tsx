@@ -6,8 +6,8 @@ import { useLanguage } from "./LanguageProvider";
 
 const LANGUAGES: { code: Locale; flag: string; label: string; abbr: string }[] = [
   { code: "tr", flag: "🇹🇷", label: "Türkçe", abbr: "TR" },
-  { code: "en", flag: "🇬🇧", label: "English", abbr: "EN" },
-  { code: "de", flag: "🇩🇪", label: "Deutsch", abbr: "DE" },
+  { code: "en", flag: "🌐", label: "English", abbr: "EN" },
+  { code: "de", flag: "",   label: "Deutsch", abbr: "DE" },
   { code: "ru", flag: "🇷🇺", label: "Русский", abbr: "RU" },
 ];
 
@@ -63,7 +63,7 @@ export function LanguageMenu({ variant = "default", align = "start" }: LanguageM
             : "flex h-9 min-w-[2.75rem] items-center justify-center gap-1 rounded-lg border border-border/60 bg-background/80 px-2 text-[12px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:bg-foreground/5 active:bg-foreground/10"
         }
       >
-        <span className="text-base leading-none">{current.flag}</span>
+        {current.flag && <span className="text-base leading-none">{current.flag}</span>}
         <span>{current.abbr}</span>
         <svg
           className={`h-3.5 w-3.5 opacity-60 transition-transform ${open ? "rotate-180" : ""}`}
@@ -96,7 +96,7 @@ export function LanguageMenu({ variant = "default", align = "start" }: LanguageM
                     : "text-foreground/85 hover:bg-foreground/5"
                 }`}
               >
-                <span className="text-lg leading-none">{lang.flag}</span>
+                {lang.flag && <span className="text-lg leading-none">{lang.flag}</span>}
                 <span>{lang.label}</span>
                 {locale === lang.code && <span className="ml-auto text-accent">✓</span>}
               </button>
