@@ -7,7 +7,6 @@ const LABELS: Record<Locale, Record<Ui3DModel["jewelryType"], string>> = {
     Kolye: "Kolye",
     Bilezik: "Bilezik",
     Küpe: "Küpe",
-    Pandant: "Pandant",
     Broş: "Broş",
   },
   en: {
@@ -15,7 +14,6 @@ const LABELS: Record<Locale, Record<Ui3DModel["jewelryType"], string>> = {
     Kolye: "Necklace",
     Bilezik: "Bracelet",
     Küpe: "Earrings",
-    Pandant: "Pendant",
     Broş: "Brooch",
   },
   de: {
@@ -23,7 +21,6 @@ const LABELS: Record<Locale, Record<Ui3DModel["jewelryType"], string>> = {
     Kolye: "Halskette",
     Bilezik: "Armreif",
     Küpe: "Ohrringe",
-    Pandant: "Anhänger",
     Broş: "Brosche",
   },
   ru: {
@@ -31,7 +28,6 @@ const LABELS: Record<Locale, Record<Ui3DModel["jewelryType"], string>> = {
     Kolye: "Колье",
     Bilezik: "Браслет",
     Küpe: "Серьги",
-    Pandant: "Подвеска",
     Broş: "Брошь",
   },
 };

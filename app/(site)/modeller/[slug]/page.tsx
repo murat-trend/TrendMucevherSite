@@ -383,7 +383,7 @@ export default function ModelDetayPage({
   })
   const localizedProduct = {
     ...product,
-    tags: [jewelryTypeLabel(dynamic?.jewelryType ?? 'Pandant', locale)],
+    tags: [jewelryTypeLabel(dynamic?.jewelryType ?? 'Kolye', locale)],
   }
   const personalPrice =
     dynamic?.licensePersonalPrice && dynamic.licensePersonalPrice > 0

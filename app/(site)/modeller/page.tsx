@@ -28,7 +28,7 @@ function matchesModellerCategoryFilter(
     case 'mens_ring':
       return j === 'Yüzük' && mensRingHint
     case 'necklace':
-      return j === 'Kolye' || j === 'Pandant'
+      return j === 'Kolye'
     case 'earring':
       return j === 'Küpe'
     case 'bracelet':

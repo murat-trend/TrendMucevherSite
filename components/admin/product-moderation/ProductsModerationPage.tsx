@@ -149,7 +149,7 @@ const DISTRIBUTION_BAR: Record<ProductModerationStatus, string> = {
 };
 
 /** `products_3d.jewelry_type` — UI ve moderasyon ile uyumlu sabit liste */
-const ALLOWED_JEWELRY_TYPES = ["Yüzük", "Kolye", "Bilezik", "Küpe", "Pandant", "Broş"] as const;
+const ALLOWED_JEWELRY_TYPES = ["Yüzük", "Kolye", "Bilezik", "Küpe", "Broş"] as const;
 
 type StatusFilter = "Tümü" | ProductModerationStatus;
 type SortKey = "newest" | "sales" | "risk" | "updated";
@@ -219,7 +219,6 @@ const JEWELRY_TYPE_TO_CODE: Record<Model3DRow["jewelryType"], ModelTypeCode> = {
   Kolye: MODEL_TYPE_CODE.kolye,
   Bilezik: MODEL_TYPE_CODE.bilezik,
   Küpe: MODEL_TYPE_CODE.kupe,
-  Pandant: MODEL_TYPE_CODE.kolye,
   Broş: MODEL_TYPE_CODE.kupe,
 };
 
@@ -1581,7 +1580,6 @@ export function ProductsModerationPage() {
                   <option value="Kolye">Kolye</option>
                   <option value="Bilezik">Bilezik</option>
                   <option value="Küpe">Küpe</option>
-                  <option value="Pandant">Pandant</option>
                   <option value="Broş">Broş</option>
                 </select>
               </label>

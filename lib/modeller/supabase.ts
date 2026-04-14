@@ -35,7 +35,7 @@ export type Ui3DModel = {
   name: string;
   slug: string;
   story: string;
-  jewelryType: "Yüzük" | "Kolye" | "Bilezik" | "Küpe" | "Pandant" | "Broş";
+  jewelryType: "Yüzük" | "Kolye" | "Bilezik" | "Küpe" | "Broş";
   price: number;
   licensePersonalPrice: number | null;
   licenseCommercialPrice: number | null;
@@ -63,7 +63,6 @@ function normalizeJewelryType(value: string): Ui3DModel["jewelryType"] {
   if (v.includes("kolye")) return "Kolye";
   if (v.includes("bilezik")) return "Bilezik";
   if (v.includes("küpe") || v.includes("kupe")) return "Küpe";
-  if (v.includes("pandant")) return "Pandant";
   if (v.includes("broş") || v.includes("bros")) return "Broş";
   return "Yüzük";
 }

@@ -35,7 +35,7 @@ export type Stored3DModel = {
   stlUrl?: string | null;
   thumbnailUrl?: string | null;
   thumbnailViews?: Partial<Record<ThumbnailViewKey, string | null>>;
-  jewelryType: "Yüzük" | "Kolye" | "Bilezik" | "Küpe" | "Pandant" | "Broş";
+  jewelryType: "Yüzük" | "Kolye" | "Bilezik" | "Küpe" | "Broş";
   price: number;
   story: string;
   dimensions?: {

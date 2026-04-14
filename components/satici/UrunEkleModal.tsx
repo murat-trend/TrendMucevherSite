@@ -6,7 +6,7 @@ import {
   type ContentSourceLocale,
 } from '@/lib/modeller/product-translations-anthropic'
 
-type JewelryType = 'Yüzük' | 'Kolye' | 'Bilezik' | 'Küpe' | 'Pandant' | 'Broş'
+type JewelryType = 'Yüzük' | 'Kolye' | 'Bilezik' | 'Küpe' | 'Broş'
 
 type ProductForm = {
   name: string
@@ -296,7 +296,7 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
             <Field label="Mücevher Türü">
               <select className={inputCls} value={form.jewelryType}
                 onChange={(e) => set('jewelryType', e.target.value as JewelryType)}>
-                {['Yüzük','Kolye','Bilezik','Küpe','Pandant','Broş'].map((t) => (
+                {['Yüzük','Kolye','Bilezik','Küpe','Broş'].map((t) => (
                   <option key={t}>{t}</option>
                 ))}
               </select>
