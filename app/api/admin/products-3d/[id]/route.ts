@@ -34,6 +34,9 @@ export async function PATCH(
     patch.jewelry_type = b.jewelry_type;
   }
 
+  if (typeof b.glb_url === "string") patch.glb_url = b.glb_url;
+  if (typeof b.stl_url === "string") patch.stl_url = b.stl_url;
+
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "Güncellenecek alan yok" }, { status: 422 });
   }

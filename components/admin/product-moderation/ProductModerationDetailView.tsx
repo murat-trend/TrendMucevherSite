@@ -104,6 +104,106 @@ function CheckRow({ ok, label }: { ok: boolean; label: string }) {
 
 type BottomTab = "notes" | "history" | "messages" | "similar";
 
+function ModelFilesCard({ productId }: { productId: string }) {
+  const [glbFile, setGlbFile] = useState<File | null>(null);
+  const [stlFile, setStlFile] = useState<File | null>(null);
+  const [glbLoading, setGlbLoading] = useState(false);
+  const [stlLoading, setStlLoading] = useState(false);
+
+  async function uploadModelFile(file: File, kind: 'glb' | 'stl') {
+    const setLoading = kind === 'glb' ? setGlbLoading : setStlLoading;
+    setLoading(true);
+    try {
+      // 1. Presigned URL al
+      const urlRes = await fetch('/api/create-upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          kind,
+          slug: productId,
+          fileName: file.name,
+          size: file.size,
+          contentType: file.type || (kind === 'glb' ? 'model/gltf-binary' : 'model/stl'),
+        }),
+      });
+      const urlJson = await urlRes.json() as { uploadUrl?: string; publicUrl?: string; error?: string };
+      if (!urlRes.ok || !urlJson.uploadUrl) {
+        window.alert(`Upload URL alınamadı: ${urlJson.error ?? 'Bilinmeyen hata'}`);
+        return;
+      }
+
+      // 2. Dosyayı yükle
+      const putRes = await fetch(urlJson.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || (kind === 'glb' ? 'model/gltf-binary' : 'model/stl') },
+        body: file,
+      });
+      if (!putRes.ok) {
+        window.alert(`Dosya yüklenemedi: ${putRes.status}`);
+        return;
+      }
+
+      // 3. DB'yi güncelle
+      const patchRes = await fetch(`/api/admin/products-3d/${productId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ [kind === 'glb' ? 'glb_url' : 'stl_url']: urlJson.publicUrl }),
+      });
+      const patchJson = await patchRes.json() as { ok?: boolean; error?: string };
+      if (!patchRes.ok || !patchJson.ok) {
+        window.alert(`DB güncellenemedi: ${patchJson.error ?? 'Bilinmeyen hata'}`);
+        return;
+      }
+
+      window.alert(`${kind.toUpperCase()} başarıyla güncellendi.`);
+      if (kind === 'glb') setGlbFile(null);
+      else setStlFile(null);
+    } catch (err) {
+      window.alert(`Hata: ${String(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Card title="Model Dosyaları" icon={Package}>
+      <div className="flex flex-col gap-4">
+        {(['glb', 'stl'] as const).map((kind) => {
+          const file = kind === 'glb' ? glbFile : stlFile;
+          const loading = kind === 'glb' ? glbLoading : stlLoading;
+          const setFile = kind === 'glb' ? setGlbFile : setStlFile;
+          return (
+            <div key={kind} className="flex items-center gap-3">
+              <span className="w-10 text-xs font-bold uppercase tracking-widest text-zinc-400">{kind}</span>
+              <input
+                type="file"
+                accept={`.${kind}`}
+                disabled={loading}
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-300 file:mr-2 file:rounded file:border-0 file:bg-zinc-700 file:px-2 file:py-1 file:text-xs file:text-zinc-200 disabled:opacity-50"
+              />
+              <button
+                type="button"
+                disabled={!file || loading}
+                onClick={() => file && uploadModelFile(file, kind)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-600 disabled:opacity-40"
+              >
+                {loading ? (
+                  <><svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>Yükleniyor…</>
+                ) : (
+                  `${kind.toUpperCase()} Güncelle`
+                )}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
 export function ProductModerationDetailView({ initial }: { initial: ProductDetailFull }) {
   const [product, setProduct] = useState(initial);
   const [imgIdx, setImgIdx] = useState(0);
@@ -361,6 +461,8 @@ export function ProductModerationDetailView({ initial }: { initial: ProductDetai
                 </div>
               )}
             </Card>
+
+            <ModelFilesCard productId={product.id} />
 
             <Card title="Varyantlar" icon={Layers}>
               <AdminDataScroll>
