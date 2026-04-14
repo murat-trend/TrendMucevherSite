@@ -377,8 +377,8 @@ const DETAILS: ProductDetailFull[] = [
   }),
 ];
 
-const DETAIL_BY_ID = new Map<string, ProductDetailFull>(DETAILS.map((d) => [d.id, d]));
-
+/** @deprecated Mock veri — gerçek sorgu için page.tsx'deki fetchProductDetail kullanılır */
 export function getProductDetail(id: string): ProductDetailFull | null {
+  const DETAIL_BY_ID = new Map<string, ProductDetailFull>(DETAILS.map((d) => [d.id, d]));
   return DETAIL_BY_ID.get(id) ?? null;
 }
