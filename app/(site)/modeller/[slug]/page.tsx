@@ -31,7 +31,6 @@ function getDetailCopy(locale: string) {
       packageItems: [
         { fmt: 'GLB', desc: '3D web viewer, AR, render' },
         { fmt: 'STL', desc: '3D printing, CNC production' },
-        { fmt: 'OBJ', desc: 'Optional, instant conversion' },
       ],
       buy: '◆ Buy',
       footer: 'Instant download after payment · Secure delivery',
@@ -54,7 +53,6 @@ function getDetailCopy(locale: string) {
       packageItems: [
         { fmt: 'GLB', desc: '3D-Webviewer, AR, Render' },
         { fmt: 'STL', desc: '3D-Druck, CNC-Produktion' },
-        { fmt: 'OBJ', desc: 'Optional, sofortige Konvertierung' },
       ],
       buy: '◆ Kaufen',
       footer: 'Sofortiger Download nach Zahlung · Sichere Lieferung',
@@ -77,7 +75,6 @@ function getDetailCopy(locale: string) {
       packageItems: [
         { fmt: 'GLB', desc: '3D веб‑просмотр, AR, рендер' },
         { fmt: 'STL', desc: '3D печать, CNC производство' },
-        { fmt: 'OBJ', desc: 'По запросу, мгновенная конвертация' },
       ],
       buy: '◆ Купить',
       footer: 'Мгновенная загрузка после оплаты · Безопасная доставка',
@@ -99,7 +96,6 @@ function getDetailCopy(locale: string) {
     packageItems: [
       { fmt: 'GLB', desc: '3D web görüntüleyici, AR, render' },
       { fmt: 'STL', desc: '3D baskı, CNC üretim' },
-      { fmt: 'OBJ', desc: 'İsteğe bağlı, anında dönüştürülür' },
     ],
     buy: '◆ Satın Al',
     footer: 'Ödeme sonrası anında indir · Güvenli teslimat',
