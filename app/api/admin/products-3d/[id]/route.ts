@@ -6,6 +6,52 @@ import { createClient } from "@/utils/supabase/server";
 
 export const runtime = "nodejs";
 
+export async function PATCH(
+  req: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  const { id: rawId } = await context.params;
+  const id = rawId?.trim();
+  if (!id) return NextResponse.json({ error: "Geçersiz id" }, { status: 400 });
+
+  const cookieStore = await cookies();
+  const supabase = createClient(cookieStore);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Oturum gerekli" }, { status: 401 });
+  if (!isRemauraSuperAdminUserId(user.id)) return NextResponse.json({ error: "Yetkisiz" }, { status: 403 });
+
+  let body: unknown;
+  try { body = await req.json(); } catch { return NextResponse.json({ error: "Geçersiz JSON" }, { status: 400 }); }
+
+  const ALLOWED_TYPES = ["Yüzük", "Kolye", "Bilezik", "Küpe", "Broş"];
+  const patch: Record<string, unknown> = {};
+  const b = body as Record<string, unknown>;
+
+  if (typeof b.jewelry_type === "string") {
+    if (!ALLOWED_TYPES.includes(b.jewelry_type)) {
+      return NextResponse.json({ error: "Geçersiz kategori" }, { status: 422 });
+    }
+    patch.jewelry_type = b.jewelry_type;
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: "Güncellenecek alan yok" }, { status: 422 });
+  }
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) return NextResponse.json({ error: "Sunucu yapılandırması eksik" }, { status: 500 });
+
+  const admin = createServiceClient(url, serviceKey);
+  const { error } = await admin.from("products_3d").update(patch).eq("id", id);
+  if (error) {
+    console.error("[admin/products-3d PATCH]", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
 export async function DELETE(
   _req: Request,
   context: { params: Promise<{ id: string }> },

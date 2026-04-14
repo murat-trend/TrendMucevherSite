@@ -109,6 +109,7 @@ export function ProductModerationDetailView({ initial }: { initial: ProductDetai
   const [imgIdx, setImgIdx] = useState(0);
   const [moreOpen, setMoreOpen] = useState(false);
   const [tab, setTab] = useState<BottomTab>("notes");
+  const [categoryUpdating, setCategoryUpdating] = useState(false);
 
   const setStatus = useCallback(async (status: ProductModerationStatus) => {
     const supabase = createClient();
@@ -265,7 +266,39 @@ export function ProductModerationDetailView({ initial }: { initial: ProductDetai
                 </div>
                 <div>
                   <dt className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">Kategori</dt>
-                  <dd className="mt-1 text-sm text-zinc-200">{product.category}</dd>
+                  <dd className="mt-1">
+                    <select
+                      value={product.category}
+                      disabled={categoryUpdating}
+                      onChange={async (e) => {
+                        const newCategory = e.target.value;
+                        setCategoryUpdating(true);
+                        try {
+                          const res = await fetch(`/api/admin/products-3d/${product.id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ jewelry_type: newCategory }),
+                          });
+                          const json = await res.json() as { ok?: boolean; error?: string };
+                          if (!res.ok || !json.ok) {
+                            window.alert(`Kategori güncellenemedi: ${json.error ?? 'Bilinmeyen hata'}`);
+                          } else {
+                            setProduct((p) => ({ ...p, category: newCategory }));
+                          }
+                        } catch (err) {
+                          window.alert(`İstek hatası: ${String(err)}`);
+                        } finally {
+                          setCategoryUpdating(false);
+                        }
+                      }}
+                      className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-200 outline-none transition-opacity disabled:opacity-50"
+                    >
+                      {['Yüzük','Kolye','Bilezik','Küpe','Broş'].map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">Oluşturulma</dt>
