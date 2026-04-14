@@ -189,15 +189,21 @@ export function Header() {
                   <Link key={item.href} href={item.href} className={REMAURA_NEDIR_LINK_CLASS}>
                     {t.nav[item.key]}
                   </Link>
+                ) : item.key === "superAdmin" ? (
+                  session?.isSuperAdmin ? (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className="text-[12px] font-medium tracking-[0.02em] text-muted/50 transition-colors hover:text-muted"
+                    >
+                      {t.nav[item.key]}
+                    </Link>
+                  ) : null
                 ) : (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={
-                      item.key === "superAdmin"
-                        ? "text-[12px] font-medium tracking-[0.02em] text-muted/50 transition-colors hover:text-muted"
-                        : "text-[14px] font-medium tracking-[0.02em] text-foreground/80 transition-colors hover:text-foreground"
-                    }
+                    className="text-[14px] font-medium tracking-[0.02em] text-foreground/80 transition-colors hover:text-foreground"
                   >
                     {t.nav[item.key]}
                   </Link>
@@ -549,16 +555,23 @@ export function Header() {
                       {t.nav[item.key]}
                     </Link>
                   </div>
+                ) : item.key === "superAdmin" ? (
+                  session?.isSuperAdmin ? (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="border-b border-border/60 py-4 text-[12px] font-medium tracking-[0.02em] text-muted/50 transition-colors hover:text-muted"
+                    >
+                      {t.nav[item.key]}
+                    </Link>
+                  ) : null
                 ) : (
                   <Link
                     key={item.href}
                     href={item.href}
                     onClick={() => setMobileMenuOpen(false)}
-                    className={
-                      item.key === "superAdmin"
-                        ? "border-b border-border/60 py-4 text-[12px] font-medium tracking-[0.02em] text-muted/50 transition-colors hover:text-muted"
-                        : "border-b border-border/60 py-4 text-[14px] font-medium tracking-[0.02em] text-foreground transition-colors last:border-b-0 hover:bg-foreground/[0.02]"
-                    }
+                    className="border-b border-border/60 py-4 text-[14px] font-medium tracking-[0.02em] text-foreground transition-colors last:border-b-0 hover:bg-foreground/[0.02]"
                   >
                     {t.nav[item.key]}
                   </Link>
