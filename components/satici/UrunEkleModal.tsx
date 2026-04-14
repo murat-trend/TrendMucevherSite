@@ -62,6 +62,32 @@ const slugify = (s: string) =>
     .replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 
+async function convertToWebP(file: File, quality = 0.85): Promise<File> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.width
+      canvas.height = img.height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { resolve(file); return }
+      ctx.drawImage(img, 0, 0)
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(url)
+          if (!blob) { resolve(file); return }
+          resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.webp'), { type: 'image/webp' }))
+        },
+        'image/webp',
+        quality
+      )
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file) }
+    img.src = url
+  })
+}
+
 // Presign → R2'ye direkt yükle
 async function uploadViaPresign(
   slug: string,
@@ -69,15 +95,17 @@ async function uploadViaPresign(
   kind: 'glb' | 'stl' | 'thumbnail',
   view?: string
 ): Promise<string> {
+  const uploadFile = kind === 'thumbnail' ? await convertToWebP(file) : file
+
   const presignRes = await fetch('/api/create-upload-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify({
       slug,
-      fileName: file.name,
-      contentType: file.type || (kind === 'glb' ? 'model/gltf-binary' : kind === 'stl' ? 'model/stl' : 'image/jpeg'),
-      size: file.size,
+      fileName: uploadFile.name,
+      contentType: uploadFile.type || (kind === 'glb' ? 'model/gltf-binary' : kind === 'stl' ? 'model/stl' : 'image/webp'),
+      size: uploadFile.size,
       kind,
       ...(view ? { view } : {}),
     }),
@@ -96,8 +124,8 @@ async function uploadViaPresign(
   // Doğrudan R2'ye yükle — Vercel bypass
   const uploadRes = await fetch(uploadUrl, {
     method: 'PUT',
-    headers: { 'Content-Type': file.type || 'application/octet-stream' },
-    body: file,
+    headers: { 'Content-Type': uploadFile.type || 'application/octet-stream' },
+    body: uploadFile,
   })
 
   if (!uploadRes.ok) {
