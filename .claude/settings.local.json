@@ -21,7 +21,10 @@
       "Bash(grep -v \"//.*any\")",
       "Bash(du -sh public/*)",
       "Bash(node -e ':*)",
-      "Bash(node -e \"require\\('sharp'\\)\\('public/rem-icon.png'\\).metadata\\(\\).then\\(m => console.log\\(m.width+'x'+m.height, m.format, m.channels+'ch'\\)\\)\")"
+      "Bash(node -e \"require\\('sharp'\\)\\('public/rem-icon.png'\\).metadata\\(\\).then\\(m => console.log\\(m.width+'x'+m.height, m.format, m.channels+'ch'\\)\\)\")",
+      "Bash(npm install:*)",
+      "Bash(ANALYZE=true npm run build)",
+      "Bash(npx next:*)"
     ]
   }
 }
