@@ -278,6 +278,9 @@ export default function SaticiDashboardPage() {
   const [monthlySales, setMonthlySales] = useState<Array<{ amount: number; created_at: string }>>([]);
   const [hourlySales, setHourlySales] = useState<Array<{ created_at: string; amount: number }>>([]);
   const [abandonedCart, setAbandonedCart] = useState<Array<{ name: string; count: number }>>([]);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  const SUPER_ADMIN_ID = "949fd2b4-fc33-48b4-a5c0-a6c9744167a3";
 
   useEffect(() => {
     const load = async () => {
@@ -286,6 +289,8 @@ export default function SaticiDashboardPage() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
+
+      if (user.id === SUPER_ADMIN_ID) setIsSuperAdmin(true);
 
       const { data: orders } = await supabase
         .from("orders")
@@ -567,6 +572,20 @@ export default function SaticiDashboardPage() {
   return (
     <div className="min-h-screen bg-background">
       <SaticiNav active="dashboard" />
+
+      {isSuperAdmin && (
+        <div className="border-b border-amber-500/20 bg-amber-500/[0.06] px-4 py-2 sm:px-6">
+          <div className="mx-auto flex max-w-7xl items-center justify-between">
+            <span className="text-xs font-medium text-amber-300">Super Admin modu aktif</span>
+            <Link
+              href="/admin"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/20"
+            >
+              Admin Paneli →
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
 
