@@ -22,6 +22,7 @@ type Row = {
   id: string;
   name: string;
   story: string | null;
+  seller_note: string | null;
   translations: unknown;
   content_source_locale: string | null;
 };
@@ -48,7 +49,7 @@ export async function POST() {
   const admin = createServiceClient(url, serviceKey);
   const { data: rows, error: selErr } = await admin
     .from("products_3d")
-    .select("id, name, story, translations, content_source_locale")
+    .select("id, name, story, seller_note, translations, content_source_locale")
     .order("created_at", { ascending: false });
 
   if (selErr) {
@@ -64,7 +65,7 @@ export async function POST() {
 
   for (const row of targets) {
     const sourceLang = normalizeContentSourceLocale(row.content_source_locale);
-    const translations = await buildProductTranslationsFromSource(sourceLang, row.name, row.story ?? "");
+    const translations = await buildProductTranslationsFromSource(sourceLang, row.name, row.story ?? "", row.seller_note ?? "");
     if (!translations) {
       results.push({ id: row.id, ok: false, error: "Çeviri başarısız" });
       await sleep(500);
