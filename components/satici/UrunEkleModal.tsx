@@ -18,6 +18,7 @@ type ProductForm = {
   depth: string
   weight: string
   story: string
+  sellerNote: string
   glbFile: File | null
   stlFile: File | null
   thumbnailOn: File | null
@@ -34,6 +35,7 @@ const EMPTY_FORM: ProductForm = {
   name: '', contentSourceLang: 'tr', jewelryType: 'Yüzük',
   price: '', width: '', height: '', depth: '', weight: '',
   story: '',
+  sellerNote: '',
   glbFile: null, stlFile: null,
   thumbnailOn: null, thumbnailArka: null, thumbnailKenar: null, thumbnailUst: null,
   licensePersonal: true, licensePersonalPrice: '',
@@ -210,6 +212,7 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
           credentials: 'include',
           body: JSON.stringify({
             name, story: form.story.trim(), sourceLang: form.contentSourceLang,
+            sellerNote: form.sellerNote.trim(),
           }),
         })
         const trJson = await trRes.json() as { ok?: boolean; patch?: typeof trPatch }
@@ -248,6 +251,7 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
         is_published:  false,
         show_on_home:  false,
         show_on_modeller: true,
+        seller_note:   form.sellerNote.trim() || null,
         seller_id:     user?.id ?? null,
         seller_email:  user?.email ?? null,
       })
@@ -323,6 +327,13 @@ export function UrunEkleModal({ onClose, onSuccess }: Props) {
             <Field label="Ürün Hikayesi" span2>
               <textarea rows={3} className={inputCls} placeholder="Ürününüzü anlatın..."
                 value={form.story} onChange={(e) => set('story', e.target.value)} />
+            </Field>
+
+            <Field label="Satıcı Notu" span2>
+              <textarea rows={2} className={inputCls}
+                placeholder="Örn: STL için dönüştürücümüzü kullanın, istediğiniz boyda baskı için iletişime geçin..."
+                value={form.sellerNote}
+                onChange={(e) => set('sellerNote', e.target.value)} />
             </Field>
 
             <Field label="İçerik Dili" span2>
