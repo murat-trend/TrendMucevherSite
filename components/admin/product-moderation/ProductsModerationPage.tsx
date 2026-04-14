@@ -397,6 +397,7 @@ export function ProductsModerationPage() {
   const [sellerFilter, setSellerFilter] = useState("Tümü");
   const [sort, setSort] = useState<SortKey>("newest");
   const [activeTab, setActiveTab] = useState<AdminProductsTab>("products");
+  const [translating, setTranslating] = useState(false);
   const [categoryRulesModalOpen, setCategoryRulesModalOpen] = useState(false);
   const [modelRows, setModelRows] = useState<Model3DRow[]>([]);
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
@@ -965,10 +966,36 @@ export function ProductsModerationPage() {
           <h1 className="font-display text-3xl font-semibold tracking-[-0.02em] text-zinc-50">Ürün Denetimi</h1>
           <p className="mt-1 text-sm text-zinc-500">Satıcı ürünlerini incele, onayla, reddet ve yayına al</p>
         </div>
-        <button type="button" className={ADMIN_PRIMARY_BUTTON_CLASS}>
-          <Layers className="h-4 w-4" strokeWidth={1.5} />
-          İnceleme Kuralları
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={translating}
+            onClick={async () => {
+              setTranslating(true)
+              try {
+                const res = await fetch('/api/admin/translate-all-products', { method: 'POST', credentials: 'include' })
+                const json = await res.json() as { ok?: boolean; scanned?: number; needingTranslation?: number; translated?: number; error?: string }
+                if (!res.ok || !json.ok) {
+                  window.alert(`Hata: ${json.error ?? 'Bilinmeyen hata'}`)
+                } else {
+                  window.alert(`Tamamlandı.\nTarandı: ${json.scanned}\nÇeviri gereken: ${json.needingTranslation}\nÇevrilen: ${json.translated}`)
+                }
+              } catch (e) {
+                window.alert(`İstek hatası: ${String(e)}`)
+              } finally {
+                setTranslating(false)
+              }
+            }}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/[0.1] bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:border-white/[0.18] disabled:opacity-50"
+          >
+            {translating ? <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} /> : <Tag className="h-4 w-4" strokeWidth={1.5} />}
+            {translating ? 'Çevriliyor…' : 'Tüm Ürünleri Çevir'}
+          </button>
+          <button type="button" className={ADMIN_PRIMARY_BUTTON_CLASS}>
+            <Layers className="h-4 w-4" strokeWidth={1.5} />
+            İnceleme Kuralları
+          </button>
+        </div>
       </header>
 
       <section aria-label="Sekmeler" className="flex flex-wrap items-center gap-2">
