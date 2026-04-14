@@ -26,6 +26,7 @@ import {
   type ProductModerationStatus,
   type RiskLevel,
 } from "./product-moderation-detail-data";
+import { createClient } from "@/utils/supabase/client";
 
 const tryFmt = (n: number) =>
   new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 0 }).format(n);
@@ -109,9 +110,21 @@ export function ProductModerationDetailView({ initial }: { initial: ProductDetai
   const [moreOpen, setMoreOpen] = useState(false);
   const [tab, setTab] = useState<BottomTab>("notes");
 
-  const setStatus = useCallback((status: ProductModerationStatus) => {
+  const setStatus = useCallback(async (status: ProductModerationStatus) => {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("products_3d")
+      .update({
+        is_published: status === "published",
+        moderation_status: status,
+      })
+      .eq("id", product.id);
+    if (error) {
+      window.alert(`Güncellenemedi: ${error.message}`);
+      return;
+    }
     setProduct((p) => ({ ...p, status }));
-  }, []);
+  }, [product.id]);
 
   const kpis = useMemo(() => {
     const riskTone: AdminKpiTone = product.risk === "Yüksek" ? "critical" : "neutral";
@@ -166,21 +179,21 @@ export function ProductModerationDetailView({ initial }: { initial: ProductDetai
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
             <button
               type="button"
-              onClick={() => setStatus("published")}
+              onClick={() => void setStatus("published")}
               className="rounded-xl border border-emerald-500/30 bg-emerald-500/12 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
             >
               Onayla
             </button>
             <button
               type="button"
-              onClick={() => setStatus("rejected")}
+              onClick={() => void setStatus("rejected")}
               className="rounded-xl border border-rose-500/30 bg-rose-500/12 px-4 py-2.5 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/20"
             >
               Reddet
             </button>
             <button
               type="button"
-              onClick={() => setStatus("suspended")}
+              onClick={() => void setStatus("suspended")}
               className="rounded-xl border border-amber-500/30 bg-amber-500/12 px-4 py-2.5 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/20"
             >
               Askıya Al
