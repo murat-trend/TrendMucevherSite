@@ -36,6 +36,7 @@ function getDetailCopy(locale: string) {
       footer: 'Instant download after payment · Secure delivery',
       licensePersonal: 'Personal Use',
       licenseCommercial: 'Commercial Use',
+      convertGlbStl: 'Convert GLB → STL for Free',
       currencyLocale: 'en-US',
       viewerNoGlb: 'No GLB or STL preview is available for this model yet.',
       viewerGlbChecking: 'Checking preview…',
@@ -60,6 +61,7 @@ function getDetailCopy(locale: string) {
       footer: 'Sofortiger Download nach Zahlung · Sichere Lieferung',
       licensePersonal: 'Persönliche Nutzung',
       licenseCommercial: 'Kommerzielle Nutzung',
+      convertGlbStl: 'Kostenlos GLB → STL konvertieren',
       currencyLocale: 'de-DE',
       viewerNoGlb: 'Für dieses Modell ist weder GLB- noch STL-Vorschau verknüpft.',
       viewerGlbChecking: 'Vorschau wird geprüft…',
@@ -84,6 +86,7 @@ function getDetailCopy(locale: string) {
       footer: 'Мгновенная загрузка после оплаты · Безопасная доставка',
       licensePersonal: 'Личное использование',
       licenseCommercial: 'Коммерческое использование',
+      convertGlbStl: 'Конвертировать GLB → STL бесплатно',
       currencyLocale: 'ru-RU',
       viewerNoGlb: 'Для этой модели нет привязки GLB или STL для превью.',
       viewerGlbChecking: 'Проверка превью…',
@@ -107,6 +110,7 @@ function getDetailCopy(locale: string) {
     footer: 'Ödeme sonrası anında indir · Güvenli teslimat',
     licensePersonal: 'Kişisel Kullanım',
     licenseCommercial: 'Ticari Kullanım',
+    convertGlbStl: 'Ücretsiz GLB → STL Dönüştür',
     currencyLocale: 'tr-TR',
     viewerNoGlb: 'Bu model için tanımlı GLB veya STL dosyası yok; önizleme gösterilemiyor.',
     viewerGlbChecking: 'Önizleme kontrol ediliyor…',
@@ -1098,6 +1102,12 @@ export default function ModelDetayPage({
           {localizedSellerNote && (
             <div className="mt-4 rounded-xl border border-border/40 bg-white/[0.02] p-4 text-sm text-muted">
               {localizedSellerNote}
+              <Link
+                href="/convert"
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-border/40 px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:border-border/70 hover:text-foreground"
+              >
+                {copy.convertGlbStl}
+              </Link>
             </div>
           )}
 
