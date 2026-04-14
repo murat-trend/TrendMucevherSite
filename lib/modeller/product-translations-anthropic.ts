@@ -6,7 +6,7 @@ export const PRODUCT_LOCALES = ["tr", "en", "de", "ru"] as const;
 export type ProductLocale = (typeof PRODUCT_LOCALES)[number];
 export type ContentSourceLocale = ProductLocale;
 
-export type ProductTranslationsQuad = Record<ProductLocale, { name: string; story: string }>;
+export type ProductTranslationsQuad = Record<ProductLocale, { name: string; story: string; sellerNote: string }>;
 
 const SOURCE_LABEL: Record<ContentSourceLocale, string> = {
   tr: "Turkish",
@@ -30,7 +30,9 @@ function parseProductTranslationsQuad(raw: string): ProductTranslationsQuad {
     const name = typeof (block as { name?: unknown }).name === "string" ? (block as { name: string }).name : "";
     const story =
       typeof (block as { story?: unknown }).story === "string" ? (block as { story: string }).story : "";
-    out[loc] = { name, story };
+    const sellerNote =
+      typeof (block as { sellerNote?: unknown }).sellerNote === "string" ? (block as { sellerNote: string }).sellerNote : "";
+    out[loc] = { name, story, sellerNote };
   }
   if (!out.tr.name.trim()) {
     throw new Error("Turkish name required in response");
@@ -45,6 +47,7 @@ export async function buildProductTranslationsFromSource(
   sourceLang: ContentSourceLocale,
   name: string,
   story: string,
+  sellerNote: string = '',
 ): Promise<ProductTranslationsQuad | null> {
   const nameTrim = name.trim();
   if (!nameTrim) {
@@ -57,6 +60,8 @@ export async function buildProductTranslationsFromSource(
     const storyTrim = story.trim();
     const srcLabel = SOURCE_LABEL[sourceLang];
 
+    const sellerNoteTrim = sellerNote.trim();
+
     const message = await client.messages.create({
       model: ANTHROPIC_TRANSLATE_MODEL,
       max_tokens: 6000,
@@ -65,12 +70,13 @@ export async function buildProductTranslationsFromSource(
           role: "user",
           content: `You localize a jewelry / 3D product listing for a global marketplace.
 
-The product TITLE and STORY below were written by the seller in ${srcLabel} (${sourceLang}).
+The product TITLE, STORY and SELLER NOTE below were written by the seller in ${srcLabel} (${sourceLang}).
 
 Produce ONE JSON object with exactly these top-level keys: "tr", "en", "de", "ru".
-Each value MUST be an object: {"name":"...","story":"..."}
+Each value MUST be an object: {"name":"...","story":"...","sellerNote":"..."}
 - "name": localized product title for that language (concise, elegant).
 - "story": localized product story for that language (poetic jewelry commerce tone). If the seller story is empty, use "" for every language's story.
+- "sellerNote": localized seller note for that language (short, practical buyer-facing note). If the seller note is empty, use "" for every language's sellerNote.
 
 Rules:
 - Preserve meaning; adapt naturally for each locale.
@@ -82,7 +88,10 @@ TITLE:
 ${nameTrim}
 
 STORY:
-${storyTrim || "(empty)"}`,
+${storyTrim || "(empty)"}
+
+SELLER NOTE:
+${sellerNoteTrim || "(empty)"}`,
         },
       ],
     });
@@ -110,6 +119,9 @@ export function productTranslationsToDbPatch(quad: ProductTranslationsQuad, cont
     story_en: quad.en.story,
     story_de: quad.de.story,
     story_ru: quad.ru.story,
+    seller_note_en: quad.en.sellerNote,
+    seller_note_de: quad.de.sellerNote,
+    seller_note_ru: quad.ru.sellerNote,
   };
 }
 
