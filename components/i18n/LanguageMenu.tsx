@@ -4,11 +4,13 @@ import { useState, useEffect, useRef } from "react";
 import type { Locale } from "@/lib/i18n/translations";
 import { useLanguage } from "./LanguageProvider";
 
-const LANGUAGES: { code: Locale; flag: string; label: string; abbr: string }[] = [
-  { code: "tr", flag: "🇹🇷", label: "Türkçe", abbr: "TR" },
-  { code: "en", flag: "🌐", label: "English", abbr: "EN" },
-  { code: "de", flag: "",   label: "Deutsch", abbr: "DE" },
-  { code: "ru", flag: "🇷🇺", label: "Русский", abbr: "RU" },
+const FLAG_BASE = "https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/6.6.6/flags/4x3";
+
+const LANGUAGES: { code: Locale; flagSrc: string; label: string; abbr: string }[] = [
+  { code: "tr", flagSrc: `${FLAG_BASE}/tr.svg`, label: "Türkçe", abbr: "TR" },
+  { code: "en", flagSrc: `${FLAG_BASE}/gb.svg`, label: "English", abbr: "EN" },
+  { code: "de", flagSrc: `${FLAG_BASE}/de.svg`, label: "Deutsch", abbr: "DE" },
+  { code: "ru", flagSrc: `${FLAG_BASE}/ru.svg`, label: "Русский", abbr: "RU" },
 ];
 
 type LanguageMenuProps = {
@@ -63,7 +65,7 @@ export function LanguageMenu({ variant = "default", align = "start" }: LanguageM
             : "flex h-9 min-w-[2.75rem] items-center justify-center gap-1 rounded-lg border border-border/60 bg-background/80 px-2 text-[12px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:bg-foreground/5 active:bg-foreground/10"
         }
       >
-        {current.flag && <span className="text-base leading-none">{current.flag}</span>}
+        <img src={current.flagSrc} alt={current.abbr} width={20} height={15} className="rounded-[2px] object-cover" />
         <span>{current.abbr}</span>
         <svg
           className={`h-3.5 w-3.5 opacity-60 transition-transform ${open ? "rotate-180" : ""}`}
@@ -96,7 +98,7 @@ export function LanguageMenu({ variant = "default", align = "start" }: LanguageM
                     : "text-foreground/85 hover:bg-foreground/5"
                 }`}
               >
-                {lang.flag && <span className="text-lg leading-none">{lang.flag}</span>}
+                <img src={lang.flagSrc} alt={lang.abbr} width={20} height={15} className="rounded-[2px] object-cover" />
                 <span>{lang.label}</span>
                 {locale === lang.code && <span className="ml-auto text-accent">✓</span>}
               </button>
