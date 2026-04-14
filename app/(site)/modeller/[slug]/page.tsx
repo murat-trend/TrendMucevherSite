@@ -1104,7 +1104,7 @@ export default function ModelDetayPage({
               {localizedSellerNote}
               <Link
                 href="/convert"
-                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-border/40 px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:border-border/70 hover:text-foreground"
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[#c9a84c]/40 bg-[#c9a84c]/10 px-3 py-1.5 text-xs font-medium text-[#c9a84c] transition-colors hover:bg-[#c9a84c]/20 hover:border-[#c9a84c]/60"
               >
                 {copy.convertGlbStl}
               </Link>
