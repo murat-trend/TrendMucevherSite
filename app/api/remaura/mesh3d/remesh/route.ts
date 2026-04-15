@@ -38,8 +38,6 @@ export async function POST(req: Request) {
       origin_at: "bottom",
     };
 
-    console.log("Meshy Remesh Payload:", remeshPayload);
-
     const remeshRes = await fetch(MESHY_REMESH_URL, {
       method: "POST",
       headers: {

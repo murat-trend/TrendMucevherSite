@@ -106,8 +106,6 @@ export async function POST(req: Request) {
       should_remesh: false,
     };
 
-    console.log("Meshy Image-to-3D Payload:", meshyPayload);
-
     const meshyRes = await fetch(MESHY_IMAGE_TO_3D_URL, {
       method: "POST",
       headers: {
