@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
-const SELLER_ROUTES = ['/satici']
+const SELLER_ROUTES = ['/satici/']
 const ADMIN_ROUTES  = ['/admin']
 const AUTH_ROUTES   = ['/giris', '/kayit', '/sifremi-unuttum']
 

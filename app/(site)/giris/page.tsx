@@ -63,11 +63,9 @@ function GirisPageContent() {
       const safeRedirect =
         r && r.startsWith("/") && !r.startsWith("//") ? r : null;
 
-      if (kind === "buyer") {
-        router.push(safeRedirect ?? "/hesabim");
-      } else {
-        router.push(safeRedirect ?? "/satici/dashboard");
-      }
+      const dest = safeRedirect ?? (kind === "buyer" ? "/hesabim" : "/satici/dashboard");
+      // Hard redirect: session cookie'nin middleware'e ulaşması için tam sayfa yenileme gerekli
+      window.location.href = dest;
     } catch {
       setError(g.errUnexpected);
     } finally {
