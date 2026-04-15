@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
@@ -58,9 +59,19 @@ export default function HesabimPage() {
         </div>
         <div className="border-t border-border/40 pt-2">
           <p className="mb-3 text-xs text-muted">{b.ordersSection}</p>
-          <a href="/siparislerim" className="text-sm text-[#c9a84c] hover:underline">
+          <Link href="/hesabim/siparislerim" className="text-sm text-[#c9a84c] hover:underline">
             {b.viewOrders}
-          </a>
+          </Link>
+        </div>
+        <div className="border-t border-border/40 pt-4">
+          <p className="mb-1 text-xs font-medium text-foreground">{b.becomeSeller}</p>
+          <p className="mb-3 text-xs text-muted">{b.becomeSellerHint}</p>
+          <Link
+            href="/satici-ol"
+            className="inline-block rounded-xl border border-[#c9a84c]/40 bg-[#c9a84c]/10 px-4 py-2.5 text-sm font-medium text-[#c9a84c] transition-colors hover:bg-[#c9a84c]/20"
+          >
+            {b.becomeSeller} →
+          </Link>
         </div>
         <button
           type="button"

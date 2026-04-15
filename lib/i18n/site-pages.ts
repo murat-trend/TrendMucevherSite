@@ -51,6 +51,8 @@ export const siteLocales = {
       email: "E-posta",
       ordersSection: "Siparişlerim",
       viewOrders: "Siparişlerimi Görüntüle →",
+      becomeSeller: "Satıcı Ol",
+      becomeSellerHint: "Ürünlerinizi platformumuzda satın",
       logout: "Çıkış Yap",
     },
     seller: {
@@ -340,6 +342,8 @@ export const siteLocales = {
       email: "Email",
       ordersSection: "My orders",
       viewOrders: "View my orders →",
+      becomeSeller: "Become a Seller",
+      becomeSellerHint: "List your products on our platform",
       logout: "Log out",
     },
     seller: {
@@ -630,6 +634,8 @@ export const siteLocales = {
       email: "E-Mail",
       ordersSection: "Meine Bestellungen",
       viewOrders: "Bestellungen ansehen →",
+      becomeSeller: "Verkäufer werden",
+      becomeSellerHint: "Bieten Sie Ihre Produkte auf unserer Plattform an",
       logout: "Abmelden",
     },
     seller: {
@@ -920,6 +926,8 @@ export const siteLocales = {
       email: "Email",
       ordersSection: "Мои заказы",
       viewOrders: "Смотреть заказы →",
+      becomeSeller: "Стать продавцом",
+      becomeSellerHint: "Размещайте свои товары на нашей платформе",
       logout: "Выйти",
     },
     seller: {
