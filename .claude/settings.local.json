@@ -24,7 +24,11 @@
       "Bash(node -e \"require\\('sharp'\\)\\('public/rem-icon.png'\\).metadata\\(\\).then\\(m => console.log\\(m.width+'x'+m.height, m.format, m.channels+'ch'\\)\\)\")",
       "Bash(npm install:*)",
       "Bash(ANALYZE=true npm run build)",
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "Bash(wc -l /c/Users/Murat/Desktop/RemauraAi2/supabase/migrations/*.sql)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(vercel env *)"
     ]
   }
 }

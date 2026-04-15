@@ -1,0 +1,28 @@
+[project]
+project_id = "bohwpsupnxpplybycmmt"
+
+[auth]
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://trendmucevher.com", "https://www.trendmucevher.com"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+template.confirmation.subject = "E-posta adresinizi doğrulayın — Trend Mücevher"
+template.confirmation.content_path = "./templates/confirm_signup.html"
+template.recovery.subject = "Şifrenizi sıfırlayın — Trend Mücevher"
+template.recovery.content_path = "./templates/reset_password.html"
+
+[auth.smtp]
+enabled = true
+host = "smtp.resend.com"
+port = 465
+user = "resend"
+pass = "env(SMTP_PASS)"
+admin_email = "no-reply@no-reply.trendmucevher.com"
+sender_name = "Trend Mücevher"
