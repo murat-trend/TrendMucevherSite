@@ -30,31 +30,40 @@ export default function SaticiOlPage() {
   useEffect(() => {
     (async () => {
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      console.log("[satici-ol] getUser →", { user: user?.id, email: user?.email, userError });
       if (!user) { setState({ phase: "unauthenticated" }); return; }
 
       // Onaylı satıcı ise doğrudan panele yönlendir
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("role, is_approved_seller")
         .eq("id", user.id)
         .maybeSingle();
 
+      console.log("[satici-ol] profiles →", { profile, profileError });
+
       if (profile?.role === "seller" && profile?.is_approved_seller) {
+        console.log("[satici-ol] onaylı satıcı → /satici/dashboard");
         router.replace("/satici/dashboard");
         return;
       }
 
       // Mevcut başvuru kontrolü
-      const { data: app } = await supabase
+      const { data: app, error: appError } = await supabase
         .from("seller_applications")
         .select("status, rejection_reason")
         .eq("user_id", user.id)
         .maybeSingle();
 
+      console.log("[satici-ol] seller_applications →", { app, appError });
+
       if (app) {
+        console.log("[satici-ol] mevcut başvuru bulundu → phase: existing", app.status);
         setState({ phase: "existing", status: app.status as AppStatus, rejection_reason: app.rejection_reason });
       } else {
+        console.log("[satici-ol] başvuru yok → phase: form");
         setState({ phase: "form" });
       }
     })();
