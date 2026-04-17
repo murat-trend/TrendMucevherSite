@@ -165,6 +165,8 @@ function VideoOptimizePageInner() {
       }
     };
 
+    let intervalId: ReturnType<typeof setInterval> | undefined;
+
     try {
       // Three.js saydamlıkta render eder; arka plan compositing adımında eklenir
       viewerRef.current?.setCanvasBackground("#000000", 0);
@@ -180,7 +182,7 @@ function VideoOptimizePageInner() {
       setRecordMimeType(mimeType);
       const recorder = new MediaRecorder(stream, {
         mimeType,
-        videoBitsPerSecond: 40_000_000,
+        videoBitsPerSecond: 25_000_000,
       });
 
       const chunks: Blob[] = [];
@@ -189,7 +191,7 @@ function VideoOptimizePageInner() {
       };
 
       recorder.onstop = () => {
-        window.cancelAnimationFrame(rafId);
+        clearInterval(intervalId);
         viewerRef.current?.pauseAnimation(false);
         viewerRef.current?.setCanvasBackground("#000000", 0);
         viewerRef.current?.renderFrame();
@@ -201,21 +203,12 @@ function VideoOptimizePageInner() {
         setProgress(100);
       };
 
-      let rafId = 0;
-      recorder.start(100);
-
-      // Frame-count bazlı rotasyon: her frame sabit artış → geri sarma/sıçrama yok.
-      // Zaman bazlı (elapsed/duration) yerine frame index kullanılır.
       const totalFrames = Math.max(Math.round(durationSec * fps), 1);
       let frameCount = 0;
-      let nextFrameAt = performance.now();
 
-      const render = (now: number) => {
-        if (now < nextFrameAt - 0.5) {
-          rafId = window.requestAnimationFrame(render);
-          return;
-        }
+      recorder.start(100);
 
+      const tick = () => {
         const turnProgress = frameCount / totalFrames;
         viewerRef.current?.setRotation({
           x: baseRotation.x,
@@ -224,21 +217,20 @@ function VideoOptimizePageInner() {
         });
         viewerRef.current?.renderFrame();
         composite();
-
         setProgress(Math.min(Math.round(turnProgress * 100), 99));
         frameCount++;
-        nextFrameAt += frameDurationMs;
 
-        if (frameCount < totalFrames) {
-          rafId = window.requestAnimationFrame(render);
-        } else {
+        if (frameCount >= totalFrames) {
+          clearInterval(intervalId);
           if (recorder.state === "recording") recorder.requestData();
           recorder.stop();
           setRecordState("processing");
         }
       };
-      rafId = window.requestAnimationFrame(render);
+
+      intervalId = setInterval(tick, frameDurationMs);
     } catch {
+      clearInterval(intervalId);
       viewerRef.current?.pauseAnimation(false);
       viewerRef.current?.setCanvasBackground("#000000", 0);
       viewerRef.current?.renderFrame();
