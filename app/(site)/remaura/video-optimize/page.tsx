@@ -352,21 +352,12 @@ function VideoOptimizePageInner() {
               <div
                 ref={viewerContainerRef}
                 className={`relative overflow-hidden rounded-2xl border border-border/80 ${selectedBg.cls}`}
-                style={
-                  selectedFmt.h > selectedFmt.w
-                    ? {
-                        // Dikey: yüksekliği sabitle, genişliği orandan türet
-                        height: "70vh",
-                        width: `calc(70vh * ${selectedFmt.w} / ${selectedFmt.h})`,
-                        marginInline: "auto",
-                      }
-                    : {
-                        // Kare / yatay: genişliği doldur, yüksekliği orandan türet
-                        width: "100%",
-                        aspectRatio: `${selectedFmt.w}/${selectedFmt.h}`,
-                        maxHeight: "70vh",
-                      }
-                }
+                style={{
+                  // Evrensel: genişlik min(sütun, 70vh×aspect) — her formatta oran korunur
+                  width: `min(100%, calc(70vh * ${selectedFmt.w} / ${selectedFmt.h}))`,
+                  aspectRatio: `${selectedFmt.w}/${selectedFmt.h}`,
+                  marginInline: "auto",
+                }}
               >
                 <MeshRealtimeViewer
                   ref={viewerRef}
