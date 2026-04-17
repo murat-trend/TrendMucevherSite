@@ -45,6 +45,7 @@ export type MeshRealtimeViewerHandle = {
   setCanvasBackground: (color: string, alpha?: number) => void;
   setAutoRotate: (enabled: boolean) => void;
   pauseAnimation: (paused: boolean) => void;
+  overrideAnimationLoop: (fn: (() => void) | null) => void;
 };
 
 export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealtimeViewerProps>(function MeshRealtimeViewer(
@@ -82,6 +83,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
   const autoRotateRef = useRef(false);
   const userInteractingRef = useRef(false);
   const pauseAnimationRef = useRef(false);
+  const animationLoopRef = useRef<(() => void) | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [rotation, setRotation] = useState({ x: 0, y: 0, z: 0 });
 
@@ -288,6 +290,9 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       pauseAnimation: (paused: boolean) => {
         pauseAnimationRef.current = paused;
       },
+      overrideAnimationLoop: (fn) => {
+        rendererRef.current?.setAnimationLoop(fn ?? animationLoopRef.current);
+      },
     }),
     [cloneMeshForExport, exportToSTL, exportToOBJ, triggerDownload, rotation]
   );
@@ -366,8 +371,6 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     scene.add(gridMinor);
     gridMinorRef.current = gridMinor;
 
-    let frameId = 0;
-
     applyRendererSize();
 
     const resizeObserver = new ResizeObserver(() => {
@@ -376,20 +379,18 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     resizeObserver.observe(host.parentElement ?? host);
 
     const animate = () => {
-      frameId = window.requestAnimationFrame(animate);
       if (pauseAnimationRef.current) return;
       if (autoRotateRef.current && !userInteractingRef.current && modelRootRef.current) {
         modelRootRef.current.rotation.y += 0.007;
       }
       controlsRef.current?.update();
-      if (rendererRef.current && sceneRef.current && cameraRef.current) {
-        rendererRef.current.render(sceneRef.current, cameraRef.current);
-      }
+      renderer.render(scene, camera);
     };
-    animate();
+    animationLoopRef.current = animate;
+    renderer.setAnimationLoop(animate);
 
     return () => {
-      window.cancelAnimationFrame(frameId);
+      renderer.setAnimationLoop(null);
       resizeObserver.disconnect();
       controls.removeEventListener("start", onInteractStart);
       controls.removeEventListener("end", onInteractEnd);

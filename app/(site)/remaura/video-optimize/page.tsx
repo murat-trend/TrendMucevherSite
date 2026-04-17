@@ -132,9 +132,7 @@ function VideoOptimizePageInner() {
     }
 
     // autoRotate useEffect asenkron tetiklenir; kayıt öncesi senkron durdur.
-    // Ana animation loop da durdurulur — çift rendering / çakışma engellenir.
     viewerRef.current?.setAutoRotate(false);
-    viewerRef.current?.pauseAnimation(true);
 
     const durationSec = Number(duration);
     const fps = 30;
@@ -165,8 +163,6 @@ function VideoOptimizePageInner() {
       }
     };
 
-    let intervalId: ReturnType<typeof setInterval> | undefined;
-
     try {
       // Three.js saydamlıkta render eder; arka plan compositing adımında eklenir
       viewerRef.current?.setCanvasBackground("#000000", 0);
@@ -191,8 +187,7 @@ function VideoOptimizePageInner() {
       };
 
       recorder.onstop = () => {
-        clearInterval(intervalId);
-        viewerRef.current?.pauseAnimation(false);
+        viewerRef.current?.overrideAnimationLoop(null);
         viewerRef.current?.setCanvasBackground("#000000", 0);
         viewerRef.current?.renderFrame();
         stream.getTracks().forEach((track) => track.stop());
@@ -205,10 +200,19 @@ function VideoOptimizePageInner() {
 
       const totalFrames = Math.max(Math.round(durationSec * fps), 1);
       let frameCount = 0;
+      // setAnimationLoop display Hz'de ateşlenir; sabit 1/30s adımla frame üretiyoruz
+      let nextFrameAt = performance.now();
 
       recorder.start(100);
 
-      const tick = () => {
+      // overrideAnimationLoop: renderer.setAnimationLoop ile ana loop'un yerine geçer.
+      // Her çağrıda zaman kontrolü yapılır — 30fps'ten fazla composite üretilmez.
+      // Rotasyon frame index'e bağlı (deterministic), gerçek zamana bağlı değil.
+      viewerRef.current?.overrideAnimationLoop(() => {
+        const now = performance.now();
+        if (now < nextFrameAt - 0.5) return;
+        nextFrameAt += frameDurationMs;
+
         const turnProgress = frameCount / totalFrames;
         viewerRef.current?.setRotation({
           x: baseRotation.x,
@@ -221,17 +225,14 @@ function VideoOptimizePageInner() {
         frameCount++;
 
         if (frameCount >= totalFrames) {
-          clearInterval(intervalId);
+          viewerRef.current?.overrideAnimationLoop(null);
           if (recorder.state === "recording") recorder.requestData();
           recorder.stop();
           setRecordState("processing");
         }
-      };
-
-      intervalId = setInterval(tick, frameDurationMs);
+      });
     } catch {
-      clearInterval(intervalId);
-      viewerRef.current?.pauseAnimation(false);
+      viewerRef.current?.overrideAnimationLoop(null);
       viewerRef.current?.setCanvasBackground("#000000", 0);
       viewerRef.current?.renderFrame();
       setRecordState("idle");
