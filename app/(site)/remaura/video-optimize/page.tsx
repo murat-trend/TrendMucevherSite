@@ -281,6 +281,17 @@ function VideoOptimizePageInner() {
   const selectedBg = BG_OPTIONS.find((b) => b.id === bg) ?? BG_OPTIONS[0];
   const selectedFmt = FORMAT_OPTIONS.find((f) => f.id === format) ?? FORMAT_OPTIONS[0];
 
+  /**
+   * Hem önizleme hem video player için ortak frame boyutu.
+   * Yükseklik 70vh'ye sabitlenir, genişlik aspect ratio'dan türer.
+   * max-width: 100% dar ekranlarda taşmayı önler.
+   */
+  const frameStyle = useMemo((): React.CSSProperties => ({
+    width: `min(100%, calc(70vh * ${selectedFmt.w} / ${selectedFmt.h}))`,
+    aspectRatio: `${selectedFmt.w} / ${selectedFmt.h}`,
+    marginInline: "auto",
+  }), [selectedFmt.w, selectedFmt.h]);
+
   useEffect(() => {
     viewerRef.current?.setGridVisible(showGrid);
   }, [showGrid]);
@@ -352,12 +363,7 @@ function VideoOptimizePageInner() {
               <div
                 ref={viewerContainerRef}
                 className={`relative overflow-hidden rounded-2xl border border-border/80 ${selectedBg.cls}`}
-                style={{
-                  // Evrensel: genişlik min(sütun, 70vh×aspect) — her formatta oran korunur
-                  width: `min(100%, calc(70vh * ${selectedFmt.w} / ${selectedFmt.h}))`,
-                  aspectRatio: `${selectedFmt.w}/${selectedFmt.h}`,
-                  marginInline: "auto",
-                }}
+                style={frameStyle}
               >
                 <MeshRealtimeViewer
                   ref={viewerRef}
@@ -458,7 +464,9 @@ function VideoOptimizePageInner() {
                     <CheckCircle size={16} className="text-emerald-500" strokeWidth={2} />
                     <span className="text-[14px] font-medium text-foreground">{vo.videoReady}</span>
                   </div>
-                  <video src={outputUrl} controls className="max-h-[300px] w-full rounded-xl" />
+                  <div style={frameStyle} className="overflow-hidden rounded-xl bg-black">
+                    <video src={outputUrl} controls className="h-full w-full object-contain" />
+                  </div>
                   <div className="flex gap-3">
                     <button
                       onClick={download}
