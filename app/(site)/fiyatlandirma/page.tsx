@@ -28,7 +28,7 @@ export default function FiyatlandirmaPage() {
   const name = (p: CreditPackage) => (locale === "en" ? p.nameEn : p.nameTr);
   const creditsLabel =
     locale === "en" ? "credits" : "kredi";
-  const buyLabel = locale === "en" ? "Purchase" : "Satın Al";
+  const buyLabel = locale === "en" ? "Own It" : locale === "de" ? "Besitzen" : locale === "ru" ? "Владей" : "Sahip Ol";
   const contactHint =
     locale === "en"
       ? "Bank transfer and checkout will be available soon. Contact us to purchase a package."
