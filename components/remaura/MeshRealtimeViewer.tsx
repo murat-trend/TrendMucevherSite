@@ -426,18 +426,20 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       return;
     }
 
-    const placeModel = (loadedRoot: THREE.Object3D) => {
+    const placeModel = (loadedRoot: THREE.Object3D, applyGeometryRotation = true) => {
       setLoadError(null);
       modelRootRef.current = loadedRoot;
       loadedRoot.position.set(0, 0, 0);
       loadedRoot.scale.set(1, 1, 1);
-      // Tüm mesh geometry'lerini X ekseninde -90° döndür
+      loadedRoot.rotation.set(0, 0, 0);
       loadedRoot.traverse((child) => {
         const mesh = child as THREE.Mesh;
         if (mesh.isMesh && mesh.geometry) {
-          mesh.geometry.applyMatrix4(
-            new THREE.Matrix4().makeRotationX(-Math.PI / 2),
-          );
+          if (applyGeometryRotation) {
+            mesh.geometry.applyMatrix4(
+              new THREE.Matrix4().makeRotationX(-Math.PI / 2),
+            );
+          }
           tuneMaterialForDisplay(mesh.material);
         }
       });
@@ -550,8 +552,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
         url,
         (gltf) => {
           dracoLoader.dispose();
-          gltf.scene.rotation.x = -Math.PI / 2;
-          placeModel(gltf.scene);
+          placeModel(gltf.scene, false);
         },
         undefined,
         (error) => {
