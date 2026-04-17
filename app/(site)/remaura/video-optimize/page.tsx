@@ -146,6 +146,8 @@ function VideoOptimizePageInner() {
         setRecordState("idle");
         return;
       }
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
 
       const stream = recordCanvas.captureStream(fps);
       const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
@@ -375,6 +377,7 @@ function VideoOptimizePageInner() {
                   renderWidth={selectedFmt.w}
                   renderHeight={selectedFmt.h}
                   preserveDrawingBuffer={true}
+                  pixelRatio={2}
                 />
 
                 {recordState === "recording" && (
