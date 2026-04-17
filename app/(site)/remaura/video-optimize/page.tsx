@@ -80,6 +80,7 @@ function VideoOptimizePageInner() {
   const [mp4Converting, setMp4Converting] = useState(false);
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [recordMimeType, setRecordMimeType] = useState("video/webm");
   const [meshStats, setMeshStats] = useState<{ vertices: number; faces: number } | null>(null);
 
   const viewerRef = useRef<MeshRealtimeViewerHandle>(null);
@@ -138,8 +139,14 @@ function VideoOptimizePageInner() {
       }
 
       const stream = recordCanvas.captureStream(fps);
+      const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
+        ? "video/webm;codecs=vp9"
+        : MediaRecorder.isTypeSupported("video/webm")
+          ? "video/webm"
+          : "video/mp4";
+      setRecordMimeType(mimeType);
       const recorder = new MediaRecorder(stream, {
-        mimeType: "video/webm;codecs=vp9",
+        mimeType,
         videoBitsPerSecond: 15_000_000,
       });
 
@@ -171,7 +178,7 @@ function VideoOptimizePageInner() {
 
       recorder.onstop = () => {
         window.cancelAnimationFrame(rafId);
-        const blob = new Blob(chunks, { type: "video/webm" });
+        const blob = new Blob(chunks, { type: mimeType });
         setOutputBlob(blob);
         setOutputUrl(URL.createObjectURL(blob));
         setRecordState("done");
@@ -184,9 +191,10 @@ function VideoOptimizePageInner() {
 
   const download = () => {
     if (!outputUrl) return;
+    const ext = recordMimeType.includes("mp4") ? "mp4" : "webm";
     const a = document.createElement("a");
     a.href = outputUrl;
-    a.download = `remaura-3d-${Date.now()}.webm`;
+    a.download = `remaura-3d-${Date.now()}.${ext}`;
     a.click();
   };
 
