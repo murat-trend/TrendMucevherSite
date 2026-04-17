@@ -68,6 +68,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
   const renderWidthRef = useRef<number | undefined>(renderWidth);
   const renderHeightRef = useRef<number | undefined>(renderHeight);
   const uniformScaleRef = useRef<number>(1);
+  const modelTargetYRef = useRef<number>(0.9);
   const stlExporterRef = useRef(new STLExporter());
   const objExporterRef = useRef(new OBJExporter());
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -85,6 +86,30 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     renderer.domElement.style.width = "100%";
     renderer.domElement.style.height = "100%";
     camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+  }, []);
+
+  /**
+   * Format/boyut değişince kamerayı modeli tam çerçeveleyecek şekilde yeniden konumlandırır.
+   * Model her zaman 1.8 birime scale edildiğinden sabit fitSize kullanılır.
+   */
+  const fitCameraForAspect = useCallback((w: number, h: number) => {
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    if (!camera || !modelRootRef.current) return;
+    const aspect = w / h;
+    const halfFovV = Math.tan(((45 * Math.PI) / 180) / 2); // tan(22.5°)
+    const halfFovH = aspect * halfFovV;
+    const fitSize = 1.8;
+    const distV = fitSize / (2 * halfFovV);
+    const distH = fitSize / (2 * halfFovH);
+    const dist = Math.max(distV, distH) * 1.4;
+    const ty = modelTargetYRef.current;
+    camera.position.set(0, ty + dist * 0.12, dist);
+    if (controls) {
+      controls.target.set(0, ty, 0);
+      controls.update();
+    }
     camera.updateProjectionMatrix();
   }, []);
 
@@ -359,8 +384,18 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       if (controlsRef.current) {
         const finalBox = new THREE.Box3().setFromObject(loadedRoot);
         const modelHeight = finalBox.max.y - finalBox.min.y;
+        modelTargetYRef.current = modelHeight * 0.5;
         controlsRef.current.target.set(0, modelHeight * 0.5, 0);
         controlsRef.current.update();
+      }
+
+      // Model yüklendi — mevcut format için kamerayı çerçeve içine al
+      {
+        const host = mountRef.current;
+        const container = host?.parentElement ?? host;
+        const w = renderWidthRef.current ?? (container ? Math.max(container.clientWidth, 1) : 1);
+        const h = renderHeightRef.current ?? (container ? Math.max(container.clientHeight, 1) : 1);
+        fitCameraForAspect(w, h);
       }
 
       if (onMeshStats) {
@@ -443,7 +478,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     } else {
       tryLoadGltf(remoteLoaderUrl);
     }
-  }, [modelUrl, fileType, applyMicronDepth, onMeshStats, initialRotation]);
+  }, [modelUrl, fileType, applyMicronDepth, onMeshStats, initialRotation, fitCameraForAspect]);
 
   useEffect(() => {
     if (!modelRootRef.current) return;
@@ -470,7 +505,10 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     renderWidthRef.current = renderWidth;
     renderHeightRef.current = renderHeight;
     applyRendererSize();
-  }, [renderWidth, renderHeight, applyRendererSize]);
+    if (renderWidth != null && renderHeight != null) {
+      fitCameraForAspect(renderWidth, renderHeight);
+    }
+  }, [renderWidth, renderHeight, applyRendererSize, fitCameraForAspect]);
 
   return (
     <div className="relative h-full w-full overflow-hidden">
