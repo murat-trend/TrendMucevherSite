@@ -29,6 +29,8 @@ type MeshRealtimeViewerProps = {
   initialRotation?: { x: number; y: number; z: number };
   onRotationChange?: (rotation: { x: number; y: number; z: number }) => void;
   showRotationControls?: boolean;
+  /** Video kaydı gibi harici canvas okuma için WebGL buffer'ını koru. */
+  preserveDrawingBuffer?: boolean;
 };
 
 export type MeshRealtimeViewerHandle = {
@@ -51,6 +53,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     initialRotation,
     onRotationChange,
     showRotationControls,
+    preserveDrawingBuffer = false,
   },
   ref
 ) {
@@ -193,7 +196,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     camera.position.set(0, 1.2, 3.2);
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer });
     renderer.setPixelRatio(1); // Boyutu biz kontrol ediyoruz
     renderer.setClearColor(0x000000, 0);
     renderer.domElement.style.position = "absolute";

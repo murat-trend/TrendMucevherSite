@@ -20,6 +20,15 @@ type RecordState = "idle" | "recording" | "processing" | "done";
 const TRANSPARENT_BG =
   "bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABmJLR0QA/wD/AP+gvaeTAAAAH0lEQVQ4jWNgYGD4z8BQDwAAAP//AwBG7SMdAAAADklEQVQI12NgYGD4DwABBAEAWB0v7QAAAABJRU5ErkJggg==')] bg-repeat";
 
+/** Video kaydında recordCanvas'a çizilecek arka plan renkleri. */
+const BG_VIDEO_FILL: Record<string, { base: string; overlay?: string }> = {
+  transparent: { base: "#0a0a0a" },
+  black:       { base: "#000000" },
+  white:       { base: "#ffffff" },
+  dark:        { base: "#1a1a1a" },
+  gold:        { base: "#0a0a0a", overlay: "rgba(201,168,76,0.13)" },
+};
+
 export default function VideoOptimizePage() {
   return (
     <RemauraBillingModalProvider>
@@ -126,6 +135,8 @@ function VideoOptimizePageInner() {
     const fmt = FORMAT_OPTIONS.find((f) => f.id === format) ?? FORMAT_OPTIONS[0];
     const durationSec = Number(duration);
     const fps = 30;
+    // bg state'ini kayıt başlangıcında yakala — loop içinde stale closure olmasın
+    const bgFill = BG_VIDEO_FILL[bg] ?? BG_VIDEO_FILL.dark;
 
     try {
       recordCanvas.width = fmt.w;
@@ -162,7 +173,13 @@ function VideoOptimizePageInner() {
         const pct = Math.min(Math.round((elapsed / durationSec) * 100), 99);
         setProgress(pct);
 
-        ctx.clearRect(0, 0, fmt.w, fmt.h);
+        // Arka planı doldur — Three.js canvas transparent, video encoder siyah yapar
+        ctx.fillStyle = bgFill.base;
+        ctx.fillRect(0, 0, fmt.w, fmt.h);
+        if (bgFill.overlay) {
+          ctx.fillStyle = bgFill.overlay;
+          ctx.fillRect(0, 0, fmt.w, fmt.h);
+        }
         ctx.drawImage(sourceCanvas, 0, 0, fmt.w, fmt.h);
 
         if (elapsed < durationSec) {
@@ -185,7 +202,7 @@ function VideoOptimizePageInner() {
     } catch {
       setRecordState("idle");
     }
-  }, [billingUi, checkCredits, modelUrl, format, duration, FORMAT_OPTIONS]);
+  }, [billingUi, checkCredits, modelUrl, format, duration, bg, FORMAT_OPTIONS]);
 
   const download = () => {
     if (!outputUrl) return;
@@ -350,6 +367,7 @@ function VideoOptimizePageInner() {
                   showGrid={true}
                   renderWidth={selectedFmt.w}
                   renderHeight={selectedFmt.h}
+                  preserveDrawingBuffer={true}
                 />
 
                 {recordState === "recording" && (
