@@ -139,9 +139,10 @@ function VideoOptimizePageInner() {
 
     // Compositing canvas: 1x çıkış boyutu — Three.js 2x supersampled canvas buraya
     // downscale edilir (antialiasing) ve arka plan + overlay burada uygulanır.
+    const fmtOpt = FORMAT_OPTIONS.find((f) => f.id === format) ?? FORMAT_OPTIONS[0];
     const recordCanvas = document.createElement("canvas");
-    recordCanvas.width = selectedFmt.w;
-    recordCanvas.height = selectedFmt.h;
+    recordCanvas.width = fmtOpt.w;
+    recordCanvas.height = fmtOpt.h;
     const recordCtx = recordCanvas.getContext("2d")!;
     recordCtx.imageSmoothingEnabled = true;
     recordCtx.imageSmoothingQuality = "high";
@@ -235,7 +236,7 @@ function VideoOptimizePageInner() {
       viewerRef.current?.renderFrame();
       setRecordState("idle");
     }
-  }, [billingUi, checkCredits, modelUrl, duration, bg, viewerRotation, selectedFmt]);
+  }, [billingUi, checkCredits, modelUrl, duration, bg, viewerRotation, format, FORMAT_OPTIONS]);
 
   const download = () => {
     if (!outputUrl) return;
