@@ -30,7 +30,9 @@
       "Bash(grep *)",
       "Bash(vercel env *)",
       "Bash(powershell.exe *)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(xargs -I {} sh -c 'echo \"=== {} ===\" && head -5 {}')",
+      "Bash(xargs ls *)"
     ]
   }
 }
