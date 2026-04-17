@@ -89,11 +89,9 @@ function VideoOptimizePageInner() {
   const recordCanvasRef = useRef<HTMLCanvasElement>(null);
   const ffmpegRef = useRef<FFmpeg | null>(null);
 
-  const openMeshFilePicker = useCallback(async () => {
-    const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
-    if (!ok) return;
+  const openMeshFilePicker = useCallback(() => {
     fileInputRef.current?.click();
-  }, [billingUi, checkCredits]);
+  }, []);
 
   const handleFile = (file: File) => {
     const ext = file.name.split(".").pop()?.toLowerCase();
@@ -325,7 +323,13 @@ function VideoOptimizePageInner() {
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) handleFile(f);
+                e.target.value = "";
+                if (!f) return;
+                void (async () => {
+                  const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+                  if (!ok) return;
+                  handleFile(f);
+                })();
               }}
             />
           </div>
