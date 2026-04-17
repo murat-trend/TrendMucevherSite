@@ -160,7 +160,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     const distH = fitSize / (2 * halfFovH);
     const dist = Math.max(distV, distH) * 1.4;
     const ty = modelTargetYRef.current;
-    camera.position.set(0, ty + dist * 0.12, dist);
+    camera.position.set(0, ty, dist);
     if (controls) {
       controls.target.set(0, ty, 0);
       controls.update();
@@ -289,7 +289,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
-    camera.position.set(0, 1.2, 3.2);
+    camera.position.set(0, 0.9, 3.5);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer });
