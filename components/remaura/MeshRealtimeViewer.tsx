@@ -77,6 +77,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
   const modelTargetYRef = useRef<number>(0.9);
   const stlExporterRef = useRef(new STLExporter());
   const objExporterRef = useRef(new OBJExporter());
+  const autoRotateRef = useRef(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [rotation, setRotation] = useState({ x: 0, y: 0, z: 0 });
 
@@ -260,7 +261,13 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
         }
         setRotation({ x: rot.x, y: rot.y, z: rot.z });
       },
-      getRotation: () => ({ ...rotation }),
+      getRotation: () => {
+        if (modelRootRef.current) {
+          const r = modelRootRef.current.rotation;
+          return { x: r.x, y: r.y, z: r.z };
+        }
+        return { ...rotation };
+      },
       renderFrame: () => {
         controlsRef.current?.update();
         if (rendererRef.current && sceneRef.current && cameraRef.current) {
@@ -352,6 +359,9 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     resizeObserver.observe(host.parentElement ?? host);
 
     const animate = () => {
+      if (autoRotateRef.current && modelRootRef.current) {
+        modelRootRef.current.rotation.y += 0.007;
+      }
       controlsRef.current?.update();
       if (rendererRef.current && sceneRef.current && cameraRef.current) {
         rendererRef.current.render(sceneRef.current, cameraRef.current);
@@ -564,9 +574,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
   }, [zScaleMm, applyMicronDepth]);
 
   useEffect(() => {
-    if (!controlsRef.current) return;
-    controlsRef.current.autoRotate = autoRotate;
-    controlsRef.current.autoRotateSpeed = 1.6;
+    autoRotateRef.current = autoRotate;
   }, [autoRotate]);
 
   useEffect(() => {
