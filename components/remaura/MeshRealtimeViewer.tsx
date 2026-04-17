@@ -275,6 +275,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       renderFrame: () => {
         controlsRef.current?.update();
         if (rendererRef.current && sceneRef.current && cameraRef.current) {
+          rendererRef.current.clear();
           rendererRef.current.render(sceneRef.current, cameraRef.current);
         }
       },
