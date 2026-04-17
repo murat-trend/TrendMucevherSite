@@ -26,7 +26,7 @@ const BG_VIDEO_FILL: Record<string, { base: string; overlay?: string }> = {
   black:       { base: "#000000" },
   white:       { base: "#ffffff" },
   dark:        { base: "#1a1a1a" },
-  gold:        { base: "#13100a" },
+  gold:        { base: "#0a0a0a", overlay: "rgba(201,168,76,0.13)" },
 };
 
 export default function VideoOptimizePage() {
@@ -135,15 +135,37 @@ function VideoOptimizePageInner() {
     const fps = 30;
     const frameDurationMs = 1000 / fps;
     const baseRotation = viewerRef.current?.getRotation() ?? viewerRotation;
-    // bg state'ini kayıt başlangıcında yakala — loop içinde stale closure olmasın
     const bgFill = BG_VIDEO_FILL[bg] ?? BG_VIDEO_FILL.dark;
 
-    try {
-      const backgroundAlpha = bg === "transparent" ? 0 : 1;
-      viewerRef.current?.setCanvasBackground(bgFill.base, backgroundAlpha);
-      viewerRef.current?.renderFrame();
+    // Compositing canvas: 1x çıkış boyutu — Three.js 2x supersampled canvas buraya
+    // downscale edilir (antialiasing) ve arka plan + overlay burada uygulanır.
+    const recordCanvas = document.createElement("canvas");
+    recordCanvas.width = selectedFmt.w;
+    recordCanvas.height = selectedFmt.h;
+    const recordCtx = recordCanvas.getContext("2d")!;
+    recordCtx.imageSmoothingEnabled = true;
+    recordCtx.imageSmoothingQuality = "high";
 
-      const stream = sourceCanvas.captureStream(fps);
+    const composite = () => {
+      recordCtx.clearRect(0, 0, recordCanvas.width, recordCanvas.height);
+      if (bg !== "transparent") {
+        recordCtx.fillStyle = bgFill.base;
+        recordCtx.fillRect(0, 0, recordCanvas.width, recordCanvas.height);
+      }
+      recordCtx.drawImage(sourceCanvas, 0, 0, recordCanvas.width, recordCanvas.height);
+      if (bgFill.overlay) {
+        recordCtx.fillStyle = bgFill.overlay;
+        recordCtx.fillRect(0, 0, recordCanvas.width, recordCanvas.height);
+      }
+    };
+
+    try {
+      // Three.js saydamlıkta render eder; arka plan compositing adımında eklenir
+      viewerRef.current?.setCanvasBackground("#000000", 0);
+      viewerRef.current?.renderFrame();
+      composite();
+
+      const stream = recordCanvas.captureStream(fps);
       const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
         ? "video/webm;codecs=vp9"
         : MediaRecorder.isTypeSupported("video/webm")
@@ -152,7 +174,7 @@ function VideoOptimizePageInner() {
       setRecordMimeType(mimeType);
       const recorder = new MediaRecorder(stream, {
         mimeType,
-        videoBitsPerSecond: 24_000_000,
+        videoBitsPerSecond: 40_000_000,
       });
 
       const chunks: Blob[] = [];
@@ -173,7 +195,7 @@ function VideoOptimizePageInner() {
       };
 
       let rafId = 0;
-      recorder.start(250);
+      recorder.start(100);
 
       let nextFrameAt = performance.now();
       const startTime = performance.now();
@@ -191,10 +213,10 @@ function VideoOptimizePageInner() {
           z: baseRotation.z,
         });
         viewerRef.current?.renderFrame();
+        composite();
         const pct = Math.min(Math.round((elapsed / durationSec) * 100), 99);
         setProgress(pct);
 
-        // Arka planı doldur — Three.js canvas transparent, video encoder siyah yapar
         nextFrameAt += frameDurationMs;
 
         if (elapsed < durationSec) {
@@ -213,7 +235,7 @@ function VideoOptimizePageInner() {
       viewerRef.current?.renderFrame();
       setRecordState("idle");
     }
-  }, [billingUi, checkCredits, modelUrl, duration, bg, viewerRotation]);
+  }, [billingUi, checkCredits, modelUrl, duration, bg, viewerRotation, selectedFmt]);
 
   const download = () => {
     if (!outputUrl) return;
