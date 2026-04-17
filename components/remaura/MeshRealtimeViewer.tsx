@@ -43,6 +43,7 @@ export type MeshRealtimeViewerHandle = {
   getRotation: () => { x: number; y: number; z: number };
   renderFrame: () => void;
   setCanvasBackground: (color: string, alpha?: number) => void;
+  setAutoRotate: (enabled: boolean) => void;
 };
 
 export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealtimeViewerProps>(function MeshRealtimeViewer(
@@ -277,6 +278,9 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       },
       setCanvasBackground: (color: string, alpha = 0) => {
         rendererRef.current?.setClearColor(color, alpha);
+      },
+      setAutoRotate: (enabled: boolean) => {
+        autoRotateRef.current = enabled;
       },
     }),
     [cloneMeshForExport, exportToSTL, exportToOBJ, triggerDownload, rotation]

@@ -131,6 +131,9 @@ function VideoOptimizePageInner() {
       return;
     }
 
+    // autoRotate useEffect asenkron tetiklenir; kayıt öncesi senkron durdur
+    viewerRef.current?.setAutoRotate(false);
+
     const durationSec = Number(duration);
     const fps = 30;
     const frameDurationMs = 1000 / fps;
