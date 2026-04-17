@@ -26,7 +26,7 @@ const BG_VIDEO_FILL: Record<string, { base: string; overlay?: string }> = {
   black:       { base: "#000000" },
   white:       { base: "#ffffff" },
   dark:        { base: "#1a1a1a" },
-  gold:        { base: "#0a0a0a", overlay: "rgba(201,168,76,0.13)" },
+  gold:        { base: "#13100a" },
 };
 
 export default function VideoOptimizePage() {
@@ -80,7 +80,7 @@ function VideoOptimizePageInner() {
   const [bg, setBg] = useState("dark");
   const [duration, setDuration] = useState("10");
   const [format, setFormat] = useState("square");
-  const [showGrid, setShowGrid] = useState(true);
+  const [showGrid, setShowGrid] = useState(false);
   const [recordState, setRecordState] = useState<RecordState>("idle");
   const [progress, setProgress] = useState(0);
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
@@ -91,11 +91,11 @@ function VideoOptimizePageInner() {
   const [dragging, setDragging] = useState(false);
   const [recordMimeType, setRecordMimeType] = useState("video/webm");
   const [meshStats, setMeshStats] = useState<{ vertices: number; faces: number } | null>(null);
+  const [viewerRotation, setViewerRotation] = useState({ x: 0, y: 0, z: 0 });
 
   const viewerRef = useRef<MeshRealtimeViewerHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
-  const recordCanvasRef = useRef<HTMLCanvasElement>(null);
   const ffmpegRef = useRef<FFmpeg | null>(null);
 
   const openMeshFilePicker = useCallback(() => {
@@ -115,8 +115,7 @@ function VideoOptimizePageInner() {
 
   const startRecording = useCallback(async () => {
     const container = viewerContainerRef.current;
-    const recordCanvas = recordCanvasRef.current;
-    if (!container || !modelUrl || !recordCanvas) return;
+    if (!container || !modelUrl) return;
 
     const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
     if (!ok) return;
@@ -127,29 +126,24 @@ function VideoOptimizePageInner() {
     setOutputBlob(null);
 
     const sourceCanvas = container.querySelector("canvas");
-    if (!sourceCanvas) {
+    if (!(sourceCanvas instanceof HTMLCanvasElement)) {
       setRecordState("idle");
       return;
     }
 
-    const fmt = FORMAT_OPTIONS.find((f) => f.id === format) ?? FORMAT_OPTIONS[0];
     const durationSec = Number(duration);
     const fps = 30;
+    const frameDurationMs = 1000 / fps;
+    const baseRotation = viewerRef.current?.getRotation() ?? viewerRotation;
     // bg state'ini kayıt başlangıcında yakala — loop içinde stale closure olmasın
     const bgFill = BG_VIDEO_FILL[bg] ?? BG_VIDEO_FILL.dark;
 
     try {
-      recordCanvas.width = fmt.w;
-      recordCanvas.height = fmt.h;
-      const ctx = recordCanvas.getContext("2d");
-      if (!ctx) {
-        setRecordState("idle");
-        return;
-      }
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
+      const backgroundAlpha = bg === "transparent" ? 0 : 1;
+      viewerRef.current?.setCanvasBackground(bgFill.base, backgroundAlpha);
+      viewerRef.current?.renderFrame();
 
-      const stream = recordCanvas.captureStream(fps);
+      const stream = sourceCanvas.captureStream(fps);
       const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
         ? "video/webm;codecs=vp9"
         : MediaRecorder.isTypeSupported("video/webm")
@@ -158,7 +152,7 @@ function VideoOptimizePageInner() {
       setRecordMimeType(mimeType);
       const recorder = new MediaRecorder(stream, {
         mimeType,
-        videoBitsPerSecond: 15_000_000,
+        videoBitsPerSecond: 24_000_000,
       });
 
       const chunks: Blob[] = [];
@@ -166,45 +160,60 @@ function VideoOptimizePageInner() {
         if (e.data.size > 0) chunks.push(e.data);
       };
 
-      recorder.start();
-
-      let rafId = 0;
-      const startTime = Date.now();
-      const render = () => {
-        const elapsed = (Date.now() - startTime) / 1000;
-        const pct = Math.min(Math.round((elapsed / durationSec) * 100), 99);
-        setProgress(pct);
-
-        // Arka planı doldur — Three.js canvas transparent, video encoder siyah yapar
-        ctx.fillStyle = bgFill.base;
-        ctx.fillRect(0, 0, fmt.w, fmt.h);
-        if (bgFill.overlay) {
-          ctx.fillStyle = bgFill.overlay;
-          ctx.fillRect(0, 0, fmt.w, fmt.h);
-        }
-        ctx.drawImage(sourceCanvas, 0, 0, fmt.w, fmt.h);
-
-        if (elapsed < durationSec) {
-          rafId = window.requestAnimationFrame(render);
-        } else {
-          recorder.stop();
-          setRecordState("processing");
-        }
-      };
-      render();
-
       recorder.onstop = () => {
         window.cancelAnimationFrame(rafId);
+        viewerRef.current?.setCanvasBackground("#000000", 0);
+        viewerRef.current?.renderFrame();
+        stream.getTracks().forEach((track) => track.stop());
         const blob = new Blob(chunks, { type: mimeType });
         setOutputBlob(blob);
         setOutputUrl(URL.createObjectURL(blob));
         setRecordState("done");
         setProgress(100);
       };
+
+      let rafId = 0;
+      recorder.start(250);
+
+      let nextFrameAt = performance.now();
+      const startTime = performance.now();
+      const render = (now: number) => {
+        if (now + 0.5 < nextFrameAt) {
+          rafId = window.requestAnimationFrame(render);
+          return;
+        }
+
+        const elapsed = Math.min((now - startTime) / 1000, durationSec);
+        const turnProgress = durationSec > 0 ? elapsed / durationSec : 1;
+        viewerRef.current?.setRotation({
+          x: baseRotation.x,
+          y: baseRotation.y + turnProgress * Math.PI * 2,
+          z: baseRotation.z,
+        });
+        viewerRef.current?.renderFrame();
+        const pct = Math.min(Math.round((elapsed / durationSec) * 100), 99);
+        setProgress(pct);
+
+        // Arka planı doldur — Three.js canvas transparent, video encoder siyah yapar
+        nextFrameAt += frameDurationMs;
+
+        if (elapsed < durationSec) {
+          rafId = window.requestAnimationFrame(render);
+        } else {
+          if (recorder.state === "recording") {
+            recorder.requestData();
+          }
+          recorder.stop();
+          setRecordState("processing");
+        }
+      };
+      rafId = window.requestAnimationFrame(render);
     } catch {
+      viewerRef.current?.setCanvasBackground("#000000", 0);
+      viewerRef.current?.renderFrame();
       setRecordState("idle");
     }
-  }, [billingUi, checkCredits, modelUrl, format, duration, bg, FORMAT_OPTIONS]);
+  }, [billingUi, checkCredits, modelUrl, duration, bg, viewerRotation]);
 
   const download = () => {
     if (!outputUrl) return;
@@ -243,7 +252,7 @@ function VideoOptimizePageInner() {
       await ffmpeg.exec([
         "-i", "input.webm",
         "-c:v", "libx264",
-        "-preset", "ultrafast",
+        "-preset", "veryfast",
         "-crf", "18",
         "-movflags", "+faststart",
         "-pix_fmt", "yuv420p",
@@ -293,10 +302,6 @@ function VideoOptimizePageInner() {
     aspectRatio: `${selectedFmt.w} / ${selectedFmt.h}`,
     marginInline: "auto",
   }), [selectedFmt.w, selectedFmt.h]);
-
-  useEffect(() => {
-    viewerRef.current?.setGridVisible(showGrid);
-  }, [showGrid]);
 
   return (
     <main className="min-h-screen bg-background">
@@ -372,8 +377,9 @@ function VideoOptimizePageInner() {
                   modelUrl={modelUrl}
                   fileType={fileType}
                   onMeshStats={setMeshStats}
-                  autoRotate={true}
-                  showGrid={true}
+                  onRotationChange={setViewerRotation}
+                  autoRotate={recordState !== "recording" && recordState !== "processing"}
+                  showGrid={showGrid}
                   renderWidth={selectedFmt.w}
                   renderHeight={selectedFmt.h}
                   preserveDrawingBuffer={true}
@@ -614,7 +620,6 @@ function VideoOptimizePageInner() {
           </div>
         )}
       </div>
-      <canvas ref={recordCanvasRef} className="hidden" />
     </main>
   );
 }

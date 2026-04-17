@@ -40,6 +40,9 @@ export type MeshRealtimeViewerHandle = {
   downloadOBJ: () => boolean;
   setGridVisible: (visible: boolean) => void;
   setRotation: (rotation: { x: number; y: number; z: number }) => void;
+  getRotation: () => { x: number; y: number; z: number };
+  renderFrame: () => void;
+  setCanvasBackground: (color: string, alpha?: number) => void;
 };
 
 export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealtimeViewerProps>(function MeshRealtimeViewer(
@@ -76,6 +79,54 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
   const objExporterRef = useRef(new OBJExporter());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [rotation, setRotation] = useState({ x: 0, y: 0, z: 0 });
+
+  const tuneMaterialForDisplay = useCallback((material?: THREE.Material | THREE.Material[] | null) => {
+    if (!material) return;
+    const materials = Array.isArray(material) ? material : [material];
+    const renderer = rendererRef.current;
+    const anisotropy = renderer?.capabilities.getMaxAnisotropy?.() ?? 1;
+
+    const tuneTexture = (texture?: THREE.Texture | null) => {
+      if (!texture) return;
+      texture.generateMipmaps = true;
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.anisotropy = Math.max(texture.anisotropy ?? 1, Math.min(anisotropy, 4));
+      texture.needsUpdate = true;
+    };
+
+    for (const entry of materials) {
+      const standard = entry as THREE.MeshStandardMaterial;
+      if ("envMapIntensity" in standard) {
+        standard.envMapIntensity = Math.min(standard.envMapIntensity ?? 0.85, 0.9);
+      }
+      if ("metalness" in standard) {
+        standard.metalness = Math.min(standard.metalness ?? 0.5, 0.55);
+      }
+      if ("roughness" in standard) {
+        standard.roughness = Math.max(standard.roughness ?? 0.5, 0.42);
+      }
+      if ("map" in standard && standard.map) {
+        tuneTexture(standard.map);
+      }
+      if ("normalMap" in standard && standard.normalMap) {
+        tuneTexture(standard.normalMap);
+      }
+      if ("roughnessMap" in standard && standard.roughnessMap) {
+        tuneTexture(standard.roughnessMap);
+      }
+      if ("metalnessMap" in standard && standard.metalnessMap) {
+        tuneTexture(standard.metalnessMap);
+      }
+      if ("aoMap" in standard && standard.aoMap) {
+        tuneTexture(standard.aoMap);
+      }
+      if ("emissiveMap" in standard && standard.emissiveMap) {
+        tuneTexture(standard.emissiveMap);
+      }
+      entry.needsUpdate = true;
+    }
+  }, []);
 
   const applyRendererSize = useCallback(() => {
     const host = mountRef.current;
@@ -209,8 +260,18 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
         }
         setRotation({ x: rot.x, y: rot.y, z: rot.z });
       },
+      getRotation: () => ({ ...rotation }),
+      renderFrame: () => {
+        controlsRef.current?.update();
+        if (rendererRef.current && sceneRef.current && cameraRef.current) {
+          rendererRef.current.render(sceneRef.current, cameraRef.current);
+        }
+      },
+      setCanvasBackground: (color: string, alpha = 0) => {
+        rendererRef.current?.setClearColor(color, alpha);
+      },
     }),
-    [cloneMeshForExport, exportToSTL, exportToOBJ, triggerDownload, setRotation]
+    [cloneMeshForExport, exportToSTL, exportToOBJ, triggerDownload, rotation]
   );
 
   useEffect(() => {
@@ -226,6 +287,9 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer });
     renderer.setPixelRatio(pixelRatio ?? 1);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.96;
     renderer.setClearColor(0x000000, 0);
     renderer.domElement.style.position = "absolute";
     renderer.domElement.style.inset = "0";
@@ -238,7 +302,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.06;
-    controls.autoRotate = autoRotate;
+    controls.autoRotate = false;
     controls.autoRotateSpeed = 1.6;
     controls.enablePan = true;
     controls.enableZoom = true;
@@ -268,13 +332,13 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     scene.add(fill);
 
     const gridMajor = new THREE.GridHelper(10, 20, 0x566174, 0x2f3848);
-    gridMajor.position.y = 0;
-    gridMajor.visible = showGrid;
+    gridMajor.position.y = -0.02;
+    gridMajor.visible = true;
     scene.add(gridMajor);
     gridMajorRef.current = gridMajor;
     const gridMinor = new THREE.GridHelper(10, 80, 0x253041, 0x253041);
-    gridMinor.position.y = 0.001;
-    gridMinor.visible = showGrid;
+    gridMinor.position.y = -0.019;
+    gridMinor.visible = true;
     scene.add(gridMinor);
     gridMinorRef.current = gridMinor;
 
@@ -323,7 +387,13 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       gridMinorRef.current = null;
       host.innerHTML = "";
     };
-  }, [applyRendererSize]);
+  }, [applyRendererSize, pixelRatio, preserveDrawingBuffer]);
+
+  useEffect(() => {
+    if (modelUrl) return;
+    const frame = window.requestAnimationFrame(() => setLoadError(null));
+    return () => window.cancelAnimationFrame(frame);
+  }, [modelUrl]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -335,11 +405,8 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     }
 
     if (!modelUrl) {
-      setLoadError(null);
       return;
     }
-
-    setLoadError(null);
 
     const placeModel = (loadedRoot: THREE.Object3D) => {
       setLoadError(null);
@@ -353,6 +420,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
           mesh.geometry.applyMatrix4(
             new THREE.Matrix4().makeRotationX(-Math.PI / 2),
           );
+          tuneMaterialForDisplay(mesh.material);
         }
       });
       scene.add(loadedRoot);
@@ -379,7 +447,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
       loadedRoot.position.x = -scaledCenter.x;
       loadedRoot.position.z = -scaledCenter.z;
-      loadedRoot.position.y = -scaledBox.min.y;
+      loadedRoot.position.y = -scaledBox.min.y + 0.01;
       loadedRoot.updateMatrixWorld(true);
 
       applyMicronDepth();
@@ -436,12 +504,13 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
         (geometry) => {
           geometry.computeVertexNormals();
           const material = new THREE.MeshStandardMaterial({
-            color: 0xc0c0c0,
-            metalness: 0.4,
-            roughness: 0.5,
+            color: 0xd6d0c5,
+            metalness: 0.72,
+            roughness: 0.32,
             flatShading: false,
           });
           const mesh = new THREE.Mesh(geometry, material);
+          tuneMaterialForDisplay(material);
           const group = new THREE.Group();
           group.add(mesh);
           placeModel(group);
@@ -481,12 +550,13 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     } else {
       tryLoadGltf(remoteLoaderUrl);
     }
-  }, [modelUrl, fileType, applyMicronDepth, onMeshStats, initialRotation, fitCameraForAspect]);
+  }, [modelUrl, fileType, applyMicronDepth, onMeshStats, initialRotation, fitCameraForAspect, tuneMaterialForDisplay]);
 
   useEffect(() => {
     if (!modelRootRef.current) return;
     modelRootRef.current.rotation.set(rotation.x, rotation.y, rotation.z);
-  }, [rotation]);
+    onRotationChange?.(rotation);
+  }, [rotation, onRotationChange]);
 
   // zScaleMm her değiştiğinde mikron derinliğini yeniden uygula
   useEffect(() => {
