@@ -241,14 +241,10 @@ function VideoOptimizePageInner() {
       await ffmpeg.exec([
         "-i", "input.webm",
         "-c:v", "libx264",
-        "-preset", "slow",
-        "-crf", "12",
-        "-b:v", "10M",
-        "-maxrate", "12M",
-        "-bufsize", "24M",
+        "-preset", "ultrafast",
+        "-crf", "18",
         "-movflags", "+faststart",
         "-pix_fmt", "yuv420p",
-        "-vf", "scale=iw:ih:flags=lanczos",
         "output.mp4",
       ]);
 
@@ -353,10 +349,11 @@ function VideoOptimizePageInner() {
         ) : (
           <div className="grid gap-6 lg:grid-cols-4">
             <div className="space-y-4 lg:col-span-3">
+              <div className="flex justify-center">
               <div
                 ref={viewerContainerRef}
                 className={`relative overflow-hidden rounded-2xl border border-border/80 ${selectedBg.cls}`}
-                style={{ aspectRatio: `${selectedFmt.w}/${selectedFmt.h}`, maxHeight: "70vh" }}
+                style={{ aspectRatio: `${selectedFmt.w}/${selectedFmt.h}`, maxHeight: "70vh", maxWidth: "100%" }}
               >
                 <MeshRealtimeViewer
                   ref={viewerRef}
@@ -392,6 +389,7 @@ function VideoOptimizePageInner() {
                 <div className="absolute right-4 top-4 flex items-center gap-2 rounded-full border border-white/10 bg-black/50 px-3 py-1.5 backdrop-blur-sm">
                   <span className="max-w-[160px] truncate text-[11px] text-white/70">{fileName}</span>
                 </div>
+              </div>
               </div>
 
               <div className="flex gap-2 mt-2 justify-center">
