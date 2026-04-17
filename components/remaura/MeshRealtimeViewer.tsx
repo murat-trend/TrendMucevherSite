@@ -78,6 +78,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
   const stlExporterRef = useRef(new STLExporter());
   const objExporterRef = useRef(new OBJExporter());
   const autoRotateRef = useRef(false);
+  const userInteractingRef = useRef(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [rotation, setRotation] = useState({ x: 0, y: 0, z: 0 });
 
@@ -329,6 +330,11 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     };
     controlsRef.current = controls;
 
+    const onInteractStart = () => { userInteractingRef.current = true; };
+    const onInteractEnd = () => { userInteractingRef.current = false; };
+    controls.addEventListener("start", onInteractStart);
+    controls.addEventListener("end", onInteractEnd);
+
     const ambient = new THREE.HemisphereLight(0xffffff, 0x1b2130, 1.0);
     scene.add(ambient);
     const key = new THREE.DirectionalLight(0xfff7ef, 1.6);
@@ -359,7 +365,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     resizeObserver.observe(host.parentElement ?? host);
 
     const animate = () => {
-      if (autoRotateRef.current && modelRootRef.current) {
+      if (autoRotateRef.current && !userInteractingRef.current && modelRootRef.current) {
         modelRootRef.current.rotation.y += 0.007;
       }
       controlsRef.current?.update();
@@ -373,6 +379,8 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     return () => {
       window.cancelAnimationFrame(frameId);
       resizeObserver.disconnect();
+      controls.removeEventListener("start", onInteractStart);
+      controls.removeEventListener("end", onInteractEnd);
       controlsRef.current?.dispose();
       controlsRef.current = null;
 
