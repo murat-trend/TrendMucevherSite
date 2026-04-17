@@ -131,8 +131,10 @@ function VideoOptimizePageInner() {
       return;
     }
 
-    // autoRotate useEffect asenkron tetiklenir; kayıt öncesi senkron durdur
+    // autoRotate useEffect asenkron tetiklenir; kayıt öncesi senkron durdur.
+    // Ana animation loop da durdurulur — çift rendering / çakışma engellenir.
     viewerRef.current?.setAutoRotate(false);
+    viewerRef.current?.pauseAnimation(true);
 
     const durationSec = Number(duration);
     const fps = 30;
@@ -188,6 +190,7 @@ function VideoOptimizePageInner() {
 
       recorder.onstop = () => {
         window.cancelAnimationFrame(rafId);
+        viewerRef.current?.pauseAnimation(false);
         viewerRef.current?.setCanvasBackground("#000000", 0);
         viewerRef.current?.renderFrame();
         stream.getTracks().forEach((track) => track.stop());
@@ -201,16 +204,19 @@ function VideoOptimizePageInner() {
       let rafId = 0;
       recorder.start(100);
 
+      // Frame-count bazlı rotasyon: her frame sabit artış → geri sarma/sıçrama yok.
+      // Zaman bazlı (elapsed/duration) yerine frame index kullanılır.
+      const totalFrames = Math.max(Math.round(durationSec * fps), 1);
+      let frameCount = 0;
       let nextFrameAt = performance.now();
-      const startTime = performance.now();
+
       const render = (now: number) => {
-        if (now + 0.5 < nextFrameAt) {
+        if (now < nextFrameAt - 0.5) {
           rafId = window.requestAnimationFrame(render);
           return;
         }
 
-        const elapsed = Math.min((now - startTime) / 1000, durationSec);
-        const turnProgress = durationSec > 0 ? elapsed / durationSec : 1;
+        const turnProgress = frameCount / totalFrames;
         viewerRef.current?.setRotation({
           x: baseRotation.x,
           y: baseRotation.y + turnProgress * Math.PI * 2,
@@ -218,23 +224,22 @@ function VideoOptimizePageInner() {
         });
         viewerRef.current?.renderFrame();
         composite();
-        const pct = Math.min(Math.round((elapsed / durationSec) * 100), 99);
-        setProgress(pct);
 
+        setProgress(Math.min(Math.round(turnProgress * 100), 99));
+        frameCount++;
         nextFrameAt += frameDurationMs;
 
-        if (elapsed < durationSec) {
+        if (frameCount < totalFrames) {
           rafId = window.requestAnimationFrame(render);
         } else {
-          if (recorder.state === "recording") {
-            recorder.requestData();
-          }
+          if (recorder.state === "recording") recorder.requestData();
           recorder.stop();
           setRecordState("processing");
         }
       };
       rafId = window.requestAnimationFrame(render);
     } catch {
+      viewerRef.current?.pauseAnimation(false);
       viewerRef.current?.setCanvasBackground("#000000", 0);
       viewerRef.current?.renderFrame();
       setRecordState("idle");

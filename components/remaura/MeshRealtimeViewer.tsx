@@ -44,6 +44,7 @@ export type MeshRealtimeViewerHandle = {
   renderFrame: () => void;
   setCanvasBackground: (color: string, alpha?: number) => void;
   setAutoRotate: (enabled: boolean) => void;
+  pauseAnimation: (paused: boolean) => void;
 };
 
 export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealtimeViewerProps>(function MeshRealtimeViewer(
@@ -80,6 +81,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
   const objExporterRef = useRef(new OBJExporter());
   const autoRotateRef = useRef(false);
   const userInteractingRef = useRef(false);
+  const pauseAnimationRef = useRef(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [rotation, setRotation] = useState({ x: 0, y: 0, z: 0 });
 
@@ -282,6 +284,9 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       setAutoRotate: (enabled: boolean) => {
         autoRotateRef.current = enabled;
       },
+      pauseAnimation: (paused: boolean) => {
+        pauseAnimationRef.current = paused;
+      },
     }),
     [cloneMeshForExport, exportToSTL, exportToOBJ, triggerDownload, rotation]
   );
@@ -369,6 +374,8 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     resizeObserver.observe(host.parentElement ?? host);
 
     const animate = () => {
+      frameId = window.requestAnimationFrame(animate);
+      if (pauseAnimationRef.current) return;
       if (autoRotateRef.current && !userInteractingRef.current && modelRootRef.current) {
         modelRootRef.current.rotation.y += 0.007;
       }
@@ -376,7 +383,6 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       if (rendererRef.current && sceneRef.current && cameraRef.current) {
         rendererRef.current.render(sceneRef.current, cameraRef.current);
       }
-      frameId = window.requestAnimationFrame(animate);
     };
     animate();
 
