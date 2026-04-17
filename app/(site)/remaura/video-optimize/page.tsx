@@ -351,15 +351,22 @@ function VideoOptimizePageInner() {
             <div className="space-y-4 lg:col-span-3">
               <div
                 ref={viewerContainerRef}
-                className={`relative overflow-hidden rounded-2xl border border-border/80 ${selectedBg.cls} w-full`}
-                style={{
-                  aspectRatio: `${selectedFmt.w}/${selectedFmt.h}`,
-                  maxHeight: "70vh",
-                  maxWidth: selectedFmt.h > selectedFmt.w
-                    ? `calc(70vh * ${selectedFmt.w} / ${selectedFmt.h})`
-                    : "100%",
-                  marginInline: "auto",
-                }}
+                className={`relative overflow-hidden rounded-2xl border border-border/80 ${selectedBg.cls}`}
+                style={
+                  selectedFmt.h > selectedFmt.w
+                    ? {
+                        // Dikey: yüksekliği sabitle, genişliği orandan türet
+                        height: "70vh",
+                        width: `calc(70vh * ${selectedFmt.w} / ${selectedFmt.h})`,
+                        marginInline: "auto",
+                      }
+                    : {
+                        // Kare / yatay: genişliği doldur, yüksekliği orandan türet
+                        width: "100%",
+                        aspectRatio: `${selectedFmt.w}/${selectedFmt.h}`,
+                        maxHeight: "70vh",
+                      }
+                }
               >
                 <MeshRealtimeViewer
                   ref={viewerRef}
