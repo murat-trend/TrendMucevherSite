@@ -20,15 +20,6 @@ type RecordState = "idle" | "recording" | "processing" | "done";
 const TRANSPARENT_BG =
   "bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABmJLR0QA/wD/AP+gvaeTAAAAH0lEQVQ4jWNgYGD4z8BQDwAAAP//AwBG7SMdAAAADklEQVQI12NgYGD4DwABBAEAWB0v7QAAAABJRU5ErkJggg==')] bg-repeat";
 
-/** Video kaydında recordCanvas'a çizilecek arka plan renkleri. */
-const BG_VIDEO_FILL: Record<string, { base: string; overlay?: string }> = {
-  transparent: { base: "#0a0a0a" },
-  black:       { base: "#000000" },
-  white:       { base: "#ffffff" },
-  dark:        { base: "#1a1a1a" },
-  gold:        { base: "#0a0a0a", overlay: "rgba(201,168,76,0.13)" },
-};
-
 export default function VideoOptimizePage() {
   return (
     <RemauraBillingModalProvider>
@@ -80,7 +71,7 @@ function VideoOptimizePageInner() {
   const [bg, setBg] = useState("dark");
   const [duration, setDuration] = useState("10");
   const [format, setFormat] = useState("square");
-  const [showGrid, setShowGrid] = useState(false);
+  const [showGrid, setShowGrid] = useState(true);
   const [recordState, setRecordState] = useState<RecordState>("idle");
   const [progress, setProgress] = useState(0);
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
@@ -91,16 +82,18 @@ function VideoOptimizePageInner() {
   const [dragging, setDragging] = useState(false);
   const [recordMimeType, setRecordMimeType] = useState("video/webm");
   const [meshStats, setMeshStats] = useState<{ vertices: number; faces: number } | null>(null);
-  const [viewerRotation, setViewerRotation] = useState({ x: 0, y: 0, z: 0 });
 
   const viewerRef = useRef<MeshRealtimeViewerHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
+  const recordCanvasRef = useRef<HTMLCanvasElement>(null);
   const ffmpegRef = useRef<FFmpeg | null>(null);
 
-  const openMeshFilePicker = useCallback(() => {
+  const openMeshFilePicker = useCallback(async () => {
+    const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+    if (!ok) return;
     fileInputRef.current?.click();
-  }, []);
+  }, [billingUi, checkCredits]);
 
   const handleFile = (file: File) => {
     const ext = file.name.split(".").pop()?.toLowerCase();
@@ -115,7 +108,8 @@ function VideoOptimizePageInner() {
 
   const startRecording = useCallback(async () => {
     const container = viewerContainerRef.current;
-    if (!container || !modelUrl) return;
+    const recordCanvas = recordCanvasRef.current;
+    if (!container || !modelUrl || !recordCanvas) return;
 
     const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
     if (!ok) return;
@@ -126,48 +120,23 @@ function VideoOptimizePageInner() {
     setOutputBlob(null);
 
     const sourceCanvas = container.querySelector("canvas");
-    if (!(sourceCanvas instanceof HTMLCanvasElement)) {
+    if (!sourceCanvas) {
       setRecordState("idle");
       return;
     }
 
-    // autoRotate useEffect asenkron tetiklenir; kayıt öncesi senkron durdur.
-    viewerRef.current?.setAutoRotate(false);
-
+    const fmt = FORMAT_OPTIONS.find((f) => f.id === format) ?? FORMAT_OPTIONS[0];
     const durationSec = Number(duration);
     const fps = 30;
-    const frameDurationMs = 1000 / fps;
-    const baseRotation = viewerRef.current?.getRotation() ?? viewerRotation;
-    const bgFill = BG_VIDEO_FILL[bg] ?? BG_VIDEO_FILL.dark;
-
-    // Compositing canvas: 1x çıkış boyutu — Three.js 2x supersampled canvas buraya
-    // downscale edilir (antialiasing) ve arka plan + overlay burada uygulanır.
-    const fmtOpt = FORMAT_OPTIONS.find((f) => f.id === format) ?? FORMAT_OPTIONS[0];
-    const recordCanvas = document.createElement("canvas");
-    recordCanvas.width = fmtOpt.w;
-    recordCanvas.height = fmtOpt.h;
-    const recordCtx = recordCanvas.getContext("2d")!;
-    recordCtx.imageSmoothingEnabled = true;
-    recordCtx.imageSmoothingQuality = "high";
-
-    const composite = () => {
-      recordCtx.clearRect(0, 0, recordCanvas.width, recordCanvas.height);
-      if (bg !== "transparent") {
-        recordCtx.fillStyle = bgFill.base;
-        recordCtx.fillRect(0, 0, recordCanvas.width, recordCanvas.height);
-      }
-      recordCtx.drawImage(sourceCanvas, 0, 0, recordCanvas.width, recordCanvas.height);
-      if (bgFill.overlay) {
-        recordCtx.fillStyle = bgFill.overlay;
-        recordCtx.fillRect(0, 0, recordCanvas.width, recordCanvas.height);
-      }
-    };
 
     try {
-      // Three.js saydamlıkta render eder; arka plan compositing adımında eklenir
-      viewerRef.current?.setCanvasBackground("#000000", 0);
-      viewerRef.current?.renderFrame();
-      composite();
+      recordCanvas.width = fmt.w;
+      recordCanvas.height = fmt.h;
+      const ctx = recordCanvas.getContext("2d");
+      if (!ctx) {
+        setRecordState("idle");
+        return;
+      }
 
       const stream = recordCanvas.captureStream(fps);
       const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
@@ -178,7 +147,7 @@ function VideoOptimizePageInner() {
       setRecordMimeType(mimeType);
       const recorder = new MediaRecorder(stream, {
         mimeType,
-        videoBitsPerSecond: 25_000_000,
+        videoBitsPerSecond: 15_000_000,
       });
 
       const chunks: Blob[] = [];
@@ -186,58 +155,39 @@ function VideoOptimizePageInner() {
         if (e.data.size > 0) chunks.push(e.data);
       };
 
+      recorder.start();
+
+      let rafId = 0;
+      const startTime = Date.now();
+      const render = () => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        const pct = Math.min(Math.round((elapsed / durationSec) * 100), 99);
+        setProgress(pct);
+
+        ctx.clearRect(0, 0, fmt.w, fmt.h);
+        ctx.drawImage(sourceCanvas, 0, 0, fmt.w, fmt.h);
+
+        if (elapsed < durationSec) {
+          rafId = window.requestAnimationFrame(render);
+        } else {
+          recorder.stop();
+          setRecordState("processing");
+        }
+      };
+      render();
+
       recorder.onstop = () => {
-        viewerRef.current?.overrideAnimationLoop(null);
-        viewerRef.current?.setCanvasBackground("#000000", 0);
-        viewerRef.current?.renderFrame();
-        stream.getTracks().forEach((track) => track.stop());
+        window.cancelAnimationFrame(rafId);
         const blob = new Blob(chunks, { type: mimeType });
         setOutputBlob(blob);
         setOutputUrl(URL.createObjectURL(blob));
         setRecordState("done");
         setProgress(100);
       };
-
-      const totalFrames = Math.max(Math.round(durationSec * fps), 1);
-      let frameCount = 0;
-      // setAnimationLoop display Hz'de ateşlenir; sabit 1/30s adımla frame üretiyoruz
-      let nextFrameAt = performance.now();
-
-      recorder.start(100);
-
-      // overrideAnimationLoop: renderer.setAnimationLoop ile ana loop'un yerine geçer.
-      // Her çağrıda zaman kontrolü yapılır — 30fps'ten fazla composite üretilmez.
-      // Rotasyon frame index'e bağlı (deterministic), gerçek zamana bağlı değil.
-      viewerRef.current?.overrideAnimationLoop(() => {
-        const now = performance.now();
-        if (now < nextFrameAt - 0.5) return;
-        nextFrameAt += frameDurationMs;
-
-        const turnProgress = frameCount / totalFrames;
-        viewerRef.current?.setRotation({
-          x: baseRotation.x,
-          y: baseRotation.y + turnProgress * Math.PI * 2,
-          z: baseRotation.z,
-        });
-        viewerRef.current?.renderFrame();
-        composite();
-        setProgress(Math.min(Math.round(turnProgress * 100), 99));
-        frameCount++;
-
-        if (frameCount >= totalFrames) {
-          viewerRef.current?.overrideAnimationLoop(null);
-          if (recorder.state === "recording") recorder.requestData();
-          recorder.stop();
-          setRecordState("processing");
-        }
-      });
     } catch {
-      viewerRef.current?.overrideAnimationLoop(null);
-      viewerRef.current?.setCanvasBackground("#000000", 0);
-      viewerRef.current?.renderFrame();
       setRecordState("idle");
     }
-  }, [billingUi, checkCredits, modelUrl, duration, bg, viewerRotation, format, FORMAT_OPTIONS]);
+  }, [billingUi, checkCredits, modelUrl, format, duration, FORMAT_OPTIONS]);
 
   const download = () => {
     if (!outputUrl) return;
@@ -276,10 +226,14 @@ function VideoOptimizePageInner() {
       await ffmpeg.exec([
         "-i", "input.webm",
         "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-crf", "18",
+        "-preset", "slow",
+        "-crf", "12",
+        "-b:v", "10M",
+        "-maxrate", "12M",
+        "-bufsize", "24M",
         "-movflags", "+faststart",
         "-pix_fmt", "yuv420p",
+        "-vf", "scale=iw:ih:flags=lanczos",
         "output.mp4",
       ]);
 
@@ -316,16 +270,9 @@ function VideoOptimizePageInner() {
   const selectedBg = BG_OPTIONS.find((b) => b.id === bg) ?? BG_OPTIONS[0];
   const selectedFmt = FORMAT_OPTIONS.find((f) => f.id === format) ?? FORMAT_OPTIONS[0];
 
-  /**
-   * Hem önizleme hem video player için ortak frame boyutu.
-   * Yükseklik 70vh'ye sabitlenir, genişlik aspect ratio'dan türer.
-   * max-width: 100% dar ekranlarda taşmayı önler.
-   */
-  const frameStyle = useMemo((): React.CSSProperties => ({
-    width: `min(100%, calc(70vh * ${selectedFmt.w} / ${selectedFmt.h}))`,
-    aspectRatio: `${selectedFmt.w} / ${selectedFmt.h}`,
-    marginInline: "auto",
-  }), [selectedFmt.w, selectedFmt.h]);
+  useEffect(() => {
+    viewerRef.current?.setGridVisible(showGrid);
+  }, [showGrid]);
 
   return (
     <main className="min-h-screen bg-background">
@@ -378,13 +325,7 @@ function VideoOptimizePageInner() {
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                e.target.value = "";
-                if (!f) return;
-                void (async () => {
-                  const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
-                  if (!ok) return;
-                  handleFile(f);
-                })();
+                if (f) handleFile(f);
               }}
             />
           </div>
@@ -394,20 +335,17 @@ function VideoOptimizePageInner() {
               <div
                 ref={viewerContainerRef}
                 className={`relative overflow-hidden rounded-2xl border border-border/80 ${selectedBg.cls}`}
-                style={frameStyle}
+                style={{ aspectRatio: `${selectedFmt.w}/${selectedFmt.h}`, maxHeight: "70vh" }}
               >
                 <MeshRealtimeViewer
                   ref={viewerRef}
                   modelUrl={modelUrl}
                   fileType={fileType}
                   onMeshStats={setMeshStats}
-                  onRotationChange={setViewerRotation}
-                  autoRotate={recordState !== "recording" && recordState !== "processing"}
-                  showGrid={showGrid}
+                  autoRotate={true}
+                  showGrid={true}
                   renderWidth={selectedFmt.w}
                   renderHeight={selectedFmt.h}
-                  preserveDrawingBuffer={true}
-                  pixelRatio={2}
                 />
 
                 {recordState === "recording" && (
@@ -497,9 +435,7 @@ function VideoOptimizePageInner() {
                     <CheckCircle size={16} className="text-emerald-500" strokeWidth={2} />
                     <span className="text-[14px] font-medium text-foreground">{vo.videoReady}</span>
                   </div>
-                  <div style={frameStyle} className="overflow-hidden rounded-xl bg-black">
-                    <video src={outputUrl} controls className="h-full w-full object-contain" />
-                  </div>
+                  <video src={outputUrl} controls className="max-h-[300px] w-full rounded-xl" />
                   <div className="flex gap-3">
                     <button
                       onClick={download}
@@ -644,6 +580,7 @@ function VideoOptimizePageInner() {
           </div>
         )}
       </div>
+      <canvas ref={recordCanvasRef} className="hidden" />
     </main>
   );
 }
