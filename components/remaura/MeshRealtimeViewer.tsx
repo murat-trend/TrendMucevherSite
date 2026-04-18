@@ -29,6 +29,10 @@ type MeshRealtimeViewerProps = {
   initialRotation?: { x: number; y: number; z: number };
   onRotationChange?: (rotation: { x: number; y: number; z: number }) => void;
   showRotationControls?: boolean;
+  /** AI analiz butonu callback'i */
+  onAiAnalysis?: () => void;
+  /** AI analiz yüklenme durumu */
+  isAiAnalyzing?: boolean;
   /** Video kaydı gibi harici canvas okuma için WebGL buffer'ını koru. */
   preserveDrawingBuffer?: boolean;
   /** Render pixel yoğunluğu — 2 = 2x supersample (video için önerilen). */
@@ -61,6 +65,8 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     initialRotation,
     onRotationChange,
     showRotationControls,
+    onAiAnalysis,
+    isAiAnalyzing = false,
     preserveDrawingBuffer = false,
     pixelRatio,
   },
@@ -87,6 +93,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
   const animationLoopRef = useRef<(() => void) | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [localAutoRotate, setLocalAutoRotate] = useState(autoRotate);
   const [rotation, setRotation] = useState({ x: 0, y: 0, z: 0 });
 
   const tuneMaterialForDisplay = useCallback((material?: THREE.Material | THREE.Material[] | null) => {
@@ -578,7 +585,12 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
 
   useEffect(() => {
     autoRotateRef.current = autoRotate;
+    setLocalAutoRotate(autoRotate);
   }, [autoRotate]);
+
+  useEffect(() => {
+    autoRotateRef.current = localAutoRotate;
+  }, [localAutoRotate]);
 
   useEffect(() => {
     if (gridMajorRef.current) gridMajorRef.current.visible = showGrid;
@@ -608,24 +620,26 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       )}
 
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/90 backdrop-blur-lg z-50">
-          <div className="w-16 h-16 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+        <div className="absolute inset-0 bg-black/95 backdrop-blur-xl z-50 flex flex-col items-center justify-center">
+          <div className="w-16 h-16 border-2 border-white/10 border-t-white rounded-full animate-spin mb-4" />
+          <p className="text-[10px] tracking-[0.5em] text-white/40 uppercase">Pivot Hizalanıyor</p>
         </div>
       )}
 
       {showRotationControls && (
-        <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-3 z-10">
+        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-white/5 backdrop-blur-2xl p-2 rounded-[2.5rem] border border-white/10 flex items-center gap-2 shadow-2xl pointer-events-auto z-10">
+          <div className="px-4 text-[9px] font-black tracking-[0.3em] text-white/30 uppercase">Eksen Düzelt</div>
           {(["x", "y", "z"] as const).map((axis) => (
             <button
               key={axis}
               type="button"
               onClick={() => rotateOrientation(axis)}
-              className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold transition-all border border-white/5"
+              className="w-12 h-12 rounded-full bg-white/5 hover:bg-white/20 text-white font-bold border border-white/10 transition-all"
             >
               {axis.toUpperCase()}
             </button>
           ))}
-          <div className="w-[1px] h-8 bg-white/10" />
+          <div className="w-[1px] h-8 bg-white/10 mx-2" />
           <button
             type="button"
             onClick={() => {
@@ -636,6 +650,28 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
           >
             SIFIRLA
           </button>
+          <div className="w-[1px] h-8 bg-white/10 mx-2" />
+          <button
+            type="button"
+            onClick={() => setLocalAutoRotate((v) => !v)}
+            className={`px-4 h-12 rounded-full text-[10px] font-bold border transition-all ${
+              localAutoRotate
+                ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
+                : "bg-white/5 text-white/40 border-white/10"
+            }`}
+          >
+            OTOMATİK DÖNÜŞ
+          </button>
+          {onAiAnalysis && (
+            <button
+              type="button"
+              onClick={onAiAnalysis}
+              disabled={isAiAnalyzing}
+              className="bg-blue-600 px-6 h-12 rounded-full font-bold shadow-xl hover:brightness-110 disabled:opacity-50 text-white text-[11px] transition-all"
+            >
+              {isAiAnalyzing ? "ANALİZ EDİLİYOR..." : "✨ AI ANALİZİ"}
+            </button>
+          )}
         </div>
       )}
     </div>
