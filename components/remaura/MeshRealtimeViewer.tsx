@@ -412,9 +412,9 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
 
     if (!modelUrl) return;
 
-    // Hiyerarşi:
-    //   wrapper (modelRootRef) — animasyon rotation.y
-    //     └── loadedRoot (orientationGroupRef) — Z-up→Y-up + kullanıcı eksen düzeltmesi
+    // Hiyerarşi: wrapper (pivot) → loadedRoot
+    // Kullanıcı wrapper'ın rotation.x'ini butonlarla seçer (0, 90, 180, -90)
+    // Auto-rotate wrapper.rotation.y'yi döndürür
     const placeModel = (loadedRoot: THREE.Object3D) => {
       setLoadError(null);
       setIsLoading(false);
@@ -430,45 +430,31 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
         if (mesh.isMesh) tuneMaterialForDisplay(mesh.material);
       });
 
-      // 3. Z-up → Y-up düzeltmesi (önce rotation, sonra centering — Gemini yaklaşımı)
-      loadedRoot.rotation.x = -Math.PI / 2;
-      orientationGroupRef.current = loadedRoot as THREE.Group;
+      // 3. Modeli pivot noktasına (merkez) hizala + ölçekle
+      loadedRoot.updateMatrixWorld(true);
+      const rawBox = new THREE.Box3().setFromObject(loadedRoot);
+      const center = rawBox.getCenter(new THREE.Vector3());
+      const size = rawBox.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z, 1e-6);
+      const scale = 1.8 / maxDim;
+      loadedRoot.position.sub(center);
+      loadedRoot.scale.setScalar(scale);
 
-      // 4. Animation wrapper
+      // 4. Wrapper = pivot grubu
       const wrapper = new THREE.Group();
       wrapper.add(loadedRoot);
+      orientationGroupRef.current = wrapper;
       modelRootRef.current = wrapper;
       scene.add(wrapper);
 
-      // 5. Rotasyon uygulandıktan sonra Y-up uzayında ortala
-      loadedRoot.updateMatrixWorld(true);
-      const box = new THREE.Box3().setFromObject(loadedRoot);
-      const center = box.getCenter(new THREE.Vector3());
-      loadedRoot.position.sub(center);
-
-      if (initialRotation) {
-        wrapper.rotation.set(initialRotation.x, initialRotation.y, initialRotation.z);
-        setRotation(initialRotation);
-      }
+      // 5. Wrapper'ı zemine oturt
+      wrapper.updateMatrixWorld(true);
+      const groundBox = new THREE.Box3().setFromObject(wrapper);
+      wrapper.position.y = -groundBox.min.y + 0.01;
+      uniformScaleRef.current = scale;
       wrapper.updateMatrixWorld(true);
 
-      // 6. Uniform scale — max boyut 1.8 birime sığdır
-      const rawBox = new THREE.Box3().setFromObject(wrapper);
-      const rawSize = rawBox.getSize(new THREE.Vector3());
-      const maxDim = Math.max(rawSize.x, rawSize.y, rawSize.z, 1e-6);
-      const uniformScale = 1.8 / maxDim;
-      uniformScaleRef.current = uniformScale;
-      wrapper.scale.setScalar(uniformScale);
-      wrapper.updateMatrixWorld(true);
-
-      // 7. Zemine oturt
-      const scaledBox = new THREE.Box3().setFromObject(wrapper);
-      wrapper.position.y = -scaledBox.min.y + 0.01;
-      wrapper.updateMatrixWorld(true);
-
-      applyMicronDepth();
-
-      // 8. Kamera hedefi
+      // 6. Kamera hedefi
       if (controlsRef.current) {
         const finalBox = new THREE.Box3().setFromObject(wrapper);
         const modelHeight = finalBox.max.y - finalBox.min.y;
@@ -477,7 +463,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
         controlsRef.current.update();
       }
 
-      // 9. Format aspect'e göre kamerayı çerçevele
+      // 7. Format aspect'e göre kamerayı çerçevele
       {
         const host = mountRef.current;
         const container = host?.parentElement ?? host;
@@ -486,7 +472,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
         fitCameraForAspect(w, h);
       }
 
-      // 10. Mesh istatistikleri
+      // 8. Mesh istatistikleri
       if (onMeshStats) {
         let totalVerts = 0;
         let totalFaces = 0;
