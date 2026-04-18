@@ -105,13 +105,13 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     for (const entry of materials) {
       const standard = entry as THREE.MeshStandardMaterial;
       if ("envMapIntensity" in standard) {
-        standard.envMapIntensity = Math.min(standard.envMapIntensity ?? 0.85, 0.9);
+        standard.envMapIntensity = Math.min(standard.envMapIntensity ?? 1.0, 1.2);
       }
       if ("metalness" in standard) {
-        standard.metalness = Math.min(standard.metalness ?? 0.5, 0.55);
+        standard.metalness = Math.min(standard.metalness ?? 0.8, 1.0);
       }
       if ("roughness" in standard) {
-        standard.roughness = Math.max(standard.roughness ?? 0.5, 0.42);
+        standard.roughness = Math.max(standard.roughness ?? 0.3, 0.05);
       }
       if ("map" in standard && standard.map) {
         tuneTexture(standard.map);
@@ -312,7 +312,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     renderer.setPixelRatio(pixelRatio ?? 1);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.96;
+    renderer.toneMappingExposure = 1.15;
     renderer.setClearColor(0x000000, 0);
     renderer.shadowMap.enabled = false;
     renderer.domElement.style.position = "absolute";
@@ -441,59 +441,78 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
 
     const placeModel = (loadedRoot: THREE.Object3D, applyGeometryRotation = true) => {
       setLoadError(null);
-      modelRootRef.current = loadedRoot;
+
       loadedRoot.position.set(0, 0, 0);
       loadedRoot.scale.set(1, 1, 1);
       loadedRoot.rotation.set(0, 0, 0);
+
       loadedRoot.traverse((child) => {
         const mesh = child as THREE.Mesh;
         if (mesh.isMesh && mesh.geometry) {
           if (applyGeometryRotation) {
-            mesh.geometry.applyMatrix4(
-              new THREE.Matrix4().makeRotationX(-Math.PI / 2),
-            );
+            mesh.geometry.applyMatrix4(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
           }
           tuneMaterialForDisplay(mesh.material);
         }
       });
-      scene.add(loadedRoot);
+
+      // GLB: inner modele orientation fix uygula, sonra wrapper Group içine al.
+      // Animasyon (rotation.y) wrapper üzerinden döner → eksen kayması olmaz.
+      let sceneRoot: THREE.Object3D;
+      if (!applyGeometryRotation) {
+        loadedRoot.updateMatrixWorld(true);
+        const orientBox = new THREE.Box3().setFromObject(loadedRoot);
+        const sz = orientBox.getSize(new THREE.Vector3());
+        if (sz.z > sz.y * 1.2) {
+          loadedRoot.rotation.x = -Math.PI / 2;
+        }
+        // Inner modeli wrapper merkezine sabitle
+        loadedRoot.updateMatrixWorld(true);
+        const innerCenter = new THREE.Box3().setFromObject(loadedRoot).getCenter(new THREE.Vector3());
+        loadedRoot.position.sub(innerCenter);
+
+        const wrapper = new THREE.Group();
+        wrapper.add(loadedRoot);
+        sceneRoot = wrapper;
+      } else {
+        sceneRoot = loadedRoot;
+      }
+
+      modelRootRef.current = sceneRoot;
+      scene.add(sceneRoot);
+
       if (initialRotation) {
-        loadedRoot.rotation.set(
-          initialRotation.x,
-          initialRotation.y,
-          initialRotation.z,
-        );
+        sceneRoot.rotation.set(initialRotation.x, initialRotation.y, initialRotation.z);
         setRotation(initialRotation);
       }
-      loadedRoot.updateMatrixWorld(true);
+      sceneRoot.updateMatrixWorld(true);
 
-      const rawBox = new THREE.Box3().setFromObject(loadedRoot);
+      const rawBox = new THREE.Box3().setFromObject(sceneRoot);
       const rawSize = rawBox.getSize(new THREE.Vector3());
       const maxDim = Math.max(rawSize.x, rawSize.y, rawSize.z, 1e-6);
       const uniformScale = 1.8 / maxDim;
       uniformScaleRef.current = uniformScale;
 
-      loadedRoot.scale.setScalar(uniformScale);
-      loadedRoot.updateMatrixWorld(true);
+      sceneRoot.scale.setScalar(uniformScale);
+      sceneRoot.updateMatrixWorld(true);
 
-      const scaledBox = new THREE.Box3().setFromObject(loadedRoot);
+      const scaledBox = new THREE.Box3().setFromObject(sceneRoot);
       const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
-      loadedRoot.position.x = -scaledCenter.x;
-      loadedRoot.position.z = -scaledCenter.z;
-      loadedRoot.position.y = -scaledBox.min.y + 0.01;
-      loadedRoot.updateMatrixWorld(true);
+      sceneRoot.position.x = -scaledCenter.x;
+      sceneRoot.position.z = -scaledCenter.z;
+      sceneRoot.position.y = -scaledBox.min.y + 0.01;
+      sceneRoot.updateMatrixWorld(true);
 
       applyMicronDepth();
 
       if (controlsRef.current) {
-        const finalBox = new THREE.Box3().setFromObject(loadedRoot);
+        const finalBox = new THREE.Box3().setFromObject(sceneRoot);
         const modelHeight = finalBox.max.y - finalBox.min.y;
         modelTargetYRef.current = modelHeight * 0.5;
         controlsRef.current.target.set(0, modelHeight * 0.5, 0);
         controlsRef.current.update();
       }
 
-      // Model yüklendi — mevcut format için kamerayı çerçeve içine al
       {
         const host = mountRef.current;
         const container = host?.parentElement ?? host;
@@ -505,7 +524,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       if (onMeshStats) {
         let totalVerts = 0;
         let totalFaces = 0;
-        loadedRoot.traverse((child) => {
+        sceneRoot.traverse((child) => {
           const m = child as THREE.Mesh;
           if (m.isMesh && m.geometry) {
             const pos = m.geometry.getAttribute("position");
