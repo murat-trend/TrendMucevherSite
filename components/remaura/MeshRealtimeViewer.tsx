@@ -430,15 +430,22 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
         if (mesh.isMesh) tuneMaterialForDisplay(mesh.material);
       });
 
-      // 3. Modeli pivot noktasına (merkez) hizala + ölçekle
+      // 3. Önce scale, sonra center — yoksa pivot kayar
       loadedRoot.updateMatrixWorld(true);
       const rawBox = new THREE.Box3().setFromObject(loadedRoot);
-      const center = rawBox.getCenter(new THREE.Vector3());
-      const size = rawBox.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z, 1e-6);
+      const rawSize = rawBox.getSize(new THREE.Vector3());
+      const maxDim = Math.max(rawSize.x, rawSize.y, rawSize.z, 1e-6);
       const scale = 1.8 / maxDim;
-      loadedRoot.position.sub(center);
       loadedRoot.scale.setScalar(scale);
+      loadedRoot.updateMatrixWorld(true);
+
+      // Scale sonrası bounding box ile gerçek merkezi al
+      const scaledBox = new THREE.Box3().setFromObject(loadedRoot);
+      const center = scaledBox.getCenter(new THREE.Vector3());
+      loadedRoot.position.x = -center.x;
+      loadedRoot.position.z = -center.z;
+      // Y'yi wrapper.position.y ile zemine oturtacağız, burada ortalıyoruz
+      loadedRoot.position.y = -center.y;
 
       // 4. Wrapper = pivot grubu
       const wrapper = new THREE.Group();
