@@ -72,6 +72,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const modelRootRef = useRef<THREE.Object3D | null>(null);
+  const orientationGroupRef = useRef<THREE.Group | null>(null);
   const gridMajorRef = useRef<THREE.GridHelper | null>(null);
   const gridMinorRef = useRef<THREE.GridHelper | null>(null);
   const renderWidthRef = useRef<number | undefined>(renderWidth);
@@ -85,6 +86,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
   const pauseAnimationRef = useRef(false);
   const animationLoopRef = useRef<(() => void) | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [rotation, setRotation] = useState({ x: 0, y: 0, z: 0 });
 
   const tuneMaterialForDisplay = useCallback((material?: THREE.Material | THREE.Material[] | null) => {
@@ -113,24 +115,12 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       if ("roughness" in standard) {
         standard.roughness = Math.max(standard.roughness ?? 0.3, 0.05);
       }
-      if ("map" in standard && standard.map) {
-        tuneTexture(standard.map);
-      }
-      if ("normalMap" in standard && standard.normalMap) {
-        tuneTexture(standard.normalMap);
-      }
-      if ("roughnessMap" in standard && standard.roughnessMap) {
-        tuneTexture(standard.roughnessMap);
-      }
-      if ("metalnessMap" in standard && standard.metalnessMap) {
-        tuneTexture(standard.metalnessMap);
-      }
-      if ("aoMap" in standard && standard.aoMap) {
-        tuneTexture(standard.aoMap);
-      }
-      if ("emissiveMap" in standard && standard.emissiveMap) {
-        tuneTexture(standard.emissiveMap);
-      }
+      if ("map" in standard && standard.map) tuneTexture(standard.map);
+      if ("normalMap" in standard && standard.normalMap) tuneTexture(standard.normalMap);
+      if ("roughnessMap" in standard && standard.roughnessMap) tuneTexture(standard.roughnessMap);
+      if ("metalnessMap" in standard && standard.metalnessMap) tuneTexture(standard.metalnessMap);
+      if ("aoMap" in standard && standard.aoMap) tuneTexture(standard.aoMap);
+      if ("emissiveMap" in standard && standard.emissiveMap) tuneTexture(standard.emissiveMap);
       entry.needsUpdate = true;
     }
   }, []);
@@ -150,16 +140,12 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     camera.updateProjectionMatrix();
   }, []);
 
-  /**
-   * Format/boyut değişince kamerayı modeli tam çerçeveleyecek şekilde yeniden konumlandırır.
-   * Model her zaman 1.8 birime scale edildiğinden sabit fitSize kullanılır.
-   */
   const fitCameraForAspect = useCallback((w: number, h: number) => {
     const camera = cameraRef.current;
     const controls = controlsRef.current;
     if (!camera || !modelRootRef.current) return;
     const aspect = w / h;
-    const halfFovV = Math.tan(((45 * Math.PI) / 180) / 2); // tan(22.5°)
+    const halfFovV = Math.tan(((45 * Math.PI) / 180) / 2);
     const halfFovH = aspect * halfFovV;
     const fitSize = 1.8;
     const distV = fitSize / (2 * halfFovV);
@@ -174,28 +160,23 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     camera.updateProjectionMatrix();
   }, []);
 
-  /**
-   * Z eksenini göreli katsayıyla ölçekler.
-   * zScaleMm = 1.0 → doğal oranlar (bozulma yok)
-   * zScaleMm = 0.5 → doğal Z'nin yarısı
-   * zScaleMm = 0.01 → çok ince (1%)
-   * Model tabanı HER ZAMAN y=0 üzerinde kalır.
-   */
   const applyMicronDepth = useCallback(() => {
     const modelRoot = modelRootRef.current;
     if (!modelRoot) return;
-
     const uniformScale = Math.max(uniformScaleRef.current, 1e-6);
     const zMult = THREE.MathUtils.clamp(zScaleMm, 0.01, 1.0);
-
     modelRoot.scale.set(uniformScale, uniformScale, uniformScale * zMult);
     modelRoot.updateMatrixWorld(true);
-
-    // Taban y=0'a sabitle
     const bbox = new THREE.Box3().setFromObject(modelRoot);
     modelRoot.position.y = -bbox.min.y;
     modelRoot.updateMatrixWorld(true);
   }, [zScaleMm]);
+
+  // Orientation group'u 90° adımlarla döndür — kullanıcı yanlış gelen modeli düzeltir
+  const rotateOrientation = useCallback((axis: "x" | "y" | "z") => {
+    if (!orientationGroupRef.current) return;
+    orientationGroupRef.current.rotation[axis] += Math.PI / 2;
+  }, []);
 
   const cloneMeshForExport = useCallback(() => {
     const target = modelRootRef.current;
@@ -211,15 +192,10 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
   const exportToSTL = useCallback((mesh: THREE.Object3D) => {
     const output: unknown = stlExporterRef.current.parse(mesh, { binary: true });
     if (output instanceof DataView) {
-      const bytes = output.buffer.slice(
-        output.byteOffset,
-        output.byteOffset + output.byteLength
-      ) as ArrayBuffer;
+      const bytes = output.buffer.slice(output.byteOffset, output.byteOffset + output.byteLength) as ArrayBuffer;
       return new Blob([bytes], { type: "model/stl" });
     }
-    if (output instanceof ArrayBuffer) {
-      return new Blob([output], { type: "model/stl" });
-    }
+    if (output instanceof ArrayBuffer) return new Blob([output], { type: "model/stl" });
     return new Blob([String(output)], { type: "text/plain;charset=utf-8" });
   }, []);
 
@@ -245,15 +221,13 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       downloadSTL: () => {
         const mesh = cloneMeshForExport();
         if (!mesh) return false;
-        const blob = exportToSTL(mesh);
-        triggerDownload(blob, "Remaura_Model.stl");
+        triggerDownload(exportToSTL(mesh), "Remaura_Model.stl");
         return true;
       },
       downloadOBJ: () => {
         const mesh = cloneMeshForExport();
         if (!mesh) return false;
-        const blob = exportToOBJ(mesh);
-        triggerDownload(blob, "Remaura_Model.obj");
+        triggerDownload(exportToOBJ(mesh), "Remaura_Model.obj");
         return true;
       },
       setGridVisible: (visible: boolean) => {
@@ -362,20 +336,16 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
 
     const gridMajor = new THREE.GridHelper(10, 20, 0x566174, 0x2f3848);
     gridMajor.position.y = -0.02;
-    gridMajor.visible = true;
     scene.add(gridMajor);
     gridMajorRef.current = gridMajor;
     const gridMinor = new THREE.GridHelper(10, 80, 0x253041, 0x253041);
     gridMinor.position.y = -0.019;
-    gridMinor.visible = true;
     scene.add(gridMinor);
     gridMinorRef.current = gridMinor;
 
     applyRendererSize();
 
-    const resizeObserver = new ResizeObserver(() => {
-      applyRendererSize();
-    });
+    const resizeObserver = new ResizeObserver(() => { applyRendererSize(); });
     resizeObserver.observe(host.parentElement ?? host);
 
     const animate = () => {
@@ -396,24 +366,20 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       controls.removeEventListener("end", onInteractEnd);
       controlsRef.current?.dispose();
       controlsRef.current = null;
-
       scene.traverse((obj) => {
         const mesh = obj as THREE.Mesh;
         if (!("geometry" in mesh) || !mesh.geometry) return;
         mesh.geometry.dispose();
         const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
-        if (Array.isArray(material)) {
-          material.forEach((m) => m.dispose());
-        } else {
-          material?.dispose();
-        }
+        if (Array.isArray(material)) material.forEach((m) => m.dispose());
+        else material?.dispose();
       });
-
       rendererRef.current?.dispose();
       rendererRef.current = null;
       sceneRef.current = null;
       cameraRef.current = null;
       modelRootRef.current = null;
+      orientationGroupRef.current = null;
       gridMajorRef.current = null;
       gridMinorRef.current = null;
       host.innerHTML = "";
@@ -422,6 +388,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
 
   useEffect(() => {
     if (modelUrl) return;
+    setIsLoading(false);
     const frame = window.requestAnimationFrame(() => setLoadError(null));
     return () => window.cancelAnimationFrame(frame);
   }, [modelUrl]);
@@ -433,77 +400,79 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     if (modelRootRef.current) {
       scene.remove(modelRootRef.current);
       modelRootRef.current = null;
+      orientationGroupRef.current = null;
     }
 
-    if (!modelUrl) {
-      return;
-    }
+    if (!modelUrl) return;
 
-    const placeModel = (loadedRoot: THREE.Object3D, isGLB = false) => {
+    // Hiyerarşi:
+    //   wrapper (modelRootRef) — animasyon rotation.y
+    //     └── orientationGroup (orientationGroupRef) — kullanıcı eksen düzeltmesi
+    //           └── loadedRoot — ham model
+    const placeModel = (loadedRoot: THREE.Object3D) => {
       setLoadError(null);
+      setIsLoading(false);
 
+      // 1. Reset
       loadedRoot.position.set(0, 0, 0);
       loadedRoot.rotation.set(0, 0, 0);
       loadedRoot.scale.set(1, 1, 1);
 
-      if (isGLB) {
-        // GLB: Z-up → Y-up, obje seviyesinde döndür
-        loadedRoot.rotation.x = -Math.PI / 2;
-        loadedRoot.traverse((child) => {
-          const mesh = child as THREE.Mesh;
-          if (mesh.isMesh) tuneMaterialForDisplay(mesh.material);
-        });
-      } else {
-        // STL: geometry seviyesinde baked-in döndür
-        loadedRoot.traverse((child) => {
-          const mesh = child as THREE.Mesh;
-          if (mesh.isMesh && mesh.geometry) {
-            mesh.geometry.applyMatrix4(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
-            tuneMaterialForDisplay(mesh.material);
-          }
-        });
-      }
+      // 2. Material tuning
+      loadedRoot.traverse((child) => {
+        const mesh = child as THREE.Mesh;
+        if (mesh.isMesh) tuneMaterialForDisplay(mesh.material);
+      });
 
-      // Inner modeli wrapper merkezine sabitle
+      // 3. loadedRoot'u kendi local space'inde ortala
       loadedRoot.updateMatrixWorld(true);
-      const innerCenter = new THREE.Box3().setFromObject(loadedRoot).getCenter(new THREE.Vector3());
-      loadedRoot.position.sub(innerCenter);
+      const localCenter = new THREE.Box3().setFromObject(loadedRoot).getCenter(new THREE.Vector3());
+      loadedRoot.position.sub(localCenter);
 
-      // Wrapper: animasyon (rotation.y) bu group üzerinden döner — eksen kayması olmaz
+      // 4. Orientation group: başlangıç Z-up → Y-up düzeltmesi
+      const orientGroup = new THREE.Group();
+      orientGroup.rotation.x = -Math.PI / 2;
+      orientGroup.add(loadedRoot);
+      orientationGroupRef.current = orientGroup;
+
+      // 5. Animation wrapper
       const wrapper = new THREE.Group();
-      wrapper.add(loadedRoot);
-      const sceneRoot = wrapper;
-      modelRootRef.current = sceneRoot;
-      scene.add(sceneRoot);
+      wrapper.add(orientGroup);
+      modelRootRef.current = wrapper;
+      scene.add(wrapper);
 
       if (initialRotation) {
-        sceneRoot.rotation.set(initialRotation.x, initialRotation.y, initialRotation.z);
+        wrapper.rotation.set(initialRotation.x, initialRotation.y, initialRotation.z);
         setRotation(initialRotation);
       }
-      sceneRoot.updateMatrixWorld(true);
+      wrapper.updateMatrixWorld(true);
 
-      const rawBox = new THREE.Box3().setFromObject(sceneRoot);
+      // 6. Uniform scale — max boyut 1.8 birime sığdır
+      const rawBox = new THREE.Box3().setFromObject(wrapper);
       const rawSize = rawBox.getSize(new THREE.Vector3());
       const maxDim = Math.max(rawSize.x, rawSize.y, rawSize.z, 1e-6);
       const uniformScale = 1.8 / maxDim;
       uniformScaleRef.current = uniformScale;
-      sceneRoot.scale.setScalar(uniformScale);
-      sceneRoot.updateMatrixWorld(true);
+      wrapper.scale.setScalar(uniformScale);
+      wrapper.updateMatrixWorld(true);
 
-      const scaledBox = new THREE.Box3().setFromObject(sceneRoot);
-      sceneRoot.position.y = -scaledBox.min.y + 0.01;
-      sceneRoot.updateMatrixWorld(true);
+      // 7. Zemine oturt
+      const scaledBox = new THREE.Box3().setFromObject(wrapper);
+      wrapper.position.y = -scaledBox.min.y + 0.01;
+      wrapper.updateMatrixWorld(true);
 
       applyMicronDepth();
 
+      // 8. Kamera hedefi
       if (controlsRef.current) {
-        const finalBox = new THREE.Box3().setFromObject(sceneRoot);
+        const finalBox = new THREE.Box3().setFromObject(wrapper);
         const modelHeight = finalBox.max.y - finalBox.min.y;
         modelTargetYRef.current = modelHeight * 0.5;
         controlsRef.current.target.set(0, modelHeight * 0.5, 0);
         controlsRef.current.update();
       }
 
+      // 9. Format aspect'e göre kamerayı çerçevele
       {
         const host = mountRef.current;
         const container = host?.parentElement ?? host;
@@ -512,10 +481,11 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
         fitCameraForAspect(w, h);
       }
 
+      // 10. Mesh istatistikleri
       if (onMeshStats) {
         let totalVerts = 0;
         let totalFaces = 0;
-        sceneRoot.traverse((child) => {
+        wrapper.traverse((child) => {
           const m = child as THREE.Mesh;
           if (m.isMesh && m.geometry) {
             const pos = m.geometry.getAttribute("position");
@@ -528,7 +498,6 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       }
     };
 
-    /** Uzak HTTPS dosyalarını tarayıcı CORS'undan kaçınmak için same-origin proxy. */
     const remoteLoaderUrl =
       modelUrl.startsWith("blob:") || modelUrl.startsWith("/")
         ? modelUrl
@@ -541,6 +510,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       (fileType === "auto" && modelUrl.toLowerCase().endsWith(".stl"));
 
     const tryLoadStl = (url: string) => {
+      setIsLoading(true);
       const stlLoader = new STLLoader();
       stlLoader.load(
         url,
@@ -553,7 +523,6 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
             flatShading: false,
           });
           const mesh = new THREE.Mesh(geometry, material);
-          tuneMaterialForDisplay(material);
           const group = new THREE.Group();
           group.add(mesh);
           placeModel(group);
@@ -561,12 +530,14 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
         undefined,
         (error) => {
           console.error("[MeshViewer] STL yüklenemedi:", error);
+          setIsLoading(false);
           setLoadError("3D model yüklenemedi. Format desteklenmiyor olabilir.");
         }
       );
     };
 
     const tryLoadGltf = (url: string) => {
+      setIsLoading(true);
       const dracoLoader = new DRACOLoader();
       dracoLoader.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.6/");
       const gltfLoader = new GLTFLoader();
@@ -575,12 +546,13 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
         url,
         (gltf) => {
           dracoLoader.dispose();
-          placeModel(gltf.scene, true);
+          placeModel(gltf.scene);
         },
         undefined,
         (error) => {
           console.error("[MeshViewer] GLB yüklenemedi:", error);
           dracoLoader.dispose();
+          setIsLoading(false);
           setLoadError("3D model yüklenemedi. Format desteklenmiyor olabilir.");
           tryLoadStl(url);
         }
@@ -600,7 +572,6 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     onRotationChange?.(rotation);
   }, [rotation, onRotationChange]);
 
-  // zScaleMm her değiştiğinde mikron derinliğini yeniden uygula
   useEffect(() => {
     applyMicronDepth();
   }, [zScaleMm, applyMicronDepth]);
@@ -626,78 +597,45 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
   return (
     <div className="relative h-full w-full overflow-hidden">
       <div ref={mountRef} className="absolute inset-0" />
-      {loadError ? (
+
+      {loadError && (
         <div
           className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/45 px-3 text-center text-xs leading-snug text-red-300"
           role="alert"
         >
           {loadError}
         </div>
-      ) : null}
+      )}
+
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/90 backdrop-blur-lg z-50">
+          <div className="w-16 h-16 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+        </div>
+      )}
+
       {showRotationControls && (
-        <div style={{ position: "absolute", bottom: 8, left: 8, zIndex: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+        <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-3 z-10">
           {(["x", "y", "z"] as const).map((axis) => (
-            <div key={axis} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <span style={{ color: "#c9a84c", fontSize: 10, width: 10 }}>{axis.toUpperCase()}</span>
-              <button
-                type="button"
-                onClick={() => {
-                  const newRot = { ...rotation, [axis]: rotation[axis] - Math.PI / 12 };
-                  setRotation(newRot);
-                  onRotationChange?.(newRot);
-                }}
-                style={{
-                  background: "rgba(0,0,0,0.5)",
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  color: "#fff",
-                  borderRadius: 4,
-                  padding: "2px 6px",
-                  fontSize: 11,
-                  cursor: "pointer",
-                }}
-              >
-                −15°
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const newRot = { ...rotation, [axis]: rotation[axis] + Math.PI / 12 };
-                  setRotation(newRot);
-                  onRotationChange?.(newRot);
-                }}
-                style={{
-                  background: "rgba(0,0,0,0.5)",
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  color: "#fff",
-                  borderRadius: 4,
-                  padding: "2px 6px",
-                  fontSize: 11,
-                  cursor: "pointer",
-                }}
-              >
-                +15°
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const newRot = { ...rotation, [axis]: 0 };
-                  setRotation(newRot);
-                  onRotationChange?.(newRot);
-                }}
-                style={{
-                  background: "rgba(0,0,0,0.5)",
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  color: "#aaa",
-                  borderRadius: 4,
-                  padding: "2px 6px",
-                  fontSize: 10,
-                  cursor: "pointer",
-                }}
-              >
-                0
-              </button>
-            </div>
+            <button
+              key={axis}
+              type="button"
+              onClick={() => rotateOrientation(axis)}
+              className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold transition-all border border-white/5"
+            >
+              {axis.toUpperCase()}
+            </button>
           ))}
+          <div className="w-[1px] h-8 bg-white/10" />
+          <button
+            type="button"
+            onClick={() => {
+              if (orientationGroupRef.current)
+                orientationGroupRef.current.rotation.set(-Math.PI / 2, 0, 0);
+            }}
+            className="text-[10px] text-white/50 font-black tracking-widest hover:text-white transition-colors px-2"
+          >
+            SIFIRLA
+          </button>
         </div>
       )}
     </div>
