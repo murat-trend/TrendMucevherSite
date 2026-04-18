@@ -312,7 +312,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
     renderer.setPixelRatio(pixelRatio ?? 1);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
+    renderer.toneMappingExposure = 1.2;
     renderer.setClearColor(0x000000, 0);
     renderer.shadowMap.enabled = false;
     renderer.domElement.style.position = "absolute";
@@ -439,45 +439,40 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       return;
     }
 
-    const placeModel = (loadedRoot: THREE.Object3D, applyGeometryRotation = true) => {
+    const placeModel = (loadedRoot: THREE.Object3D, isGLB = false) => {
       setLoadError(null);
 
       loadedRoot.position.set(0, 0, 0);
-      loadedRoot.scale.set(1, 1, 1);
       loadedRoot.rotation.set(0, 0, 0);
+      loadedRoot.scale.set(1, 1, 1);
 
-      loadedRoot.traverse((child) => {
-        const mesh = child as THREE.Mesh;
-        if (mesh.isMesh && mesh.geometry) {
-          if (applyGeometryRotation) {
-            mesh.geometry.applyMatrix4(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
-          }
-          tuneMaterialForDisplay(mesh.material);
-        }
-      });
-
-      // GLB: inner modele orientation fix uygula, sonra wrapper Group içine al.
-      // Animasyon (rotation.y) wrapper üzerinden döner → eksen kayması olmaz.
-      let sceneRoot: THREE.Object3D;
-      if (!applyGeometryRotation) {
-        loadedRoot.updateMatrixWorld(true);
-        const orientBox = new THREE.Box3().setFromObject(loadedRoot);
-        const sz = orientBox.getSize(new THREE.Vector3());
-        if (sz.z > sz.y * 1.2) {
-          loadedRoot.rotation.x = -Math.PI / 2;
-        }
-        // Inner modeli wrapper merkezine sabitle
-        loadedRoot.updateMatrixWorld(true);
-        const innerCenter = new THREE.Box3().setFromObject(loadedRoot).getCenter(new THREE.Vector3());
-        loadedRoot.position.sub(innerCenter);
-
-        const wrapper = new THREE.Group();
-        wrapper.add(loadedRoot);
-        sceneRoot = wrapper;
+      if (isGLB) {
+        // GLB: Z-up → Y-up, obje seviyesinde döndür
+        loadedRoot.rotation.x = -Math.PI / 2;
+        loadedRoot.traverse((child) => {
+          const mesh = child as THREE.Mesh;
+          if (mesh.isMesh) tuneMaterialForDisplay(mesh.material);
+        });
       } else {
-        sceneRoot = loadedRoot;
+        // STL: geometry seviyesinde baked-in döndür
+        loadedRoot.traverse((child) => {
+          const mesh = child as THREE.Mesh;
+          if (mesh.isMesh && mesh.geometry) {
+            mesh.geometry.applyMatrix4(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
+            tuneMaterialForDisplay(mesh.material);
+          }
+        });
       }
 
+      // Inner modeli wrapper merkezine sabitle
+      loadedRoot.updateMatrixWorld(true);
+      const innerCenter = new THREE.Box3().setFromObject(loadedRoot).getCenter(new THREE.Vector3());
+      loadedRoot.position.sub(innerCenter);
+
+      // Wrapper: animasyon (rotation.y) bu group üzerinden döner — eksen kayması olmaz
+      const wrapper = new THREE.Group();
+      wrapper.add(loadedRoot);
+      const sceneRoot = wrapper;
       modelRootRef.current = sceneRoot;
       scene.add(sceneRoot);
 
@@ -492,14 +487,10 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
       const maxDim = Math.max(rawSize.x, rawSize.y, rawSize.z, 1e-6);
       const uniformScale = 1.8 / maxDim;
       uniformScaleRef.current = uniformScale;
-
       sceneRoot.scale.setScalar(uniformScale);
       sceneRoot.updateMatrixWorld(true);
 
       const scaledBox = new THREE.Box3().setFromObject(sceneRoot);
-      const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
-      sceneRoot.position.x = -scaledCenter.x;
-      sceneRoot.position.z = -scaledCenter.z;
       sceneRoot.position.y = -scaledBox.min.y + 0.01;
       sceneRoot.updateMatrixWorld(true);
 
@@ -584,7 +575,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
         url,
         (gltf) => {
           dracoLoader.dispose();
-          placeModel(gltf.scene, false);
+          placeModel(gltf.scene, true);
         },
         undefined,
         (error) => {
