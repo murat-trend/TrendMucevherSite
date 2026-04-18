@@ -344,6 +344,7 @@ function VideoOptimizePageInner() {
                   onMeshStats={setMeshStats}
                   autoRotate={true}
                   showGrid={true}
+                  showRotationControls={true}
                   renderWidth={selectedFmt.w}
                   renderHeight={selectedFmt.h}
                 />
