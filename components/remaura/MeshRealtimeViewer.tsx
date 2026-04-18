@@ -414,8 +414,7 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
 
     // Hiyerarşi:
     //   wrapper (modelRootRef) — animasyon rotation.y
-    //     └── orientationGroup (orientationGroupRef) — kullanıcı eksen düzeltmesi
-    //           └── loadedRoot — ham model
+    //     └── loadedRoot (orientationGroupRef) — Z-up→Y-up + kullanıcı eksen düzeltmesi
     const placeModel = (loadedRoot: THREE.Object3D) => {
       setLoadError(null);
       setIsLoading(false);
@@ -431,22 +430,21 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
         if (mesh.isMesh) tuneMaterialForDisplay(mesh.material);
       });
 
-      // 3. loadedRoot'u kendi local space'inde ortala
-      loadedRoot.updateMatrixWorld(true);
-      const localCenter = new THREE.Box3().setFromObject(loadedRoot).getCenter(new THREE.Vector3());
-      loadedRoot.position.sub(localCenter);
+      // 3. Z-up → Y-up düzeltmesi (önce rotation, sonra centering — Gemini yaklaşımı)
+      loadedRoot.rotation.x = -Math.PI / 2;
+      orientationGroupRef.current = loadedRoot as THREE.Group;
 
-      // 4. Orientation group: başlangıç Z-up → Y-up düzeltmesi
-      const orientGroup = new THREE.Group();
-      orientGroup.rotation.x = -Math.PI / 2;
-      orientGroup.add(loadedRoot);
-      orientationGroupRef.current = orientGroup;
-
-      // 5. Animation wrapper
+      // 4. Animation wrapper
       const wrapper = new THREE.Group();
-      wrapper.add(orientGroup);
+      wrapper.add(loadedRoot);
       modelRootRef.current = wrapper;
       scene.add(wrapper);
+
+      // 5. Rotasyon uygulandıktan sonra Y-up uzayında ortala
+      loadedRoot.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(loadedRoot);
+      const center = box.getCenter(new THREE.Vector3());
+      loadedRoot.position.sub(center);
 
       if (initialRotation) {
         wrapper.rotation.set(initialRotation.x, initialRotation.y, initialRotation.z);
