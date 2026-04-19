@@ -75,6 +75,8 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
     const controlsRef = useRef<OrbitControls | null>(null);
     const gridRef = useRef<THREE.GridHelper | null>(null);
+    const axesSceneRef = useRef<THREE.Scene | null>(null);
+    const axesCameraRef = useRef<THREE.OrthographicCamera | null>(null);
 
     // ─── Hiyerarşi ───────────────────────────────────────────────────────
     //  scene
@@ -237,22 +239,45 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
       gridRef.current = grid;
       grid.visible = showGrid;
 
-      const axes = new THREE.AxesHelper(2);
-      (axes.material as THREE.Material).depthTest = false;
-      axes.renderOrder = 999;
-      scene.add(axes);
+      const axesScene = new THREE.Scene();
+      axesScene.add(new THREE.AxesHelper(0.8));
+      axesSceneRef.current = axesScene;
+      const axesCam = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, 0.1, 10);
+      axesCameraRef.current = axesCam;
 
       applyRendererSize();
 
       const animate = () => {
         if (pauseAnimationRef.current) return;
-        // rotation SADECE pivot'ta
         if (autoRotateRef.current && !userInteractingRef.current && pivotRef.current) {
           pivotRef.current.rotation.y += 0.007;
         }
         controlsRef.current?.update();
-        if (rendererRef.current && sceneRef.current && cameraRef.current)
-          rendererRef.current.render(sceneRef.current, cameraRef.current);
+        const r = rendererRef.current;
+        const s = sceneRef.current;
+        const c = cameraRef.current;
+        if (!r || !s || !c) return;
+
+        const sz = r.getSize(new THREE.Vector2());
+        r.setScissorTest(false);
+        r.setViewport(0, 0, sz.x, sz.y);
+        r.render(s, c);
+
+        // XYZ ekseni inset — sol alt köşe
+        if (axesSceneRef.current && axesCameraRef.current) {
+          const inset = 90;
+          r.autoClear = false;
+          r.setScissorTest(true);
+          r.setScissor(12, 12, inset, inset);
+          r.setViewport(12, 12, inset, inset);
+          r.clearDepth();
+          axesCameraRef.current.position.set(0, 0, 3).applyQuaternion(c.quaternion);
+          axesCameraRef.current.lookAt(0, 0, 0);
+          r.render(axesSceneRef.current, axesCameraRef.current);
+          r.setScissorTest(false);
+          r.setViewport(0, 0, sz.x, sz.y);
+          r.autoClear = true;
+        }
       };
       renderer.setAnimationLoop(animate);
 
