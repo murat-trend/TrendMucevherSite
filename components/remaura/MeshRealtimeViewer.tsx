@@ -295,18 +295,24 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
           const w = rnd.domElement.width  / rnd.getPixelRatio();
           const h = rnd.domElement.height / rnd.getPixelRatio();
 
-          rnd.setViewport(margin, h - margin - size, size, size);
-          rnd.setScissor (margin, h - margin - size, size, size);
+          rnd.autoClear = false;
+          rnd.clearDepth();
           rnd.setScissorTest(true);
+          rnd.setScissor (margin, h - margin - size, size, size);
+          rnd.setViewport(margin, h - margin - size, size, size);
 
+          // Kamera quaternion'u kopyala + pozisyonu ona göre hizala
           gizmoCameraRef.current.quaternion.copy(cam.quaternion);
-          gizmoCameraRef.current.position.set(0, 0, 3);
+          gizmoCameraRef.current.position
+            .set(0, 0, 3)
+            .applyQuaternion(cam.quaternion);
 
           rnd.render(gizmoSceneRef.current, gizmoCameraRef.current);
 
+          rnd.setScissorTest(false);
           rnd.setViewport(0, 0, w, h);
           rnd.setScissor (0, 0, w, h);
-          rnd.setScissorTest(false);
+          rnd.autoClear = true;
         }
       };
       renderAllRef.current = renderAll;
