@@ -32,7 +32,12 @@
       "Bash(powershell.exe *)",
       "Bash(node -e ' *)",
       "Bash(xargs -I {} sh -c 'echo \"=== {} ===\" && head -5 {}')",
-      "Bash(xargs ls *)"
+      "Bash(xargs ls *)",
+      "Bash(vercel --prod)",
+      "Bash(pip install *)",
+      "Bash(python main.py)",
+      "Bash(python -c ' *)",
+      "Bash(powershell *)"
     ]
   }
 }

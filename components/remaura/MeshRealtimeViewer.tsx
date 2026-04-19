@@ -15,9 +15,10 @@ export type MeshStats = {
   faces: number;
 };
 
+export type PivotMode = "bottom" | "center" | "top";
+
 type MeshRealtimeViewerProps = {
   modelUrl?: string | null;
-  /** Orijinal dosya adı (Uzantı tespiti için kritik) */
   fileName?: string | null;
   zScaleMm?: number;
   fileType?: "stl" | "glb" | "auto";
@@ -31,6 +32,7 @@ type MeshRealtimeViewerProps = {
   showRotationControls?: boolean;
   preserveDrawingBuffer?: boolean;
   pixelRatio?: number;
+  pivotMode?: PivotMode;
 };
 
 export type MeshRealtimeViewerHandle = {
@@ -63,6 +65,7 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
       showRotationControls = true,
       preserveDrawingBuffer = true,
       pixelRatio,
+      pivotMode = "bottom",
     },
     ref
   ) {
@@ -71,11 +74,19 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
     const controlsRef = useRef<OrbitControls | null>(null);
-    const modelRootRef = useRef<THREE.Group | null>(null);
-    const orientationGroupRef = useRef<THREE.Group | null>(null);
     const gridRef = useRef<THREE.GridHelper | null>(null);
-    
-    const uniformScaleRef = useRef<number>(1);
+
+    // ─── Hiyerarşi ───────────────────────────────────────────────────────
+    //  scene
+    //   └── pivot          ← SADECE rotation.y (transform yok)
+    //         └── modelRoot  ← SADECE scale
+    //               └── orientationGroup  ← X/Y/Z butonları
+    //                     └── loadedRoot  ← position.sub(pivotPoint)
+    // ─────────────────────────────────────────────────────────────────────
+    const pivotRef = useRef<THREE.Group | null>(null);           // rotation hedefi
+    const modelRootRef = useRef<THREE.Group | null>(null);       // scale + export
+    const orientationGroupRef = useRef<THREE.Group | null>(null);
+
     const modelTargetYRef = useRef<number>(0.9);
     const autoRotateRef = useRef(autoRotate);
     const userInteractingRef = useRef(false);
@@ -89,10 +100,10 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
       if (!material) return;
       const materials = Array.isArray(material) ? material : [material];
       for (const entry of materials) {
-        const standard = entry as THREE.MeshStandardMaterial;
-        if ("envMapIntensity" in standard) standard.envMapIntensity = 1.5;
-        if ("metalness" in standard) standard.metalness = Math.max(standard.metalness ?? 0.5, 0.8);
-        if ("roughness" in standard) standard.roughness = Math.min(standard.roughness ?? 0.5, 0.2);
+        const s = entry as THREE.MeshStandardMaterial;
+        if ("envMapIntensity" in s) s.envMapIntensity = 1.5;
+        if ("metalness" in s) s.metalness = Math.max(s.metalness ?? 0.5, 0.8);
+        if ("roughness" in s) s.roughness = Math.min(s.roughness ?? 0.5, 0.2);
         entry.needsUpdate = true;
       }
     }, []);
@@ -103,14 +114,13 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
       const container = host.parentElement ?? host;
       const width = renderWidth ?? Math.max(container.clientWidth, 1);
       const height = renderHeight ?? Math.max(container.clientHeight, 1);
-      
       rendererRef.current.setSize(width, height, false);
       cameraRef.current.aspect = width / height;
       cameraRef.current.updateProjectionMatrix();
     }, [renderWidth, renderHeight]);
 
     const fitCameraForAspect = useCallback((w: number, h: number) => {
-      if (!cameraRef.current || !modelRootRef.current) return;
+      if (!cameraRef.current) return;
       const aspect = w / h;
       const dist = 4.0 / Math.min(aspect, 1);
       cameraRef.current.position.set(0, modelTargetYRef.current, dist);
@@ -121,17 +131,21 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
     }, []);
 
     const rotateOrientation = useCallback((axis: "x" | "y" | "z") => {
-      if (!orientationGroupRef.current || !modelRootRef.current) return;
+      if (!orientationGroupRef.current || !pivotRef.current) return;
       orientationGroupRef.current.rotation[axis] += Math.PI / 2;
-      
+
       setTimeout(() => {
-        if (modelRootRef.current) {
-          modelRootRef.current.updateMatrixWorld(true);
-          const box = new THREE.Box3().setFromObject(modelRootRef.current);
-          modelRootRef.current.position.y = -box.min.y;
-        }
+        const pivot = pivotRef.current;
+        if (!pivot) return;
+        pivot.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(pivot);
+        modelTargetYRef.current = (box.max.y - box.min.y) * 0.5;
+        fitCameraForAspect(
+          mountRef.current?.clientWidth  || 800,
+          mountRef.current?.clientHeight || 600
+        );
       }, 50);
-    }, []);
+    }, [fitCameraForAspect]);
 
     useImperativeHandle(ref, () => ({
       downloadSTL: () => {
@@ -160,14 +174,13 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
         if (gridRef.current) gridRef.current.visible = visible;
       },
       setRotation: (rot) => {
-        if (modelRootRef.current) modelRootRef.current.rotation.set(rot.x, rot.y, rot.z);
+        if (pivotRef.current) pivotRef.current.rotation.set(rot.x, rot.y, rot.z);
         setRotationState(rot);
       },
       getRotation: () => rotationState,
       renderFrame: () => {
-        if (rendererRef.current && sceneRef.current && cameraRef.current) {
+        if (rendererRef.current && sceneRef.current && cameraRef.current)
           rendererRef.current.render(sceneRef.current, cameraRef.current);
-        }
       },
       setCanvasBackground: (color, alpha = 0) => {
         rendererRef.current?.setClearColor(color, alpha);
@@ -184,6 +197,7 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
       },
     }), [rotationState]);
 
+    // ── Sahne + Renderer ─────────────────────────────────────────────────
     useEffect(() => {
       if (!mountRef.current) return;
       const host = mountRef.current;
@@ -207,22 +221,19 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
       controls.dampingFactor = 0.05;
       controlsRef.current = controls;
 
-      // --- IŞIKLANDIRMA ---
       scene.add(new THREE.AmbientLight(0xffffff, 0.8));
       const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
       keyLight.position.set(5, 10, 7);
       scene.add(keyLight);
-      
       const fillLight = new THREE.DirectionalLight(0xffffff, 1.0);
       fillLight.position.set(-5, 5, -5);
       scene.add(fillLight);
 
-      // Basit bir Environment Map (Parlamalar için)
       const pmrem = new THREE.PMREMGenerator(renderer);
       scene.environment = pmrem.fromScene(new THREE.Scene()).texture;
 
       const grid = new THREE.GridHelper(10, 20, 0x444444, 0x222222);
-      scene.add(grid); 
+      scene.add(grid);
       gridRef.current = grid;
       grid.visible = showGrid;
 
@@ -230,21 +241,20 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
 
       const animate = () => {
         if (pauseAnimationRef.current) return;
-        const currentModel = modelRootRef.current;
-        if (autoRotateRef.current && !userInteractingRef.current && currentModel) {
-          currentModel.rotation.y += 0.007;
+        // rotation SADECE pivot'ta
+        if (autoRotateRef.current && !userInteractingRef.current && pivotRef.current) {
+          pivotRef.current.rotation.y += 0.007;
         }
-        if (controlsRef.current) controlsRef.current.update();
-        if (rendererRef.current && sceneRef.current && cameraRef.current) {
+        controlsRef.current?.update();
+        if (rendererRef.current && sceneRef.current && cameraRef.current)
           rendererRef.current.render(sceneRef.current, cameraRef.current);
-        }
       };
       renderer.setAnimationLoop(animate);
 
       const onStart = () => (userInteractingRef.current = true);
-      const onEnd = () => (userInteractingRef.current = false);
+      const onEnd   = () => (userInteractingRef.current = false);
       controls.addEventListener("start", onStart);
-      controls.addEventListener("end", onEnd);
+      controls.addEventListener("end",   onEnd);
 
       return () => {
         renderer.setAnimationLoop(null);
@@ -254,55 +264,80 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
       };
     }, [pixelRatio, preserveDrawingBuffer, showGrid, applyRendererSize]);
 
+    // ── Model yükleme ────────────────────────────────────────────────────
     useEffect(() => {
       if (!sceneRef.current || !modelUrl) return;
       const scene = sceneRef.current;
 
-      if (modelRootRef.current) scene.remove(modelRootRef.current);
+      // Önceki modeli kaldır
+      if (pivotRef.current) scene.remove(pivotRef.current);
+      pivotRef.current       = null;
+      modelRootRef.current   = null;
+      orientationGroupRef.current = null;
 
       const placeModel = (loadedRoot: THREE.Object3D) => {
         setIsLoading(false);
 
-        // --- PIVOT DÜZELTME ---
-        const box = new THREE.Box3().setFromObject(loadedRoot);
-        const center = box.getCenter(new THREE.Vector3());
+        // 1. Bbox'ı loadedRoot'un kendi local space'inde hesapla (henüz sahneye eklenmedi)
+        const box  = new THREE.Box3().setFromObject(loadedRoot);
         const size = box.getSize(new THREE.Vector3());
-        
-        loadedRoot.position.sub(center);
+        const min  = box.min;
+        const max  = box.max;
 
+        // 2. Pivot Y seç: bottom / center / top
+        const pivotY =
+          pivotMode === "top"    ? max.y :
+          pivotMode === "center" ? (min.y + max.y) / 2 :
+          min.y; // "bottom" (default)
+
+        // 3. loadedRoot'u kaydır — pivot noktası (0,0,0)'a gelsin
+        //    Tüm hesap aynı local space'de, coordinate karışıklığı yok
+        loadedRoot.position.set(
+          -((min.x + max.x) / 2),
+          -pivotY,
+          -((min.z + max.z) / 2)
+        );
+
+        // 4. Materyal
         loadedRoot.traverse((c) => {
           if ((c as THREE.Mesh).isMesh) tuneMaterialForDisplay((c as THREE.Mesh).material);
         });
 
+        // 5. Pivot: rotation + scale buraya, başka hiçbir şey yok
+        const pivot = new THREE.Group();
+        const scale = 1.8 / Math.max(size.x, size.y, size.z, 0.01);
+        pivot.scale.setScalar(scale);
+
+        // 6. orientationGroup: X/Y/Z butonları için ara katman
         const orientationGroup = new THREE.Group();
         orientationGroup.add(loadedRoot);
+        pivot.add(orientationGroup);
+        scene.add(pivot);
+
+        pivotRef.current        = pivot;
+        modelRootRef.current    = pivot; // export için
         orientationGroupRef.current = orientationGroup;
 
-        const mainRoot = new THREE.Group();
-        mainRoot.add(orientationGroup);
-        
-        const scale = 1.8 / Math.max(size.x, size.y, size.z, 0.01);
-        mainRoot.scale.setScalar(scale);
-        
-        modelRootRef.current = mainRoot;
-        scene.add(mainRoot);
+        // 7. Kamera
+        pivot.updateMatrixWorld(true);
+        const worldBox = new THREE.Box3().setFromObject(pivot);
+        modelTargetYRef.current = (worldBox.max.y - worldBox.min.y) * 0.5;
+        fitCameraForAspect(
+          mountRef.current?.clientWidth  || 800,
+          mountRef.current?.clientHeight || 600
+        );
 
-        mainRoot.updateMatrixWorld(true);
-        const groundBox = new THREE.Box3().setFromObject(mainRoot);
-        mainRoot.position.y = -groundBox.min.y;
-
-        const h = groundBox.max.y - groundBox.min.y;
-        modelTargetYRef.current = h * 0.5;
-        fitCameraForAspect(mountRef.current?.clientWidth || 800, mountRef.current?.clientHeight || 600);
-        
+        // 8. İstatistikler
         if (onMeshStats) {
           let v = 0, f = 0;
-          mainRoot.traverse((c) => {
+          pivot.traverse((c) => {
             const m = c as THREE.Mesh;
             if (m.isMesh && m.geometry) {
               const p = m.geometry.getAttribute("position");
               if (p) v += p.count;
-              f += m.geometry.index ? m.geometry.index.count / 3 : (p ? p.count / 3 : 0);
+              f += m.geometry.index
+                ? m.geometry.index.count / 3
+                : p ? p.count / 3 : 0;
             }
           });
           onMeshStats({ vertices: Math.round(v), faces: Math.round(f) });
@@ -311,34 +346,34 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
 
       setIsLoading(true);
 
-      // Uzantı tespiti (fileName öncelikli)
       const nameToCheck = fileName || modelUrl;
       const isStl = nameToCheck.toLowerCase().endsWith(".stl") || fileType === "stl";
-      
+
       if (isStl) {
-        new STLLoader().load(modelUrl, (geo) => {
-          const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xcccccc }));
-          const group = new THREE.Group(); group.add(mesh);
-          placeModel(group);
-        }, undefined, (err) => {
-          console.error("STL Yükleme Hatası:", err);
-          setIsLoading(false);
-        });
+        new STLLoader().load(
+          modelUrl,
+          (geo) => {
+            const mesh  = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xcccccc }));
+            const group = new THREE.Group();
+            group.add(mesh);
+            placeModel(group);
+          },
+          undefined,
+          (err) => { console.error("STL Yükleme Hatası:", err); setIsLoading(false); }
+        );
       } else {
         const draco = new DRACOLoader();
         draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.6/");
         const gltf = new GLTFLoader();
         gltf.setDRACOLoader(draco);
-        gltf.load(modelUrl, (res) => {
-          draco.dispose();
-          placeModel(res.scene);
-        }, undefined, (err) => {
-          console.error("GLB Yükleme Hatası:", err);
-          draco.dispose();
-          setIsLoading(false);
-        });
+        gltf.load(
+          modelUrl,
+          (res) => { draco.dispose(); placeModel(res.scene); },
+          undefined,
+          (err) => { console.error("GLB Yükleme Hatası:", err); draco.dispose(); setIsLoading(false); }
+        );
       }
-    }, [modelUrl, fileName, fileType, tuneMaterialForDisplay, fitCameraForAspect, onMeshStats]);
+    }, [modelUrl, fileName, fileType, pivotMode, tuneMaterialForDisplay, fitCameraForAspect, onMeshStats]);
 
     return (
       <div className="relative h-full w-full overflow-hidden bg-transparent">
@@ -365,7 +400,7 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
             ))}
             <div className="w-[1px] h-6 bg-white/10 mx-1" />
             <button
-              onClick={() => orientationGroupRef.current?.rotation.set(-Math.PI / 2, 0, 0)}
+              onClick={() => orientationGroupRef.current?.rotation.set(0, 0, 0)}
               className="text-[9px] text-white/40 font-bold px-3 hover:text-white"
             >
               SIFIRLA
@@ -378,7 +413,9 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
                 setLocalAutoRotate(ns);
               }}
               className={`px-4 h-10 rounded-full text-[9px] font-bold border transition-all ${
-                localAutoRotate ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-white/5 text-white/30"
+                localAutoRotate
+                  ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
+                  : "bg-white/5 text-white/30 border-white/10"
               }`}
             >
               {localAutoRotate ? "DÖNÜŞ AÇIK" : "DÖNÜŞ KAPALI"}
@@ -396,21 +433,17 @@ export default function App() {
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setModelData({
-        url: URL.createObjectURL(file),
-        name: file.name
-      });
-    }
+    if (file) setModelData({ url: URL.createObjectURL(file), name: file.name });
   };
 
   return (
     <div className="w-full h-screen bg-[#050505] flex flex-col">
       <div className="flex-1 relative">
         {modelData ? (
-          <MeshRealtimeViewerInternal 
-            modelUrl={modelData.url} 
-            fileName={modelData.name} 
+          <MeshRealtimeViewerInternal
+            modelUrl={modelData.url}
+            fileName={modelData.name}
+            pivotMode="bottom"
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-white/30">
