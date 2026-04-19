@@ -281,8 +281,10 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
         const gScene = gizmoSceneRef.current;
         const gCam   = gizmoCameraRef.current;
         if (gScene && gCam) {
-          const rw = r.domElement.width;
-          const rh = r.domElement.height;
+          const rv = new THREE.Vector2();
+          r.getSize(rv);
+          const rw = rv.x;
+          const rh = rv.y;
           const size = Math.round(Math.min(rw, rh) * 0.13);
           const margin = Math.round(Math.min(rw, rh) * 0.02);
           r.autoClear = false;
