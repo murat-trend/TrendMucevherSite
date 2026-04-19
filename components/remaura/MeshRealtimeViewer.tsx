@@ -75,7 +75,6 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
     const controlsRef = useRef<OrbitControls | null>(null);
     const gridRef = useRef<THREE.GridHelper | null>(null);
-    const gizmoCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
     // ─── Hiyerarşi ───────────────────────────────────────────────────────
     //  scene
@@ -88,6 +87,11 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
     const modelRootRef = useRef<THREE.Group | null>(null);       // scale + export
     const orientationGroupRef = useRef<THREE.Group | null>(null);
 
+    // Köşe gizmo (XYZ eksen göstergesi)
+    const gizmoSceneRef  = useRef<THREE.Scene | null>(null);
+    const gizmoCameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+    const renderAllRef   = useRef<(() => void) | null>(null);
+
     const modelTargetYRef = useRef<number>(0.9);
     const autoRotateRef = useRef(autoRotate);
     const userInteractingRef = useRef(false);
@@ -96,6 +100,7 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
     const [isLoading, setIsLoading] = useState(false);
     const [localAutoRotate, setLocalAutoRotate] = useState(autoRotate);
     const [rotationState, setRotationState] = useState({ x: 0, y: 0, z: 0 });
+    const [pickPivotMode, setPickPivotMode] = useState(false);
 
     const tuneMaterialForDisplay = useCallback((material?: THREE.Material | THREE.Material[] | null) => {
       if (!material) return;
@@ -180,8 +185,7 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
       },
       getRotation: () => rotationState,
       renderFrame: () => {
-        if (rendererRef.current && sceneRef.current && cameraRef.current)
-          rendererRef.current.render(sceneRef.current, cameraRef.current);
+        renderAllRef.current?.();
       },
       setCanvasBackground: (color, alpha = 0) => {
         rendererRef.current?.setClearColor(color, alpha);
@@ -240,42 +244,72 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
 
       applyRendererSize();
 
-      const drawGizmo = () => {
-        const gc = gizmoCanvasRef.current;
+      // ── Gizmo: XYZ köşe eksen göstergesi ────────────────────────────────
+      const gizmoScene = new THREE.Scene();
+      gizmoSceneRef.current = gizmoScene;
+
+      const gizmoCamera = new THREE.PerspectiveCamera(50, 1, 0.1, 10);
+      gizmoCamera.position.set(0, 0, 3);
+      gizmoCameraRef.current = gizmoCamera;
+
+      const axes = new THREE.AxesHelper(1.2);
+      gizmoScene.add(axes);
+
+      // Eksen etiketleri (X=kırmızı, Y=yeşil, Z=mavi)
+      const makeLabelSprite = (text: string, color: string) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 64; canvas.height = 64;
+        const ctx = canvas.getContext("2d")!;
+        ctx.font = "bold 48px Arial";
+        ctx.fillStyle = color;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, 32, 32);
+        const tex = new THREE.CanvasTexture(canvas);
+        const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
+        const sprite = new THREE.Sprite(mat);
+        sprite.scale.set(0.4, 0.4, 0.4);
+        return sprite;
+      };
+      const lx = makeLabelSprite("X", "#ff4444"); lx.position.set(1.6, 0, 0);
+      const ly = makeLabelSprite("Y", "#44ff44"); ly.position.set(0, 1.6, 0);
+      const lz = makeLabelSprite("Z", "#4488ff"); lz.position.set(0, 0, 1.6);
+      gizmoScene.add(lx, ly, lz);
+
+
+      // Ana sahne + gizmo tek fonksiyonda — her yerden çağrılabilir
+      const renderAll = () => {
+        const rnd = rendererRef.current;
         const cam = cameraRef.current;
-        if (!gc || !cam) return;
-        const ctx = gc.getContext("2d");
-        if (!ctx) return;
-        const w = gc.width, h = gc.height;
-        const cx = w / 2, cy = h / 2;
-        const radius = w * 0.33;
-        ctx.clearRect(0, 0, w, h);
-        const defs = [
-          { dir: new THREE.Vector3(1, 0, 0), color: "#ff4040", label: "X" },
-          { dir: new THREE.Vector3(0, 1, 0), color: "#40ff80", label: "Y" },
-          { dir: new THREE.Vector3(0, 0, 1), color: "#4090ff", label: "Z" },
-        ];
-        const projected = defs.map(({ dir, color, label }) => {
-          const v = dir.clone().transformDirection(cam.matrixWorldInverse);
-          return { v, color, label };
-        });
-        projected.sort((a, b) => a.v.z - b.v.z);
-        for (const { v, color, label } of projected) {
-          const x2 = cx + v.x * radius;
-          const y2 = cy - v.y * radius;
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 2.5;
-          ctx.beginPath();
-          ctx.moveTo(cx, cy);
-          ctx.lineTo(x2, y2);
-          ctx.stroke();
-          ctx.fillStyle = color;
-          ctx.font = "bold 12px monospace";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText(label, x2 + v.x * 10, y2 - v.y * 10);
+        const scn = sceneRef.current;
+        if (!rnd || !cam || !scn) return;
+
+        // 1. Ana sahne
+        rnd.setScissorTest(false);
+        rnd.render(scn, cam);
+
+        // 2. Gizmo: sol üst köşe 100×100 px
+        if (gizmoCameraRef.current && gizmoSceneRef.current) {
+          const size = 100;
+          const margin = 16;
+          const w = rnd.domElement.width  / rnd.getPixelRatio();
+          const h = rnd.domElement.height / rnd.getPixelRatio();
+
+          rnd.setViewport(margin, h - margin - size, size, size);
+          rnd.setScissor (margin, h - margin - size, size, size);
+          rnd.setScissorTest(true);
+
+          gizmoCameraRef.current.quaternion.copy(cam.quaternion);
+          gizmoCameraRef.current.position.set(0, 0, 3);
+
+          rnd.render(gizmoSceneRef.current, gizmoCameraRef.current);
+
+          rnd.setViewport(0, 0, w, h);
+          rnd.setScissor (0, 0, w, h);
+          rnd.setScissorTest(false);
         }
       };
+      renderAllRef.current = renderAll;
 
       const animate = () => {
         if (pauseAnimationRef.current) return;
@@ -283,9 +317,7 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
           pivotRef.current.rotation.y += 0.007;
         }
         controlsRef.current?.update();
-        if (rendererRef.current && sceneRef.current && cameraRef.current)
-          rendererRef.current.render(sceneRef.current, cameraRef.current);
-        drawGizmo();
+        renderAll();
       };
       renderer.setAnimationLoop(animate);
 
@@ -313,10 +345,16 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
       modelRootRef.current   = null;
       orientationGroupRef.current = null;
 
-      const placeModel = (loadedRoot: THREE.Object3D) => {
+      const placeModel = (loadedRoot: THREE.Object3D, isStl: boolean) => {
         setIsLoading(false);
 
-        // 1. Bbox'ı loadedRoot'un kendi local space'inde hesapla (henüz sahneye eklenmedi)
+        // 0. STL dosyaları Z-up gelir → Y-up çevir (bbox'tan ÖNCE)
+        if (isStl) {
+          loadedRoot.rotation.x = -Math.PI / 2;
+          loadedRoot.updateMatrixWorld(true);
+        }
+
+        // 1. Bbox'ı rotasyon uygulanmış haliyle hesapla
         const box  = new THREE.Box3().setFromObject(loadedRoot);
         const size = box.getSize(new THREE.Vector3());
         const min  = box.min;
@@ -394,7 +432,7 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
             const mesh  = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xcccccc }));
             const group = new THREE.Group();
             group.add(mesh);
-            placeModel(group);
+            placeModel(group, true);
           },
           undefined,
           (err) => { console.error("STL Yükleme Hatası:", err); setIsLoading(false); }
@@ -406,28 +444,82 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
         gltf.setDRACOLoader(draco);
         gltf.load(
           modelUrl,
-          (res) => { draco.dispose(); placeModel(res.scene); },
+          (res) => { draco.dispose(); placeModel(res.scene, false); },
           undefined,
           (err) => { console.error("GLB Yükleme Hatası:", err); draco.dispose(); setIsLoading(false); }
         );
       }
     }, [modelUrl, fileName, fileType, pivotMode, tuneMaterialForDisplay, fitCameraForAspect, onMeshStats]);
 
+    // ── Manuel pivot seçme: model üzerine tıkla, pivot oraya taşınsın ────
+    useEffect(() => {
+      const host = mountRef.current;
+      if (!host) return;
+
+      // Mode aktifse OrbitControls'u devre dışı bırak, cursor değiştir
+      if (controlsRef.current) controlsRef.current.enabled = !pickPivotMode;
+      host.style.cursor = pickPivotMode ? "crosshair" : "";
+
+      if (!pickPivotMode) return;
+
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+
+      const onClick = (e: MouseEvent) => {
+        const scene  = sceneRef.current;
+        const cam    = cameraRef.current;
+        const pivot  = pivotRef.current;
+        const ogroup = orientationGroupRef.current;
+        if (!scene || !cam || !pivot || !ogroup) return;
+
+        // Tıklanan noktayı NDC'ye çevir
+        const rect = host.getBoundingClientRect();
+        mouse.x =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+        mouse.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, cam);
+        const hits = raycaster.intersectObject(pivot, true);
+        if (hits.length === 0) return;
+
+        const hitWorld = hits[0].point.clone(); // tıklanan dünya noktası
+
+        // loadedRoot = orientationGroup'un tek çocuğu
+        const loadedRoot = ogroup.children[0];
+        if (!loadedRoot) return;
+
+        // Re-parent trick: world pozisyonu koruyarak loadedRoot'u kaydır
+        //   1. scene'e al (world transform korunur)
+        //   2. pozisyonu -hitWorld kadar öteye, artık tıklanan nokta world (0,0,0)'da
+        //   3. orientationGroup'a geri koy (yeni local matrix otomatik hesaplanır)
+        scene.attach(loadedRoot);
+        loadedRoot.position.sub(hitWorld);
+        ogroup.attach(loadedRoot);
+
+        // Mode'u kapat
+        setPickPivotMode(false);
+      };
+
+      host.addEventListener("click", onClick);
+      return () => host.removeEventListener("click", onClick);
+    }, [pickPivotMode]);
+
     return (
       <div className="relative h-full w-full overflow-hidden bg-transparent">
         <div ref={mountRef} className="absolute inset-0" />
-        <canvas
-          ref={gizmoCanvasRef}
-          width={80}
-          height={80}
-          className="absolute bottom-20 left-4 z-20 pointer-events-none"
-        />
-
 
         {isLoading && (
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md z-50 flex flex-col items-center justify-center">
             <div className="w-12 h-12 border-2 border-white/20 border-t-white rounded-full animate-spin mb-4" />
             <p className="text-[10px] tracking-widest text-white/50 uppercase">Model Yükleniyor</p>
+          </div>
+        )}
+
+        {pickPivotMode && (
+          <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-amber-500/15 backdrop-blur-xl border border-amber-500/30 px-5 py-2.5 rounded-full flex items-center gap-3 pointer-events-none z-20 shadow-lg">
+            <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <p className="text-[10px] tracking-widest text-amber-300 uppercase font-bold">
+              Pivot noktası için modelin üzerine tıkla
+            </p>
           </div>
         )}
 
@@ -451,19 +543,56 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
               SIFIRLA
             </button>
             <div className="w-[1px] h-6 bg-white/10 mx-1" />
+
+            {/* Pivot seçme modu */}
+            <button
+              onClick={() => setPickPivotMode((v) => !v)}
+              title="Modelin üzerine tıkla, pivot noktası oraya gelsin"
+              className={`px-3 h-10 rounded-full text-[9px] font-bold border transition-all flex items-center gap-1.5 ${
+                pickPivotMode
+                  ? "bg-amber-500/20 text-amber-400 border-amber-500/40 animate-pulse"
+                  : "bg-white/5 text-white/40 border-white/10 hover:bg-white/10 hover:text-white/70"
+              }`}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="12" cy="12" r="8" />
+                <circle cx="12" cy="12" r="2" fill="currentColor" />
+                <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+              </svg>
+              {pickPivotMode ? "MODELE TIKLA" : "PİVOT SEÇ"}
+            </button>
+
+            <div className="w-[1px] h-6 bg-white/10 mx-1" />
+
+            {/* Play / Pause — ana aksiyon butonu */}
             <button
               onClick={() => {
                 const ns = !localAutoRotate;
                 autoRotateRef.current = ns;
                 setLocalAutoRotate(ns);
               }}
-              className={`px-4 h-10 rounded-full text-[9px] font-bold border transition-all ${
+              className={`px-5 h-10 rounded-full text-[10px] font-black tracking-wider border transition-all flex items-center gap-2 ${
                 localAutoRotate
-                  ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
-                  : "bg-white/5 text-white/30 border-white/10"
+                  ? "bg-red-500/20 text-red-400 border-red-500/40"
+                  : "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30"
               }`}
             >
-              {localAutoRotate ? "DÖNÜŞ AÇIK" : "DÖNÜŞ KAPALI"}
+              {localAutoRotate ? (
+                <>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="6" y="5" width="4" height="14" rx="1" />
+                    <rect x="14" y="5" width="4" height="14" rx="1" />
+                  </svg>
+                  DURDUR
+                </>
+              ) : (
+                <>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                  OYNAT
+                </>
+              )}
             </button>
           </div>
         )}
