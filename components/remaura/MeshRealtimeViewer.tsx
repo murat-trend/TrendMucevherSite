@@ -75,6 +75,8 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
     const controlsRef = useRef<OrbitControls | null>(null);
     const gridRef = useRef<THREE.GridHelper | null>(null);
+    const gizmoSceneRef = useRef<THREE.Scene | null>(null);
+    const gizmoCameraRef = useRef<THREE.OrthographicCamera | null>(null);
 
     // ─── Hiyerarşi ───────────────────────────────────────────────────────
     //  scene
@@ -237,6 +239,28 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
       gridRef.current = grid;
       grid.visible = showGrid;
 
+      // ── Yönelim gizmo'su ────────────────────────────────────────────────
+      const gizmoScene = new THREE.Scene();
+      gizmoScene.add(new THREE.AxesHelper(1));
+      const makeLabel = (text: string, color: string, pos: [number, number, number]) => {
+        const cv = document.createElement("canvas");
+        cv.width = 64; cv.height = 64;
+        const cx = cv.getContext("2d")!;
+        cx.fillStyle = color;
+        cx.font = "bold 52px monospace";
+        cx.textAlign = "center";
+        cx.textBaseline = "middle";
+        cx.fillText(text, 32, 34);
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false }));
+        sprite.scale.set(0.4, 0.4, 0.4);
+        sprite.position.set(...pos);
+        gizmoScene.add(sprite);
+      };
+      makeLabel("X", "#ff4040", [1.4, 0, 0]);
+      makeLabel("Y", "#40ff80", [0, 1.4, 0]);
+      makeLabel("Z", "#4090ff", [0, 0, 1.4]);
+      gizmoSceneRef.current = gizmoScene;
+      gizmoCameraRef.current = new THREE.OrthographicCamera(-1.8, 1.8, 1.8, -1.8, 0.1, 10);
 
       applyRendererSize();
 
@@ -246,8 +270,33 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
           pivotRef.current.rotation.y += 0.007;
         }
         controlsRef.current?.update();
-        if (rendererRef.current && sceneRef.current && cameraRef.current)
-          rendererRef.current.render(sceneRef.current, cameraRef.current);
+        const r = rendererRef.current;
+        const s = sceneRef.current;
+        const c = cameraRef.current;
+        if (!r || !s || !c) return;
+
+        r.render(s, c);
+
+        // Gizmo inset — sol alt, render boyutuna oranli
+        const gScene = gizmoSceneRef.current;
+        const gCam   = gizmoCameraRef.current;
+        if (gScene && gCam) {
+          const rw = r.domElement.width;
+          const rh = r.domElement.height;
+          const size = Math.round(Math.min(rw, rh) * 0.13);
+          const margin = Math.round(Math.min(rw, rh) * 0.02);
+          r.autoClear = false;
+          r.clearDepth();
+          r.setScissorTest(true);
+          r.setScissor(margin, margin, size, size);
+          r.setViewport(margin, margin, size, size);
+          gCam.quaternion.copy(c.quaternion);
+          gCam.position.set(0, 0, 5).applyQuaternion(c.quaternion);
+          r.render(gScene, gCam);
+          r.setScissorTest(false);
+          r.setViewport(0, 0, rw, rh);
+          r.autoClear = true;
+        }
       };
       renderer.setAnimationLoop(animate);
 
