@@ -31,29 +31,25 @@ type MeshRealtimeViewerProps = {
   onRotationChange?: (rotation: { x: number; y: number; z: number }) => void;
   showRotationControls?: boolean;
   preserveDrawingBuffer?: boolean;
-  pixelRatio?: number;
   pivotMode?: PivotMode;
+  onPivotChange?: (mode: PivotMode) => void;
+  pickPivotMode?: boolean;
+  onPickPivotModeChange?: (active: boolean) => void;
+  backgroundColor?: string;
 };
 
 export type MeshRealtimeViewerHandle = {
-  downloadSTL: () => boolean;
-  downloadOBJ: () => boolean;
-  setGridVisible: (visible: boolean) => void;
-  setRotation: (rotation: { x: number; y: number; z: number }) => void;
-  getRotation: () => { x: number; y: number; z: number };
-  renderFrame: () => void;
-  setCanvasBackground: (color: string, alpha?: number) => void;
-  setAutoRotate: (enabled: boolean) => void;
-  pauseAnimation: (paused: boolean) => void;
-  overrideAnimationLoop: (fn: (() => void) | null) => void;
+  getCanvas: () => HTMLCanvasElement | null;
+  resetCamera: () => void;
+  exportModel: (format: "stl" | "obj") => void;
 };
 
 const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshRealtimeViewerProps>(
-  function MeshRealtimeViewer(
+  (
     {
       modelUrl,
       fileName,
-      zScaleMm = 1.0,
+      zScaleMm,
       fileType = "auto",
       autoRotate = false,
       showGrid = true,
@@ -62,13 +58,16 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
       onMeshStats,
       initialRotation,
       onRotationChange,
-      showRotationControls = true,
-      preserveDrawingBuffer = true,
-      pixelRatio,
+      showRotationControls = false,
+      preserveDrawingBuffer = false,
       pivotMode = "bottom",
+      onPivotChange,
+      pickPivotMode = false,
+      onPickPivotModeChange,
+      backgroundColor = "#000000",
     },
     ref
-  ) {
+  ) => {
     const mountRef = useRef<HTMLDivElement>(null);
     const sceneRef = useRef<THREE.Scene | null>(null);
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -76,340 +75,210 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
     const controlsRef = useRef<OrbitControls | null>(null);
     const gridRef = useRef<THREE.GridHelper | null>(null);
 
-    // ─── Hiyerarşi ───────────────────────────────────────────────────────
-    //  scene
-    //   └── pivot          ← SADECE rotation.y (transform yok)
-    //         └── modelRoot  ← SADECE scale
-    //               └── orientationGroup  ← X/Y/Z butonları
-    //                     └── loadedRoot  ← position.sub(pivotPoint)
-    // ─────────────────────────────────────────────────────────────────────
-    const pivotRef = useRef<THREE.Group | null>(null);           // rotation hedefi
-    const modelRootRef = useRef<THREE.Group | null>(null);       // scale + export
+    const pivotRef = useRef<THREE.Group | null>(null);
+    const modelRootRef = useRef<THREE.Object3D | null>(null);
     const orientationGroupRef = useRef<THREE.Group | null>(null);
 
-    // Köşe gizmo (XYZ eksen göstergesi)
-    const gizmoSceneRef  = useRef<THREE.Scene | null>(null);
-    const gizmoCameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-    const renderAllRef   = useRef<(() => void) | null>(null);
-
-    const modelTargetYRef = useRef<number>(0.9);
-    const autoRotateRef = useRef(autoRotate);
-    const userInteractingRef = useRef(false);
-    const pauseAnimationRef = useRef(false);
-
     const [isLoading, setIsLoading] = useState(false);
-    const [localAutoRotate, setLocalAutoRotate] = useState(autoRotate);
-    const [rotationState, setRotationState] = useState({ x: 0, y: 0, z: 0 });
-    const [pickPivotMode, setPickPivotMode] = useState(false);
+    const modelTargetYRef = useRef(0);
 
-    const tuneMaterialForDisplay = useCallback((material?: THREE.Material | THREE.Material[] | null) => {
-      if (!material) return;
-      const materials = Array.isArray(material) ? material : [material];
-      for (const entry of materials) {
-        const s = entry as THREE.MeshStandardMaterial;
-        if ("envMapIntensity" in s) s.envMapIntensity = 1.5;
-        if ("metalness" in s) s.metalness = Math.max(s.metalness ?? 0.5, 0.8);
-        if ("roughness" in s) s.roughness = Math.min(s.roughness ?? 0.5, 0.2);
-        entry.needsUpdate = true;
-      }
+    // --- HELPER: Materyal Ayarı ---
+    const tuneMaterialForDisplay = useCallback((mat: any) => {
+      if (!mat) return;
+      const materials = Array.isArray(mat) ? mat : [mat];
+      materials.forEach((m) => {
+        if (m instanceof THREE.MeshStandardMaterial || m instanceof THREE.MeshPhongMaterial) {
+          m.side = THREE.DoubleSide;
+          if (m instanceof THREE.MeshStandardMaterial) {
+            m.roughness = 0.4;
+            m.metalness = 0.3;
+          }
+        }
+      });
     }, []);
 
-    const applyRendererSize = useCallback(() => {
-      if (!mountRef.current || !rendererRef.current || !cameraRef.current) return;
-      const host = mountRef.current;
-      const container = host.parentElement ?? host;
-      const width = renderWidth ?? Math.max(container.clientWidth, 1);
-      const height = renderHeight ?? Math.max(container.clientHeight, 1);
-      rendererRef.current.setSize(width, height, false);
-      cameraRef.current.aspect = width / height;
-      cameraRef.current.updateProjectionMatrix();
-    }, [renderWidth, renderHeight]);
-
+    // --- HELPER: Kamera Odaklama ---
     const fitCameraForAspect = useCallback((w: number, h: number) => {
-      if (!cameraRef.current) return;
-      const aspect = w / h;
-      const dist = 4.0 / Math.min(aspect, 1);
-      cameraRef.current.position.set(0, modelTargetYRef.current, dist);
+      if (!cameraRef.current || !pivotRef.current) return;
+      const camera = cameraRef.current;
+      const pivot = pivotRef.current;
+
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+
+      const box = new THREE.Box3().setFromObject(pivot);
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const fov = camera.fov * (Math.PI / 180);
+      let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+      cameraZ *= 1.5;
+
+      camera.position.set(cameraZ, cameraZ, cameraZ);
+      const center = new THREE.Vector3(0, modelTargetYRef.current, 0);
+      camera.lookAt(center);
       if (controlsRef.current) {
-        controlsRef.current.target.set(0, modelTargetYRef.current, 0);
+        controlsRef.current.target.copy(center);
         controlsRef.current.update();
       }
     }, []);
 
-    const rotateOrientation = useCallback((axis: "x" | "y" | "z") => {
-      if (!orientationGroupRef.current || !pivotRef.current) return;
-      orientationGroupRef.current.rotation[axis] += Math.PI / 2;
-
-      setTimeout(() => {
-        const pivot = pivotRef.current;
-        if (!pivot) return;
-        pivot.updateMatrixWorld(true);
-        const box = new THREE.Box3().setFromObject(pivot);
-        modelTargetYRef.current = (box.max.y - box.min.y) * 0.5;
-        fitCameraForAspect(
-          mountRef.current?.clientWidth  || 800,
-          mountRef.current?.clientHeight || 600
-        );
-      }, 50);
-    }, [fitCameraForAspect]);
-
+    // --- EXPOSE API ---
     useImperativeHandle(ref, () => ({
-      downloadSTL: () => {
-        if (!modelRootRef.current) return false;
-        const exporter = new STLExporter();
-        const result = exporter.parse(modelRootRef.current, { binary: true });
-        const blob = new Blob([result], { type: "model/stl" });
+      getCanvas: () => rendererRef.current?.domElement || null,
+      resetCamera: () => {
+        const w = mountRef.current?.clientWidth || 800;
+        const h = mountRef.current?.clientHeight || 600;
+        fitCameraForAspect(w, h);
+      },
+      exportModel: (format) => {
+        if (!modelRootRef.current) return;
+        let data: any;
+        let ext = "";
+        if (format === "stl") {
+          data = new STLExporter().parse(modelRootRef.current);
+          ext = "stl";
+        } else {
+          data = new OBJExporter().parse(modelRootRef.current);
+          ext = "obj";
+        }
+        const blob = new Blob([data], { type: "text/plain" });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
-        link.download = "Model_Export.stl";
+        link.download = `export.${ext}`;
         link.click();
-        return true;
       },
-      downloadOBJ: () => {
-        if (!modelRootRef.current) return false;
-        const exporter = new OBJExporter();
-        const result = exporter.parse(modelRootRef.current);
-        const blob = new Blob([result], { type: "text/plain" });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = "Model_Export.obj";
-        link.click();
-        return true;
-      },
-      setGridVisible: (visible) => {
-        if (gridRef.current) gridRef.current.visible = visible;
-      },
-      setRotation: (rot) => {
-        if (pivotRef.current) pivotRef.current.rotation.set(rot.x, rot.y, rot.z);
-        setRotationState(rot);
-      },
-      getRotation: () => rotationState,
-      renderFrame: () => {
-        renderAllRef.current?.();
-      },
-      setCanvasBackground: (color, alpha = 0) => {
-        rendererRef.current?.setClearColor(color, alpha);
-      },
-      setAutoRotate: (enabled) => {
-        autoRotateRef.current = enabled;
-        setLocalAutoRotate(enabled);
-      },
-      pauseAnimation: (paused) => {
-        pauseAnimationRef.current = paused;
-      },
-      overrideAnimationLoop: (fn) => {
-        rendererRef.current?.setAnimationLoop(fn);
-      },
-    }), [rotationState]);
+    }));
 
-    // ── Sahne + Renderer ─────────────────────────────────────────────────
+    // --- INIT SCENE ---
     useEffect(() => {
       if (!mountRef.current) return;
-      const host = mountRef.current;
+      const w = mountRef.current.clientWidth;
+      const h = mountRef.current.clientHeight;
 
       const scene = new THREE.Scene();
       sceneRef.current = scene;
 
-      const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+      const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 5000);
       cameraRef.current = camera;
 
-      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer });
-      renderer.setPixelRatio(pixelRatio ?? window.devicePixelRatio);
-      renderer.outputColorSpace = THREE.SRGBColorSpace;
-      renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.2;
-      host.appendChild(renderer.domElement);
+      const renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        preserveDrawingBuffer,
+      });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(w, h);
+      renderer.shadowMap.enabled = true;
+      mountRef.current.appendChild(renderer.domElement);
       rendererRef.current = renderer;
 
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
-      controls.dampingFactor = 0.05;
       controlsRef.current = controls;
 
-      scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-      const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
-      keyLight.position.set(5, 10, 7);
-      scene.add(keyLight);
-      const fillLight = new THREE.DirectionalLight(0xffffff, 1.0);
-      fillLight.position.set(-5, 5, -5);
-      scene.add(fillLight);
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+      scene.add(ambientLight);
 
-      const pmrem = new THREE.PMREMGenerator(renderer);
-      scene.environment = pmrem.fromScene(new THREE.Scene()).texture;
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+      dirLight.position.set(100, 200, 100);
+      dirLight.castShadow = true;
+      scene.add(dirLight);
 
       const grid = new THREE.GridHelper(10, 20, 0x444444, 0x222222);
       scene.add(grid);
       gridRef.current = grid;
-      grid.visible = showGrid;
-
-      applyRendererSize();
-
-      // ── Gizmo: XYZ köşe eksen göstergesi ────────────────────────────────
-      const gizmoScene = new THREE.Scene();
-      gizmoSceneRef.current = gizmoScene;
-
-      const gizmoCamera = new THREE.PerspectiveCamera(50, 1, 0.1, 10);
-      gizmoCamera.position.set(0, 0, 3);
-      gizmoCameraRef.current = gizmoCamera;
-
-      const axes = new THREE.AxesHelper(1.2);
-      gizmoScene.add(axes);
-
-      // Eksen etiketleri (X=kırmızı, Y=yeşil, Z=mavi)
-      const makeLabelSprite = (text: string, color: string) => {
-        const canvas = document.createElement("canvas");
-        canvas.width = 64; canvas.height = 64;
-        const ctx = canvas.getContext("2d")!;
-        ctx.font = "bold 48px Arial";
-        ctx.fillStyle = color;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(text, 32, 32);
-        const tex = new THREE.CanvasTexture(canvas);
-        const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
-        const sprite = new THREE.Sprite(mat);
-        sprite.scale.set(0.4, 0.4, 0.4);
-        return sprite;
-      };
-      const lx = makeLabelSprite("X", "#ff4444"); lx.position.set(1.6, 0, 0);
-      const ly = makeLabelSprite("Y", "#44ff44"); ly.position.set(0, 1.6, 0);
-      const lz = makeLabelSprite("Z", "#4488ff"); lz.position.set(0, 0, 1.6);
-      gizmoScene.add(lx, ly, lz);
-
-
-      // Ana sahne + gizmo tek fonksiyonda — her yerden çağrılabilir
-      const renderAll = () => {
-        const rnd = rendererRef.current;
-        const cam = cameraRef.current;
-        const scn = sceneRef.current;
-        if (!rnd || !cam || !scn) return;
-
-        // 1. Ana sahne
-        rnd.setScissorTest(false);
-        rnd.render(scn, cam);
-
-        // 2. Gizmo: sol üst köşe 100×100 px
-        if (gizmoCameraRef.current && gizmoSceneRef.current) {
-          const size = 100;
-          const margin = 16;
-          const w = rnd.domElement.width  / rnd.getPixelRatio();
-          const h = rnd.domElement.height / rnd.getPixelRatio();
-
-          rnd.autoClear = false;
-          rnd.clearDepth();
-          rnd.setScissorTest(true);
-          rnd.setScissor (margin, h - margin - size, size, size);
-          rnd.setViewport(margin, h - margin - size, size, size);
-
-          // Kamera quaternion'u kopyala + pozisyonu ona göre hizala
-          gizmoCameraRef.current.quaternion.copy(cam.quaternion);
-          gizmoCameraRef.current.position
-            .set(0, 0, 3)
-            .applyQuaternion(cam.quaternion);
-
-          rnd.render(gizmoSceneRef.current, gizmoCameraRef.current);
-
-          rnd.setScissorTest(false);
-          rnd.setViewport(0, 0, w, h);
-          rnd.setScissor (0, 0, w, h);
-          rnd.autoClear = true;
-        }
-      };
-      renderAllRef.current = renderAll;
 
       const animate = () => {
-        if (pauseAnimationRef.current) return;
-        if (autoRotateRef.current && !userInteractingRef.current && pivotRef.current) {
-          pivotRef.current.rotation.y += 0.007;
+        requestAnimationFrame(animate);
+        if (controlsRef.current) controlsRef.current.update();
+        if (autoRotate && pivotRef.current) {
+          pivotRef.current.rotation.y += 0.005;
         }
-        controlsRef.current?.update();
-        renderAll();
+        renderer.render(scene, camera);
       };
-      renderer.setAnimationLoop(animate);
+      animate();
 
-      const onStart = () => (userInteractingRef.current = true);
-      const onEnd   = () => (userInteractingRef.current = false);
-      controls.addEventListener("start", onStart);
-      controls.addEventListener("end",   onEnd);
+      const handleResize = () => {
+        if (!mountRef.current) return;
+        const nw = mountRef.current.clientWidth;
+        const nh = mountRef.current.clientHeight;
+        renderer.setSize(nw, nh);
+        camera.aspect = nw / nh;
+        camera.updateProjectionMatrix();
+      };
+      window.addEventListener("resize", handleResize);
 
       return () => {
-        renderer.setAnimationLoop(null);
-        controls.dispose();
+        window.removeEventListener("resize", handleResize);
         renderer.dispose();
-        host.innerHTML = "";
       };
-    }, [pixelRatio, preserveDrawingBuffer, showGrid, applyRendererSize]);
+    }, [preserveDrawingBuffer, autoRotate]);
 
-    // ── Model yükleme ────────────────────────────────────────────────────
+    // --- BACKGROUND COLOR ---
+    useEffect(() => {
+      if (sceneRef.current) {
+        sceneRef.current.background = backgroundColor === "transparent" ? null : new THREE.Color(backgroundColor);
+      }
+    }, [backgroundColor]);
+
+    // --- GRID TOGGLE ---
+    useEffect(() => {
+      if (gridRef.current) gridRef.current.visible = showGrid;
+    }, [showGrid]);
+
+    // --- MODEL LOADING & PLACING ---
     useEffect(() => {
       if (!sceneRef.current || !modelUrl) return;
       const scene = sceneRef.current;
 
-      // Önceki modeli kaldır
       if (pivotRef.current) scene.remove(pivotRef.current);
-      pivotRef.current       = null;
-      modelRootRef.current   = null;
+      pivotRef.current = null;
+      modelRootRef.current = null;
       orientationGroupRef.current = null;
 
       const placeModel = (loadedRoot: THREE.Object3D, isStl: boolean) => {
         setIsLoading(false);
 
-        // 0. STL dosyaları Z-up gelir → Y-up çevir (bbox'tan ÖNCE)
-        if (isStl) {
-          loadedRoot.rotation.x = -Math.PI / 2;
-          loadedRoot.updateMatrixWorld(true);
-        }
-
-        // 1. Bbox'ı rotasyon uygulanmış haliyle hesapla
-        const box  = new THREE.Box3().setFromObject(loadedRoot);
+        // 1. Bbox hesapla (Model artik onceden merkezlendigi icin daha stabil)
+        const box = new THREE.Box3().setFromObject(loadedRoot);
         const size = box.getSize(new THREE.Vector3());
-        const min  = box.min;
-        const max  = box.max;
+        const min = box.min;
+        const max = box.max;
 
-        // 2. Pivot Y seç: bottom / center / top
+        // 2. Pivot Y
         const pivotY =
-          pivotMode === "top"    ? max.y :
-          pivotMode === "center" ? (min.y + max.y) / 2 :
-          min.y; // "bottom" (default)
+          pivotMode === "top" ? max.y : pivotMode === "center" ? (min.y + max.y) / 2 : min.y;
 
-        // 3. loadedRoot'u kaydır — pivot noktası (0,0,0)'a gelsin
-        //    Tüm hesap aynı local space'de, coordinate karışıklığı yok
-        loadedRoot.position.set(
-          -((min.x + max.x) / 2),
-          -pivotY,
-          -((min.z + max.z) / 2)
-        );
+        // 3. Modeli sahne merkezine (0,0,0) oturt
+        loadedRoot.position.set(-((min.x + max.x) / 2), -pivotY, -((min.z + max.z) / 2));
 
         // 4. Materyal
         loadedRoot.traverse((c) => {
           if ((c as THREE.Mesh).isMesh) tuneMaterialForDisplay((c as THREE.Mesh).material);
         });
 
-        // 5. Pivot: rotation + scale buraya, başka hiçbir şey yok
+        // 5. Ana Pivot (Olcaklendirme)
         const pivot = new THREE.Group();
         const scale = 1.8 / Math.max(size.x, size.y, size.z, 0.01);
         pivot.scale.setScalar(scale);
 
-        // 6. orientationGroup: X/Y/Z butonları için ara katman
         const orientationGroup = new THREE.Group();
         orientationGroup.add(loadedRoot);
         pivot.add(orientationGroup);
         scene.add(pivot);
 
-        pivotRef.current        = pivot;
-        modelRootRef.current    = pivot; // export için
+        pivotRef.current = pivot;
+        modelRootRef.current = pivot;
         orientationGroupRef.current = orientationGroup;
 
-        // 7. Kamera
+        // 6. Focus
         pivot.updateMatrixWorld(true);
         const worldBox = new THREE.Box3().setFromObject(pivot);
         modelTargetYRef.current = (worldBox.max.y - worldBox.min.y) * 0.5;
-        fitCameraForAspect(
-          mountRef.current?.clientWidth  || 800,
-          mountRef.current?.clientHeight || 600
-        );
 
-        // 8. İstatistikler
+        fitCameraForAspect(mountRef.current?.clientWidth || 800, mountRef.current?.clientHeight || 600);
+
+        // 7. Stats
         if (onMeshStats) {
           let v = 0, f = 0;
           pivot.traverse((c) => {
@@ -417,9 +286,7 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
             if (m.isMesh && m.geometry) {
               const p = m.geometry.getAttribute("position");
               if (p) v += p.count;
-              f += m.geometry.index
-                ? m.geometry.index.count / 3
-                : p ? p.count / 3 : 0;
+              f += m.geometry.index ? m.geometry.index.count / 3 : p ? p.count / 3 : 0;
             }
           });
           onMeshStats({ vertices: Math.round(v), faces: Math.round(f) });
@@ -427,7 +294,6 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
       };
 
       setIsLoading(true);
-
       const nameToCheck = fileName || modelUrl;
       const isStl = nameToCheck.toLowerCase().endsWith(".stl") || fileType === "stl";
 
@@ -435,13 +301,24 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
         new STLLoader().load(
           modelUrl,
           (geo) => {
-            const mesh  = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xcccccc }));
+            geo.computeVertexNormals();
+            geo.center(); // STL geometrisini merkezi (0,0,0) olacak sekilde fiziksel olarak sifirlar
+
+            const material = new THREE.MeshStandardMaterial({ color: 0xcccccc });
+            const mesh = new THREE.Mesh(geo, material);
+
+            // STL genelde Z-up gelir. Grubu degil mesh'i dondurmek bbox hesaplamasini korur.
+            mesh.rotation.x = -Math.PI / 2;
+
             const group = new THREE.Group();
             group.add(mesh);
             placeModel(group, true);
           },
           undefined,
-          (err) => { console.error("STL Yükleme Hatası:", err); setIsLoading(false); }
+          (err) => {
+            console.error("STL Load Error:", err);
+            setIsLoading(false);
+          }
         );
       } else {
         const draco = new DRACOLoader();
@@ -450,155 +327,135 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
         gltf.setDRACOLoader(draco);
         gltf.load(
           modelUrl,
-          (res) => { draco.dispose(); placeModel(res.scene, false); },
+          (res) => {
+            draco.dispose();
+            placeModel(res.scene, false);
+          },
           undefined,
-          (err) => { console.error("GLB Yükleme Hatası:", err); draco.dispose(); setIsLoading(false); }
+          (err) => {
+            console.error("GLB Load Error:", err);
+            draco.dispose();
+            setIsLoading(false);
+          }
         );
       }
     }, [modelUrl, fileName, fileType, pivotMode, tuneMaterialForDisplay, fitCameraForAspect, onMeshStats]);
 
-    // ── Manuel pivot seçme: model üzerine tıkla, pivot oraya taşınsın ────
+    // --- ROTATION HANDLER ---
     useEffect(() => {
-      const host = mountRef.current;
-      if (!host) return;
+      if (initialRotation && orientationGroupRef.current) {
+        orientationGroupRef.current.rotation.set(initialRotation.x, initialRotation.y, initialRotation.z);
+      }
+    }, [initialRotation]);
 
-      // Mode aktifse OrbitControls'u devre dışı bırak, cursor değiştir
-      if (controlsRef.current) controlsRef.current.enabled = !pickPivotMode;
-      host.style.cursor = pickPivotMode ? "crosshair" : "";
+    const handleRotationChange = (axis: "x" | "y" | "z", val: number) => {
+      if (!orientationGroupRef.current) return;
+      orientationGroupRef.current.rotation[axis] = val;
+      if (onRotationChange) {
+        onRotationChange({
+          x: orientationGroupRef.current.rotation.x,
+          y: orientationGroupRef.current.rotation.y,
+          z: orientationGroupRef.current.rotation.z,
+        });
+      }
+    };
 
-      if (!pickPivotMode) return;
+    // --- CLICK TO PICK PIVOT ---
+    const onCanvasClick = (e: React.MouseEvent) => {
+      if (!pickPivotMode || !modelRootRef.current || !cameraRef.current || !mountRef.current) return;
+
+      const rect = mountRef.current.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
       const raycaster = new THREE.Raycaster();
-      const mouse = new THREE.Vector2();
+      raycaster.setFromCamera({ x, y }, cameraRef.current);
 
-      const onClick = (e: MouseEvent) => {
-        const scene  = sceneRef.current;
-        const cam    = cameraRef.current;
-        const pivot  = pivotRef.current;
-        const ogroup = orientationGroupRef.current;
-        if (!scene || !cam || !pivot || !ogroup) return;
-
-        // Tıklanan noktayı NDC'ye çevir
-        const rect = host.getBoundingClientRect();
-        mouse.x =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
-        mouse.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
-
-        raycaster.setFromCamera(mouse, cam);
-        const hits = raycaster.intersectObject(pivot, true);
-        if (hits.length === 0) return;
-
-        const hitWorld = hits[0].point.clone(); // tıklanan dünya noktası
-
-        // loadedRoot = orientationGroup'un tek çocuğu
-        const loadedRoot = ogroup.children[0];
-        if (!loadedRoot) return;
-
-        // Re-parent trick: world pozisyonu koruyarak loadedRoot'u kaydır
-        //   1. scene'e al (world transform korunur)
-        //   2. pozisyonu -hitWorld kadar öteye, artık tıklanan nokta world (0,0,0)'da
-        //   3. orientationGroup'a geri koy (yeni local matrix otomatik hesaplanır)
-        scene.attach(loadedRoot);
+      const intersects = raycaster.intersectObject(modelRootRef.current, true);
+      if (intersects.length > 0) {
+        const hitPoint = intersects[0].point;
+        // Modeli tiklanan noktaya gore kaydir
+        const loadedRoot = modelRootRef.current.children[0] as THREE.Group;
+        const hitWorld = hitPoint.clone();
+        loadedRoot.worldToLocal(hitWorld);
         loadedRoot.position.sub(hitWorld);
-        ogroup.attach(loadedRoot);
 
-        // Mode'u kapat
-        setPickPivotMode(false);
-      };
-
-      host.addEventListener("click", onClick);
-      return () => host.removeEventListener("click", onClick);
-    }, [pickPivotMode]);
+        if (onPickPivotModeChange) onPickPivotModeChange(false);
+      }
+    };
 
     return (
-      <div className="relative h-full w-full overflow-hidden bg-transparent">
-        <div ref={mountRef} className="absolute inset-0" />
-
+      <div ref={mountRef} className="relative w-full h-full group" onClick={onCanvasClick}>
         {isLoading && (
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-md z-50 flex flex-col items-center justify-center">
-            <div className="w-12 h-12 border-2 border-white/20 border-t-white rounded-full animate-spin mb-4" />
-            <p className="text-[10px] tracking-widest text-white/50 uppercase">Model Yükleniyor</p>
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+              <p className="text-white text-xs font-medium">Model Yükleniyor...</p>
+            </div>
           </div>
         )}
 
-        {pickPivotMode && (
-          <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-amber-500/15 backdrop-blur-xl border border-amber-500/30 px-5 py-2.5 rounded-full flex items-center gap-3 pointer-events-none z-20 shadow-lg">
-            <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-            <p className="text-[10px] tracking-widest text-amber-300 uppercase font-bold">
-              Pivot noktası için modelin üzerine tıkla
-            </p>
+        {/* --- ROTATION & PIVOT CONTROLS --- */}
+        {(showRotationControls || pickPivotMode) && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-4 w-full max-w-md px-4">
+            {pickPivotMode && (
+              <div className="bg-blue-600 text-white px-4 py-2 rounded-full text-xs font-bold animate-pulse shadow-xl">
+                Model üzerinde yeni merkez noktasını seçin
+              </div>
+            )}
+
+            <div className="bg-black/80 backdrop-blur-md border border-white/10 rounded-2xl p-4 w-full flex flex-col gap-4 shadow-2xl">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Hizalama</span>
+                <div className="flex bg-white/5 p-1 rounded-lg">
+                  {(["bottom", "center", "top"] as PivotMode[]).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => onPivotChange?.(m)}
+                      className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${
+                        pivotMode === m ? "bg-white text-black shadow-lg" : "text-white/50 hover:text-white"
+                      }`}
+                    >
+                      {m === "bottom" ? "ALT" : m === "center" ? "ORTA" : "ÜST"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="h-[1px] bg-white/5" />
+
+              <div className="grid grid-cols-3 gap-4">
+                {(["x", "y", "z"] as const).map((axis) => (
+                  <div key={axis} className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-white/30 font-bold uppercase ml-1">{axis} Ekseni</label>
+                    <input
+                      type="range"
+                      min={-Math.PI}
+                      max={Math.PI}
+                      step={0.01}
+                      className="w-full accent-white"
+                      onChange={(e) => handleRotationChange(axis, parseFloat(e.target.value))}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
-        {showRotationControls && (
-          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-black/40 backdrop-blur-2xl p-2 rounded-full border border-white/10 flex items-center gap-2 shadow-2xl pointer-events-auto z-10">
-            <div className="px-4 text-[9px] font-black tracking-widest text-white/30 uppercase">Eksen</div>
-            {(["x", "y", "z"] as const).map((axis) => (
-              <button
-                key={axis}
-                onClick={() => rotateOrientation(axis)}
-                className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/20 text-white font-bold border border-white/10 transition-all"
-              >
-                {axis.toUpperCase()}
-              </button>
-            ))}
-            <div className="w-[1px] h-6 bg-white/10 mx-1" />
+        {/* --- PIVOT MODE TOGGLE --- */}
+        {onPickPivotModeChange && (
+          <div className="absolute top-6 right-6 z-20">
             <button
-              onClick={() => orientationGroupRef.current?.rotation.set(0, 0, 0)}
-              className="text-[9px] text-white/40 font-bold px-3 hover:text-white"
-            >
-              SIFIRLA
-            </button>
-            <div className="w-[1px] h-6 bg-white/10 mx-1" />
-
-            {/* Pivot seçme modu */}
-            <button
-              onClick={() => setPickPivotMode((v) => !v)}
-              title="Modelin üzerine tıkla, pivot noktası oraya gelsin"
-              className={`px-3 h-10 rounded-full text-[9px] font-bold border transition-all flex items-center gap-1.5 ${
+              onClick={() => onPickPivotModeChange(!pickPivotMode)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
                 pickPivotMode
-                  ? "bg-amber-500/20 text-amber-400 border-amber-500/40 animate-pulse"
-                  : "bg-white/5 text-white/40 border-white/10 hover:bg-white/10 hover:text-white/70"
+                  ? "bg-blue-600 border-blue-400 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]"
+                  : "bg-black/60 border-white/10 text-white/70 hover:bg-black/80 hover:text-white"
               }`}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <circle cx="12" cy="12" r="8" />
-                <circle cx="12" cy="12" r="2" fill="currentColor" />
-                <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
-              </svg>
-              {pickPivotMode ? "MODELE TIKLA" : "PİVOT SEÇ"}
-            </button>
-
-            <div className="w-[1px] h-6 bg-white/10 mx-1" />
-
-            {/* Play / Pause — ana aksiyon butonu */}
-            <button
-              onClick={() => {
-                const ns = !localAutoRotate;
-                autoRotateRef.current = ns;
-                setLocalAutoRotate(ns);
-              }}
-              className={`px-5 h-10 rounded-full text-[10px] font-black tracking-wider border transition-all flex items-center gap-2 ${
-                localAutoRotate
-                  ? "bg-red-500/20 text-red-400 border-red-500/40"
-                  : "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30"
-              }`}
-            >
-              {localAutoRotate ? (
-                <>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                    <rect x="6" y="5" width="4" height="14" rx="1" />
-                    <rect x="14" y="5" width="4" height="14" rx="1" />
-                  </svg>
-                  DURDUR
-                </>
-              ) : (
-                <>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                  OYNAT
-                </>
-              )}
+              <div className={`w-2 h-2 rounded-full ${pickPivotMode ? "bg-white animate-ping" : "bg-white/30"}`} />
+              {pickPivotMode ? "SEÇİM AKTİF" : "PİVOT SEÇ"}
             </button>
           </div>
         )}
@@ -607,7 +464,11 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
   }
 );
 
-// --- ANA UYGULAMA BİLEŞENİ ---
+MeshRealtimeViewerInternal.displayName = "MeshRealtimeViewerInternal";
+
+export const MeshRealtimeViewer = MeshRealtimeViewerInternal;
+
+// --- ANA UYGULAMA BİLEŞENİ (Örnek Kullanım) ---
 export default function App() {
   const [modelData, setModelData] = useState<{ url: string; name: string } | null>(null);
 
@@ -620,10 +481,11 @@ export default function App() {
     <div className="w-full h-screen bg-[#050505] flex flex-col">
       <div className="flex-1 relative">
         {modelData ? (
-          <MeshRealtimeViewerInternal
+          <MeshRealtimeViewer
             modelUrl={modelData.url}
             fileName={modelData.name}
             pivotMode="bottom"
+            showGrid={true}
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-white/30">
@@ -631,9 +493,9 @@ export default function App() {
               3D
             </div>
             <p className="text-sm font-medium mb-8">Model seçilmedi</p>
-            <label className="bg-white text-black px-10 py-4 rounded-full font-bold cursor-pointer hover:bg-gray-200 transition-all shadow-xl active:scale-95 text-sm">
-              Dosya Seç (.glb, .stl)
-              <input type="file" onChange={handleFile} accept=".glb,.stl" className="hidden" />
+            <label className="bg-white text-black px-10 py-4 rounded-full font-bold cursor-pointer hover:bg-gray-200 transition-all shadow-xl active:scale-95">
+              DOSYA YÜKLE
+              <input type="file" accept=".stl,.glb" className="hidden" onChange={handleFile} />
             </label>
           </div>
         )}
