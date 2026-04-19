@@ -75,8 +75,6 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
     const controlsRef = useRef<OrbitControls | null>(null);
     const gridRef = useRef<THREE.GridHelper | null>(null);
-    const axesSceneRef = useRef<THREE.Scene | null>(null);
-    const axesCameraRef = useRef<THREE.OrthographicCamera | null>(null);
 
     // ─── Hiyerarşi ───────────────────────────────────────────────────────
     //  scene
@@ -239,11 +237,6 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
       gridRef.current = grid;
       grid.visible = showGrid;
 
-      const axesScene = new THREE.Scene();
-      axesScene.add(new THREE.AxesHelper(0.8));
-      axesSceneRef.current = axesScene;
-      const axesCam = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, 0.1, 10);
-      axesCameraRef.current = axesCam;
 
       applyRendererSize();
 
@@ -253,31 +246,8 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
           pivotRef.current.rotation.y += 0.007;
         }
         controlsRef.current?.update();
-        const r = rendererRef.current;
-        const s = sceneRef.current;
-        const c = cameraRef.current;
-        if (!r || !s || !c) return;
-
-        const sz = r.getSize(new THREE.Vector2());
-        r.setScissorTest(false);
-        r.setViewport(0, 0, sz.x, sz.y);
-        r.render(s, c);
-
-        // XYZ ekseni inset — sol alt köşe
-        if (axesSceneRef.current && axesCameraRef.current) {
-          const inset = 90;
-          r.autoClear = false;
-          r.setScissorTest(true);
-          r.setScissor(12, 12, inset, inset);
-          r.setViewport(12, 12, inset, inset);
-          r.clearDepth();
-          axesCameraRef.current.position.set(0, 0, 3).applyQuaternion(c.quaternion);
-          axesCameraRef.current.lookAt(0, 0, 0);
-          r.render(axesSceneRef.current, axesCameraRef.current);
-          r.setScissorTest(false);
-          r.setViewport(0, 0, sz.x, sz.y);
-          r.autoClear = true;
-        }
+        if (rendererRef.current && sceneRef.current && cameraRef.current)
+          rendererRef.current.render(sceneRef.current, cameraRef.current);
       };
       renderer.setAnimationLoop(animate);
 
@@ -408,6 +378,21 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
     return (
       <div className="relative h-full w-full overflow-hidden bg-transparent">
         <div ref={mountRef} className="absolute inset-0" />
+
+        {/* XYZ koordinat eksenleri — sol alt */}
+        <div className="absolute bottom-4 left-4 z-20 pointer-events-none">
+          <svg width="72" height="72" viewBox="0 0 72 72">
+            {/* X - sağ, kırmızı */}
+            <line x1="12" y1="56" x2="60" y2="30" stroke="#ff4040" strokeWidth="2" strokeLinecap="round"/>
+            <text x="62" y="34" fill="#ff4040" fontSize="11" fontWeight="bold" fontFamily="monospace">X</text>
+            {/* Y - yukarı, yeşil */}
+            <line x1="12" y1="56" x2="12" y2="8" stroke="#40ff80" strokeWidth="2" strokeLinecap="round"/>
+            <text x="5" y="6" fill="#40ff80" fontSize="11" fontWeight="bold" fontFamily="monospace">Y</text>
+            {/* Z - yatay sağ, mavi */}
+            <line x1="12" y1="56" x2="48" y2="56" stroke="#4090ff" strokeWidth="2" strokeLinecap="round"/>
+            <text x="50" y="60" fill="#4090ff" fontSize="11" fontWeight="bold" fontFamily="monospace">Z</text>
+          </svg>
+        </div>
 
         {isLoading && (
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md z-50 flex flex-col items-center justify-center">
