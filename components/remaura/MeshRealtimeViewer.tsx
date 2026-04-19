@@ -46,7 +46,6 @@ export type MeshRealtimeViewerHandle = {
   setAutoRotate: (enabled: boolean) => void;
   pauseAnimation: (paused: boolean) => void;
   overrideAnimationLoop: (fn: (() => void) | null) => void;
-  setPickPivotMode: (on: boolean) => void;
 };
 
 const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshRealtimeViewerProps>(
@@ -181,10 +180,7 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
         if (gridRef.current) gridRef.current.visible = visible;
       },
       setRotation: (rot) => {
-        // orientationGroup: modelin yönelimi (Düz/90°X/... butonları)
-        // pivot: auto-rotate için, ayrı
-        if (orientationGroupRef.current)
-          orientationGroupRef.current.rotation.set(rot.x, rot.y, rot.z);
+        if (pivotRef.current) pivotRef.current.rotation.set(rot.x, rot.y, rot.z);
         setRotationState(rot);
       },
       getRotation: () => rotationState,
@@ -204,7 +200,6 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
       overrideAnimationLoop: (fn) => {
         rendererRef.current?.setAnimationLoop(fn);
       },
-      setPickPivotMode: (on) => setPickPivotMode(on),
     }), [rotationState]);
 
     // ── Sahne + Renderer ─────────────────────────────────────────────────
@@ -300,18 +295,24 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
           const w = rnd.domElement.width  / rnd.getPixelRatio();
           const h = rnd.domElement.height / rnd.getPixelRatio();
 
-          rnd.setViewport(margin, h - margin - size, size, size);
-          rnd.setScissor (margin, h - margin - size, size, size);
+          rnd.autoClear = false;
+          rnd.clearDepth();
           rnd.setScissorTest(true);
+          rnd.setScissor (margin, h - margin - size, size, size);
+          rnd.setViewport(margin, h - margin - size, size, size);
 
+          // Kamera quaternion'u kopyala + pozisyonu ona göre hizala
           gizmoCameraRef.current.quaternion.copy(cam.quaternion);
-          gizmoCameraRef.current.position.set(0, 0, 3);
+          gizmoCameraRef.current.position
+            .set(0, 0, 3)
+            .applyQuaternion(cam.quaternion);
 
           rnd.render(gizmoSceneRef.current, gizmoCameraRef.current);
 
+          rnd.setScissorTest(false);
           rnd.setViewport(0, 0, w, h);
           rnd.setScissor (0, 0, w, h);
-          rnd.setScissorTest(false);
+          rnd.autoClear = true;
         }
       };
       renderAllRef.current = renderAll;
