@@ -358,8 +358,20 @@ function VideoOptimizePageInner() {
                   </div>
                 )}
 
+                {/* XYZ koordinat eksenleri */}
+                <div className="absolute bottom-4 left-4 z-30 pointer-events-none">
+                  <svg width="72" height="72" viewBox="0 0 72 72">
+                    <line x1="12" y1="56" x2="60" y2="30" stroke="#ff4040" strokeWidth="2" strokeLinecap="round"/>
+                    <text x="62" y="34" fill="#ff4040" fontSize="11" fontWeight="bold" fontFamily="monospace">X</text>
+                    <line x1="12" y1="56" x2="12" y2="8" stroke="#40ff80" strokeWidth="2" strokeLinecap="round"/>
+                    <text x="5" y="6" fill="#40ff80" fontSize="11" fontWeight="bold" fontFamily="monospace">Y</text>
+                    <line x1="12" y1="56" x2="48" y2="56" stroke="#4090ff" strokeWidth="2" strokeLinecap="round"/>
+                    <text x="50" y="60" fill="#4090ff" fontSize="11" fontWeight="bold" fontFamily="monospace">Z</text>
+                  </svg>
+                </div>
+
                 {meshStats && (
-                  <div className="absolute bottom-4 left-4 flex items-center gap-2 rounded-full border border-white/10 bg-black/50 px-3 py-1.5 backdrop-blur-sm">
+                  <div className="absolute bottom-4 left-20 flex items-center gap-2 rounded-full border border-white/10 bg-black/50 px-3 py-1.5 backdrop-blur-sm">
                     <span className="text-[11px] text-white/70">
                       {vo.vertexFace
                         .replace("{v}", meshStats.vertices.toLocaleString(numberLocale))

@@ -379,20 +379,6 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
       <div className="relative h-full w-full overflow-hidden bg-transparent">
         <div ref={mountRef} className="absolute inset-0" />
 
-        {/* XYZ koordinat eksenleri — sol alt */}
-        <div className="absolute bottom-4 left-4 z-20 pointer-events-none">
-          <svg width="72" height="72" viewBox="0 0 72 72">
-            {/* X - sağ, kırmızı */}
-            <line x1="12" y1="56" x2="60" y2="30" stroke="#ff4040" strokeWidth="2" strokeLinecap="round"/>
-            <text x="62" y="34" fill="#ff4040" fontSize="11" fontWeight="bold" fontFamily="monospace">X</text>
-            {/* Y - yukarı, yeşil */}
-            <line x1="12" y1="56" x2="12" y2="8" stroke="#40ff80" strokeWidth="2" strokeLinecap="round"/>
-            <text x="5" y="6" fill="#40ff80" fontSize="11" fontWeight="bold" fontFamily="monospace">Y</text>
-            {/* Z - yatay sağ, mavi */}
-            <line x1="12" y1="56" x2="48" y2="56" stroke="#4090ff" strokeWidth="2" strokeLinecap="round"/>
-            <text x="50" y="60" fill="#4090ff" fontSize="11" fontWeight="bold" fontFamily="monospace">Z</text>
-          </svg>
-        </div>
 
         {isLoading && (
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md z-50 flex flex-col items-center justify-center">
