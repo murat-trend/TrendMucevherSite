@@ -82,6 +82,8 @@ function VideoOptimizePageInner() {
   const [dragging, setDragging] = useState(false);
   const [recordMimeType, setRecordMimeType] = useState("video/webm");
   const [meshStats, setMeshStats] = useState<{ vertices: number; faces: number } | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [pickingPivot, setPickingPivot] = useState(false);
 
   const viewerRef = useRef<MeshRealtimeViewerHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -118,6 +120,12 @@ function VideoOptimizePageInner() {
     setProgress(0);
     setOutputUrl(null);
     setOutputBlob(null);
+
+    // Video kaydı başlarken model dönüyor olsun (yoksa durağan kayıt olur)
+    if (!isPlaying) {
+      viewerRef.current?.setAutoRotate(true);
+      setIsPlaying(true);
+    }
 
     const sourceCanvas = container.querySelector("canvas");
     if (!sourceCanvas) {
@@ -187,7 +195,7 @@ function VideoOptimizePageInner() {
     } catch {
       setRecordState("idle");
     }
-  }, [billingUi, checkCredits, modelUrl, format, duration, FORMAT_OPTIONS]);
+  }, [billingUi, checkCredits, modelUrl, format, duration, FORMAT_OPTIONS, isPlaying]);
 
   const download = () => {
     if (!outputUrl) return;
@@ -342,9 +350,9 @@ function VideoOptimizePageInner() {
                   modelUrl={modelUrl}
                   fileType={fileType}
                   onMeshStats={setMeshStats}
-                  autoRotate={true}
-                  showGrid={true}
-                  showRotationControls={true}
+                  autoRotate={false}
+                  showGrid={showGrid}
+                  showRotationControls={false}
                   renderWidth={selectedFmt.w}
                   renderHeight={selectedFmt.h}
                 />
@@ -413,6 +421,64 @@ function VideoOptimizePageInner() {
                   className="rounded-lg border border-border/40 px-3 py-1.5 text-xs text-muted hover:text-foreground"
                 >
                   {vo.rotNeg90x}
+                </button>
+
+                {/* — ayraç — */}
+                <div className="mx-1 w-px h-6 bg-border/40" />
+
+                {/* ▶ OYNAT / ⏸ DURDUR */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !isPlaying;
+                    setIsPlaying(next);
+                    viewerRef.current?.setAutoRotate(next);
+                  }}
+                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+                    isPlaying
+                      ? "border-red-500/40 bg-red-500/10 text-red-500 hover:bg-red-500/15"
+                      : "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/15"
+                  }`}
+                >
+                  {isPlaying ? (
+                    <>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="6" y="5" width="4" height="14" rx="1" />
+                        <rect x="14" y="5" width="4" height="14" rx="1" />
+                      </svg>
+                      Durdur
+                    </>
+                  ) : (
+                    <>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                      Oynat
+                    </>
+                  )}
+                </button>
+
+                {/* 🎯 PİVOT SEÇ */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !pickingPivot;
+                    setPickingPivot(next);
+                    viewerRef.current?.setPickPivotMode?.(next);
+                  }}
+                  title="Model üzerine tıkla, dönme noktası oraya gelsin"
+                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+                    pickingPivot
+                      ? "border-amber-500/50 bg-amber-500/10 text-amber-600 animate-pulse"
+                      : "border-border/40 text-muted hover:text-foreground"
+                  }`}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <circle cx="12" cy="12" r="8" />
+                    <circle cx="12" cy="12" r="2" fill="currentColor" />
+                    <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+                  </svg>
+                  {pickingPivot ? "Modele tıkla" : "Pivot seç"}
                 </button>
               </div>
 
