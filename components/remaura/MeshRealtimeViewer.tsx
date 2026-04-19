@@ -237,7 +237,9 @@ const MeshRealtimeViewerInternal = forwardRef<MeshRealtimeViewerHandle, MeshReal
       gridRef.current = grid;
       grid.visible = showGrid;
 
-      const axes = new THREE.AxesHelper(1.5);
+      const axes = new THREE.AxesHelper(2);
+      (axes.material as THREE.Material).depthTest = false;
+      axes.renderOrder = 999;
       scene.add(axes);
 
       applyRendererSize();
