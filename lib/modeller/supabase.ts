@@ -59,6 +59,7 @@ export type Ui3DModel = {
   name_ru: string | null;
   translations?: Record<string, { name?: string; story?: string }> | null;
   contentSourceLocale?: string | null;
+  imageAlts: string[] | null;
 };
 
 function normalizeJewelryType(value: string): Ui3DModel["jewelryType"] {
@@ -120,6 +121,7 @@ export function mapDbProductToUi(row: DbProduct3D): Ui3DModel {
     isPublished: row.is_published,
     showOnHome: row.show_on_home,
     showOnModeller: row.show_on_modeller,
+    imageAlts: row.image_alts ?? null,
   };
 }
 
