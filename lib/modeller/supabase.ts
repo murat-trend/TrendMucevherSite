@@ -29,6 +29,7 @@ export type DbProduct3D = {
   show_on_home: boolean;
   show_on_modeller: boolean;
   created_at: string;
+  seller_note: string | null;
 };
 
 export type Ui3DModel = {
