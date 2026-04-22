@@ -486,7 +486,12 @@ export default function SaticiUrunlerimPage() {
         glb_url: glbUrl,
         stl_url: stlUrl,
         thumbnail_url: thumbnailUrl,
-        images: thumbnailViews,
+        images: [
+          thumbnailViews.on ?? null,
+          thumbnailViews.arka ?? null,
+          thumbnailViews.kenar ?? null,
+          thumbnailViews.ust ?? null,
+        ].filter((u): u is string => u !== null),
         dimensions: { width, height, depth, weight },
         is_published: false,
         show_on_home: false,
