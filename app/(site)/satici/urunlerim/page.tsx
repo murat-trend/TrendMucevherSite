@@ -25,10 +25,15 @@ type ProductForm = {
   story: string;
   glbFile: File | null;
   stlFile: File | null;
-  thumbnailOn: File | null;
-  thumbnailArka: File | null;
-  thumbnailKenar: File | null;
-  thumbnailUst: File | null;
+  image1: File | null;
+  image2: File | null;
+  image3: File | null;
+  image4: File | null;
+  alt1: string;
+  alt2: string;
+  alt3: string;
+  alt4: string;
+  tags: string[];
   licensePersonal: boolean;
   licensePersonalPrice: string;
   licenseCommercial: boolean;
@@ -40,7 +45,9 @@ const EMPTY_FORM: ProductForm = {
   width: "", height: "", depth: "", weight: "",
   story: "",
   glbFile: null, stlFile: null,
-  thumbnailOn: null, thumbnailArka: null, thumbnailKenar: null, thumbnailUst: null,
+  image1: null, image2: null, image3: null, image4: null,
+  alt1: "", alt2: "", alt3: "", alt4: "",
+  tags: [],
   licensePersonal: true, licensePersonalPrice: "",
   licenseCommercial: false, licenseCommercialPrice: "",
 };
@@ -60,6 +67,50 @@ function Field({ label, children, span2 = false }: { label: string; children: Re
 const inputCls = "w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-[14px] text-foreground placeholder:text-muted/50 outline-none transition-all focus:border-accent/50 focus:ring-2 focus:ring-accent/10";
 const fileCls = "block w-full cursor-pointer rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted file:mr-3 file:rounded-lg file:border-0 file:bg-surface-alt file:px-3 file:py-1 file:text-xs file:text-foreground";
 
+function TagChipInput({ tags, onChange, placeholder }: {
+  tags: string[];
+  onChange: (tags: string[]) => void;
+  placeholder?: string;
+}) {
+  const [input, setInput] = useState("");
+  const addTag = (raw: string) => {
+    const val = raw.trim().toLowerCase();
+    if (val.length < 2 || val.length > 30) return;
+    if (tags.length >= 10) return;
+    if (tags.includes(val)) return;
+    onChange([...tags, val]);
+  };
+  const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addTag(input);
+      setInput("");
+    } else if (e.key === "Backspace" && input === "") {
+      onChange(tags.slice(0, -1));
+    }
+  };
+  return (
+    <div className="flex flex-wrap gap-1.5 rounded-xl border border-border bg-background px-3 py-2 focus-within:border-accent/50 focus-within:ring-2 focus-within:ring-accent/10">
+      {tags.map((tag) => (
+        <span key={tag} className="flex items-center gap-1 rounded-full bg-accent/15 px-2.5 py-0.5 text-[12px] text-accent">
+          {tag}
+          <button type="button" onClick={() => onChange(tags.filter((t) => t !== tag))}
+            aria-label={`${tag} etiketini kaldır`}
+            className="ml-0.5 opacity-60 hover:opacity-100">×</button>
+        </span>
+      ))}
+      <input
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKey}
+        onBlur={() => { if (input.trim()) { addTag(input); setInput(""); } }}
+        placeholder={tags.length === 0 ? placeholder : ""}
+        className="min-w-[120px] flex-1 bg-transparent text-[14px] text-foreground placeholder:text-muted/50 outline-none"
+      />
+    </div>
+  );
+}
+
 export default function SaticiUrunlerimPage() {
   const { t, locale } = useLanguage();
   const tp = t.site.seller.products;
@@ -67,8 +118,6 @@ export default function SaticiUrunlerimPage() {
   const fmt = (s: string, vars: Record<string, string | number>) =>
     Object.entries(vars).reduce((acc, [k, v]) => acc.replaceAll(`{${k}}`, String(v)), s);
   const dateLocale = locale === "tr" ? "tr-TR" : locale === "de" ? "de-DE" : locale === "ru" ? "ru-RU" : "en-US";
-  const viewLabel = (key: string) =>
-    ({ on: tp.thumbFront, arka: tp.thumbBack, kenar: tp.thumbSide, ust: tp.thumbTop } as Record<string, string>)[key] ?? key;
 
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -379,6 +428,8 @@ export default function SaticiUrunlerimPage() {
     if (!width || !height || !depth || !weight) return setError(tp.errDimensions);
     if (!form.licensePersonal && !form.licenseCommercial) return setError(tp.errLicense);
     if (!form.glbFile && !form.stlFile) return setError(tp.errModelFile);
+    if (!form.image1 && !form.image2 && !form.image3 && !form.image4)
+      return setError("En az 1 görsel yükleyin");
 
     setSaving(true);
     try {
@@ -386,7 +437,8 @@ export default function SaticiUrunlerimPage() {
       let glbUrl: string | null = null;
       let stlUrl: string | null = null;
       let thumbnailUrl: string | null = null;
-      const thumbnailViews: Record<string, string | null> = { on: null, arka: null, kenar: null, ust: null };
+      const imageUrls: string[] = [];
+      const imageAltsArr: string[] = [];
 
       const fd = new FormData();
       fd.set("slug", slug);
@@ -417,28 +469,26 @@ export default function SaticiUrunlerimPage() {
       glbUrl = data.glbUrl ?? null;
       stlUrl = data.stlUrl ?? null;
 
-      // Thumbnail'lar
-      const thumbFiles = [
-        { key: "on", file: form.thumbnailOn },
-        { key: "arka", file: form.thumbnailArka },
-        { key: "kenar", file: form.thumbnailKenar },
-        { key: "ust", file: form.thumbnailUst },
+      // Görseller
+      const imageSlots = [
+        { idx: 1, file: form.image1, alt: form.alt1.trim() },
+        { idx: 2, file: form.image2, alt: form.alt2.trim() },
+        { idx: 3, file: form.image3, alt: form.alt3.trim() },
+        { idx: 4, file: form.image4, alt: form.alt4.trim() },
       ];
-      for (const { key, file } of thumbFiles) {
+      for (const { idx, file, alt } of imageSlots) {
         if (!file) continue;
         const fd = new FormData();
         fd.set("slug", slug);
-        fd.set("view", key);
+        fd.set("view", `img${idx}`);
         fd.set("file", file);
         const res = await fetch("/api/upload-thumbnail", { method: "POST", body: fd });
-        if (!res.ok) throw new Error(fmt(tp.errThumbUpload, { view: viewLabel(key) }));
-        const data = await res.json() as { url?: string };
-        thumbnailViews[key] = data.url ?? null;
-        if (key === "on") thumbnailUrl = data.url ?? null;
+        if (!res.ok) throw new Error(`Görsel ${idx} yüklenemedi`);
+        const data = (await res.json()) as { url?: string };
+        if (data.url) { imageUrls.push(data.url); imageAltsArr.push(alt); }
       }
-      if (!thumbnailUrl) {
-        thumbnailUrl = thumbnailViews.on ?? thumbnailViews.arka ?? thumbnailViews.kenar ?? thumbnailViews.ust ?? null;
-      }
+      if (imageUrls.length === 0) throw new Error("En az 1 görsel yükleyin");
+      thumbnailUrl = imageUrls[0] ?? null;
 
       // Supabase'e kaydet
       const supabase = createClient();
@@ -486,12 +536,9 @@ export default function SaticiUrunlerimPage() {
         glb_url: glbUrl,
         stl_url: stlUrl,
         thumbnail_url: thumbnailUrl,
-        images: [
-          thumbnailViews.on ?? null,
-          thumbnailViews.arka ?? null,
-          thumbnailViews.kenar ?? null,
-          thumbnailViews.ust ?? null,
-        ].filter((u): u is string => u !== null),
+        images: imageUrls,
+        image_alts: imageAltsArr,
+        tags: form.tags,
         dimensions: { width, height, depth, weight },
         is_published: false,
         show_on_home: false,
@@ -514,7 +561,7 @@ export default function SaticiUrunlerimPage() {
     } finally {
       setSaving(false);
     }
-  }, [form, loadProducts, tp, fmt, viewLabel]);
+  }, [form, loadProducts, tp, fmt]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -763,21 +810,49 @@ export default function SaticiUrunlerimPage() {
                     onChange={(e) => set("stlFile", e.target.files?.[0] ?? null)} />
                 </Field>
 
-                <Field label={tp.fieldThumbnails} span2>
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { key: "thumbnailOn", label: tp.thumbFront },
-                      { key: "thumbnailArka", label: tp.thumbBack },
-                      { key: "thumbnailKenar", label: tp.thumbSide },
-                      { key: "thumbnailUst", label: tp.thumbTop },
-                    ].map(({ key, label }) => (
-                      <div key={key}>
-                        <p className="mb-1 text-[11px] text-muted">{label}</p>
-                        <input type="file" accept="image/*" className={fileCls}
-                          onChange={(e) => set(key as keyof ProductForm, e.target.files?.[0] ?? null)} />
-                      </div>
-                    ))}
+                <Field label="Görseller" span2>
+                  <p className="mb-2 text-[11px] text-muted">Görsel yükledikten sonra alt metin girebilirsiniz.</p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {([1, 2, 3, 4] as const).map((n) => {
+                      const fileKey = `image${n}` as "image1" | "image2" | "image3" | "image4";
+                      const altKey = `alt${n}` as "alt1" | "alt2" | "alt3" | "alt4";
+                      const file = form[fileKey];
+                      return (
+                        <div key={n} className="rounded-xl border border-border bg-surface-alt/50 p-3">
+                          <div className="mb-2 flex items-center justify-between">
+                            <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted">Görsel {n}</span>
+                            {file && (
+                              <button type="button"
+                                onClick={() => { set(fileKey, null); set(altKey, ""); }}
+                                className="text-[11px] text-muted hover:text-red-400">
+                                Kaldır
+                              </button>
+                            )}
+                          </div>
+                          {file ? (
+                            <img src={URL.createObjectURL(file)} alt="" className="mb-2 h-28 w-full rounded-lg object-cover" />
+                          ) : (
+                            <input type="file" accept="image/*" className={fileCls}
+                              onChange={(e) => set(fileKey, e.target.files?.[0] ?? null)} />
+                          )}
+                          <input type="text" maxLength={140} disabled={!file}
+                            placeholder="Alt metin (SEO)"
+                            className={`${inputCls} mt-2 disabled:opacity-40`}
+                            value={form[altKey]}
+                            onChange={(e) => set(altKey, e.target.value)} />
+                        </div>
+                      );
+                    })}
                   </div>
+                </Field>
+
+                <Field label="Etiketler" span2>
+                  <TagChipInput
+                    tags={form.tags}
+                    onChange={(tags) => set("tags", tags)}
+                    placeholder="Etiket ekle (Enter veya virgülle)"
+                  />
+                  <p className="mt-1.5 text-[11px] text-muted">Maks. 10 etiket, her biri 2–30 karakter.</p>
                 </Field>
 
                 {/* Lisans */}
