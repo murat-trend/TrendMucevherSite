@@ -258,12 +258,14 @@ export default function ModelDetayPage({
       alive = false
     }
   }, [glbUrl])
-  const VIEW_KEYS = ['on', 'arka', 'kenar', 'ust'] as const
-  const viewImageList = VIEW_KEYS.map((key, i) =>
-    dynamic?.thumbnailViews?.[key] ??
-    (i === 0 ? (dynamic?.thumbnailUrl ?? null) : null) ??
-    getThumbnailViewUrl(slug, key)
-  )
+  const viewImageList = (dynamic?.images && dynamic.images.length > 0)
+    ? dynamic.images
+    : [
+        getThumbnailViewUrl(slug, 'on'),
+        getThumbnailViewUrl(slug, 'arka'),
+        getThumbnailViewUrl(slug, 'kenar'),
+        getThumbnailViewUrl(slug, 'ust'),
+      ]
   const product = dynamic
     ? {
         name: dynamic.name,
@@ -279,12 +281,7 @@ export default function ModelDetayPage({
   const [selectedLicense, setSelectedLicense] = useState<'personal' | 'commercial'>('personal')
   const [viewerReady, setViewerReady] = useState(false)
   const viewerRef = useRef<HTMLDivElement>(null)
-  const visibleActiveImage =
-    activeImage &&
-    (activeImage.startsWith(`/thumbnails/${slug}`) ||
-      activeImage.includes('/thumbnails/'))
-      ? activeImage
-      : null
+  const visibleActiveImage = activeImage
   useEffect(() => {
     let cancelled = false
     const markReady = () => {
