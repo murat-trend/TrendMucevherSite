@@ -133,7 +133,7 @@ function WebmToMp4PageInner() {
         ref={fileInputRef}
         type="file"
         accept="video/webm,.webm"
-        className="hidden"
+        className="sr-only"
         onChange={(e) => {
           onFileChosen(e.target.files?.[0]);
           e.target.value = "";

@@ -203,7 +203,7 @@ export function StylePanel() {
                       }}
                       type="file"
                       accept="image/*"
-                      className="hidden"
+                      className="sr-only"
                       onChange={(e) => handleStyleImageUpload(i, e)}
                     />
                     <span className="text-[9px] text-center leading-snug text-muted">

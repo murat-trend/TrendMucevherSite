@@ -288,7 +288,7 @@ function VideoOptimizePageInner() {
         ref={fileInputRef}
         type="file"
         accept=".stl,.glb"
-        className="hidden"
+        className="sr-only"
         onChange={(e) => {
           const f = e.target.files?.[0];
           e.target.value = "";

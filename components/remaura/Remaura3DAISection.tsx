@@ -418,7 +418,7 @@ export function Remaura3DAISection() {
                 ref={inputRef}
                 type="file"
                 accept="image/*"
-                className="hidden"
+                className="sr-only"
                 onChange={handleInputChange}
                 aria-hidden
                 tabIndex={-1}

@@ -978,7 +978,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
               type="file"
               accept="image/*"
               onChange={onFile}
-              className="hidden"
+              className="sr-only"
               tabIndex={-1}
               aria-hidden
             />
@@ -1039,7 +1039,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
               type="file"
               accept="image/*,.exr,.hdr"
               onChange={onReflectionMapFile}
-              className="hidden"
+              className="sr-only"
               tabIndex={-1}
               aria-hidden
             />
@@ -1048,7 +1048,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
               type="file"
               accept="image/*,.exr,.hdr"
               onChange={onSceneEnvFile}
-              className="hidden"
+              className="sr-only"
               tabIndex={-1}
               aria-hidden
             />
