@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { useRemauraBillingModal } from "@/components/remaura/RemauraBillingModalProvider";
 import { MAX_STYLE_REFERENCE_SLOTS } from "@/components/remaura/remaura-types";
@@ -17,14 +17,30 @@ export function StylePanel() {
   const billingUi = useRemauraBillingModal();
   const { checkCredits } = useRemauraCreditsCheck();
   const styleFileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [canUpload, setCanUpload] = useState(false);
+  const pickerBusyRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const ok = await checkCredits(1, () => {}, () => {});
+      if (!cancelled) setCanUpload(ok);
+    })();
+    return () => { cancelled = true; };
+  }, [checkCredits]);
 
   const openStyleSlotPicker = useCallback(
-    async (slotIndex: number) => {
-      const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
-      if (!ok) return;
+    (slotIndex: number) => {
+      if (pickerBusyRef.current) return;
+      if (!canUpload) {
+        void checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+        return;
+      }
+      pickerBusyRef.current = true;
       styleFileInputRefs.current[slotIndex]?.click();
+      setTimeout(() => { pickerBusyRef.current = false; }, 500);
     },
-    [billingUi, checkCredits],
+    [canUpload, checkCredits, billingUi],
   );
 
   const {

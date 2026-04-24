@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   RemauraBillingModalProvider,
   useRemauraBillingModal,
@@ -27,23 +27,32 @@ function WebmToMp4PageInner() {
   const pickerBusyRef = useRef<boolean>(false);
   const ffmpegRef = useRef<FFmpeg | null>(null);
 
+  const [canUpload, setCanUpload] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState("");
 
-  const openPicker = useCallback(async () => {
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const ok = await checkCredits(1, () => {}, () => {});
+      if (!cancelled) setCanUpload(ok);
+    })();
+    return () => { cancelled = true; };
+  }, [checkCredits]);
+
+  const openPicker = useCallback(() => {
     if (pickerBusyRef.current) return;
-    pickerBusyRef.current = true;
-    try {
-      const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
-      if (!ok) return;
-      fileInputRef.current?.click();
-    } finally {
-      setTimeout(() => { pickerBusyRef.current = false; }, 500);
+    if (!canUpload) {
+      void checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+      return;
     }
-  }, [billingUi, checkCredits]);
+    pickerBusyRef.current = true;
+    fileInputRef.current?.click();
+    setTimeout(() => { pickerBusyRef.current = false; }, 500);
+  }, [canUpload, checkCredits, billingUi]);
 
   const onFileChosen = (f: File | undefined) => {
     if (!f) return;

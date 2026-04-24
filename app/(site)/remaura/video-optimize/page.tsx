@@ -79,6 +79,7 @@ function VideoOptimizePageInner() {
   const [outputBlob, setOutputBlob] = useState<Blob | null>(null);
   const [mp4Converting, setMp4Converting] = useState(false);
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
+  const [canUpload, setCanUpload] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [meshStats, setMeshStats] = useState<{ vertices: number; faces: number } | null>(null);
 
@@ -89,17 +90,25 @@ function VideoOptimizePageInner() {
   const recordCanvasRef = useRef<HTMLCanvasElement>(null);
   const ffmpegRef = useRef<FFmpeg | null>(null);
 
-  const openMeshFilePicker = useCallback(async () => {
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const ok = await checkCredits(1, () => {}, () => {});
+      if (!cancelled) setCanUpload(ok);
+    })();
+    return () => { cancelled = true; };
+  }, [checkCredits]);
+
+  const openMeshFilePicker = useCallback(() => {
     if (pickerBusyRef.current) return;
-    pickerBusyRef.current = true;
-    try {
-      const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
-      if (!ok) return;
-      fileInputRef.current?.click();
-    } finally {
-      setTimeout(() => { pickerBusyRef.current = false; }, 500);
+    if (!canUpload) {
+      void checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+      return;
     }
-  }, [billingUi, checkCredits]);
+    pickerBusyRef.current = true;
+    fileInputRef.current?.click();
+    setTimeout(() => { pickerBusyRef.current = false; }, 500);
+  }, [canUpload, checkCredits, billingUi]);
 
   const handleFile = (file: File) => {
     const ext = file.name.split(".").pop()?.toLowerCase();
