@@ -24,6 +24,7 @@ function WebmToMp4PageInner() {
   const billingUi = useRemauraBillingModal();
   const { checkCredits } = useRemauraCreditsCheck();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pickerBusyRef = useRef<boolean>(false);
   const ffmpegRef = useRef<FFmpeg | null>(null);
 
   const [file, setFile] = useState<File | null>(null);
@@ -33,9 +34,15 @@ function WebmToMp4PageInner() {
   const [progress, setProgress] = useState("");
 
   const openPicker = useCallback(async () => {
-    const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
-    if (!ok) return;
-    fileInputRef.current?.click();
+    if (pickerBusyRef.current) return;
+    pickerBusyRef.current = true;
+    try {
+      const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+      if (!ok) return;
+      fileInputRef.current?.click();
+    } finally {
+      setTimeout(() => { pickerBusyRef.current = false; }, 500);
+    }
   }, [billingUi, checkCredits]);
 
   const onFileChosen = (f: File | undefined) => {
@@ -113,6 +120,16 @@ function WebmToMp4PageInner() {
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] px-4 py-10 text-[#e8e0d0] sm:px-6">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="video/webm,.webm"
+        className="hidden"
+        onChange={(e) => {
+          onFileChosen(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
       <div className="mx-auto max-w-xl rounded-2xl border border-white/10 bg-[#101114] p-6">
         <h1 className="font-display text-2xl font-semibold">{w.title}</h1>
         <p className="mt-1 text-sm text-zinc-400">{w.subtitle}</p>
@@ -132,22 +149,15 @@ function WebmToMp4PageInner() {
               onFileChosen(e.dataTransfer.files[0]);
             })();
           }}
-          onClick={() => void openPicker()}
+          onClick={(e) => {
+            e.stopPropagation();
+            void openPicker();
+          }}
           className={`mt-6 flex min-h-[180px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 transition-colors ${
             dragging ? "border-[#c9a84c]/60 bg-[#c9a84c]/10" : "border-white/15 hover:border-white/25"
           }`}
         >
           <p className="text-sm text-zinc-300">{file ? file.name : w.uploadLabel}</p>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="video/webm,.webm"
-            className="hidden"
-            onChange={(e) => {
-              onFileChosen(e.target.files?.[0]);
-              e.target.value = "";
-            }}
-          />
         </div>
 
         {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}

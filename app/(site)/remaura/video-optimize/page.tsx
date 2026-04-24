@@ -84,14 +84,21 @@ function VideoOptimizePageInner() {
 
   const viewerRef = useRef<MeshRealtimeViewerHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pickerBusyRef = useRef<boolean>(false);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   const recordCanvasRef = useRef<HTMLCanvasElement>(null);
   const ffmpegRef = useRef<FFmpeg | null>(null);
 
   const openMeshFilePicker = useCallback(async () => {
-    const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
-    if (!ok) return;
-    fileInputRef.current?.click();
+    if (pickerBusyRef.current) return;
+    pickerBusyRef.current = true;
+    try {
+      const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+      if (!ok) return;
+      fileInputRef.current?.click();
+    } finally {
+      setTimeout(() => { pickerBusyRef.current = false; }, 500);
+    }
   }, [billingUi, checkCredits]);
 
   const handleFile = (file: File) => {
@@ -268,6 +275,17 @@ function VideoOptimizePageInner() {
 
   return (
     <main className="min-h-screen bg-background">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".stl,.glb"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) handleFile(f);
+        }}
+      />
       <div className="border-b border-border/60 bg-card">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
           <h1 className="font-display text-2xl font-medium tracking-[-0.02em] text-foreground">{vo.title}</h1>
@@ -293,7 +311,10 @@ function VideoOptimizePageInner() {
                 if (f) handleFile(f);
               })();
             }}
-            onClick={() => void openMeshFilePicker()}
+            onClick={(e) => {
+              e.stopPropagation();
+              void openMeshFilePicker();
+            }}
             className={`flex min-h-[400px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all ${
               dragging ? "border-accent bg-accent/[0.04]" : "border-border/60 hover:border-accent/40 hover:bg-surface-alt/50"
             }`}
@@ -310,16 +331,6 @@ function VideoOptimizePageInner() {
                 </span>
               ))}
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".stl,.glb"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-              }}
-            />
           </div>
         ) : (
           <div className="grid gap-6 lg:grid-cols-4">
