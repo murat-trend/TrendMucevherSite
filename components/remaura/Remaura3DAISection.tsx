@@ -367,6 +367,15 @@ export function Remaura3DAISection() {
 
   return (
     <section className="mx-auto w-full max-w-6xl rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-6">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        onChange={handleInputChange}
+        aria-hidden
+        tabIndex={-1}
+      />
       <div className="mb-4 flex items-center gap-2 border-b border-border pb-3">
         <div
           className="h-2 w-2 shrink-0 rounded-full bg-teal-500"
@@ -414,15 +423,6 @@ export function Remaura3DAISection() {
                   : "border-border hover:border-teal-500/50 hover:bg-teal-500/5 dark:border-white/10 dark:hover:border-teal-500/30"
               }`}
             >
-              <input
-                ref={inputRef}
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                onChange={handleInputChange}
-                aria-hidden
-                tabIndex={-1}
-              />
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="32"
