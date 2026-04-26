@@ -22,7 +22,6 @@ function getDetailCopy(locale: string) {
     return {
       notFound: 'MODEL NOT FOUND',
       backToCollection: '← Back to Collection',
-      viewLabels: { on: 'Front', arka: 'Back', kenar: 'Side', ust: 'Top' },
       close: '✕ Close',
       dimensions: { width: 'Width', height: 'Height', depth: 'Depth', weight: 'Weight' },
       priceTitle: 'Digital Model Price',
@@ -31,7 +30,6 @@ function getDetailCopy(locale: string) {
       packageItems: [
         { fmt: 'GLB', desc: '3D web viewer, AR, render' },
         { fmt: 'STL', desc: '3D printing, CNC production' },
-        { fmt: 'OBJ', desc: 'Optional, instant conversion' },
       ],
       buy: '◆ Buy',
       footer: 'Instant download after payment · Secure delivery',
@@ -45,7 +43,6 @@ function getDetailCopy(locale: string) {
     return {
       notFound: 'MODELL NICHT GEFUNDEN',
       backToCollection: '← Zurück zur Kollektion',
-      viewLabels: { on: 'Vorne', arka: 'Hinten', kenar: 'Seite', ust: 'Oben' },
       close: '✕ Schließen',
       dimensions: { width: 'Breite', height: 'Höhe', depth: 'Tiefe', weight: 'Gewicht' },
       priceTitle: 'Preis des Digitalmodells',
@@ -54,7 +51,6 @@ function getDetailCopy(locale: string) {
       packageItems: [
         { fmt: 'GLB', desc: '3D-Webviewer, AR, Render' },
         { fmt: 'STL', desc: '3D-Druck, CNC-Produktion' },
-        { fmt: 'OBJ', desc: 'Optional, sofortige Konvertierung' },
       ],
       buy: '◆ Kaufen',
       footer: 'Sofortiger Download nach Zahlung · Sichere Lieferung',
@@ -68,7 +64,6 @@ function getDetailCopy(locale: string) {
     return {
       notFound: 'МОДЕЛЬ НЕ НАЙДЕНА',
       backToCollection: '← Назад к коллекции',
-      viewLabels: { on: 'Спереди', arka: 'Сзади', kenar: 'Сбоку', ust: 'Сверху' },
       close: '✕ Закрыть',
       dimensions: { width: 'Ширина', height: 'Высота', depth: 'Глубина', weight: 'Вес' },
       priceTitle: 'Цена цифровой модели',
@@ -77,7 +72,6 @@ function getDetailCopy(locale: string) {
       packageItems: [
         { fmt: 'GLB', desc: '3D веб‑просмотр, AR, рендер' },
         { fmt: 'STL', desc: '3D печать, CNC производство' },
-        { fmt: 'OBJ', desc: 'По запросу, мгновенная конвертация' },
       ],
       buy: '◆ Купить',
       footer: 'Мгновенная загрузка после оплаты · Безопасная доставка',
@@ -90,7 +84,6 @@ function getDetailCopy(locale: string) {
   return {
     notFound: 'MODEL BULUNAMADI',
     backToCollection: '← Koleksiyona Dön',
-    viewLabels: { on: 'Ön', arka: 'Arka', kenar: 'Kenar', ust: 'Üst' },
     close: '✕ Kapat',
     dimensions: { width: 'Genişlik', height: 'Yükseklik', depth: 'Derinlik', weight: 'Ağırlık' },
     priceTitle: 'Dijital Model Fiyatı',
@@ -99,7 +92,6 @@ function getDetailCopy(locale: string) {
     packageItems: [
       { fmt: 'GLB', desc: '3D web görüntüleyici, AR, render' },
       { fmt: 'STL', desc: '3D baskı, CNC üretim' },
-      { fmt: 'OBJ', desc: 'İsteğe bağlı, anında dönüştürülür' },
     ],
     buy: '◆ Satın Al',
     footer: 'Ödeme sonrası anında indir · Güvenli teslimat',
@@ -266,12 +258,14 @@ export default function ModelDetayPage({
       alive = false
     }
   }, [glbUrl])
-  const dynamicViewImages: Record<'on' | 'arka' | 'kenar' | 'ust', string | null> = {
-    on: dynamic?.thumbnailViews?.on ?? dynamic?.thumbnailUrl ?? getThumbnailViewUrl(slug, 'on'),
-    arka: dynamic?.thumbnailViews?.arka ?? getThumbnailViewUrl(slug, 'arka'),
-    kenar: dynamic?.thumbnailViews?.kenar ?? getThumbnailViewUrl(slug, 'kenar'),
-    ust: dynamic?.thumbnailViews?.ust ?? getThumbnailViewUrl(slug, 'ust'),
-  }
+  const viewImageList = (dynamic?.images && dynamic.images.length > 0)
+    ? dynamic.images
+    : [
+        getThumbnailViewUrl(slug, 'on'),
+        getThumbnailViewUrl(slug, 'arka'),
+        getThumbnailViewUrl(slug, 'kenar'),
+        getThumbnailViewUrl(slug, 'ust'),
+      ]
   const product = dynamic
     ? {
         name: dynamic.name,
@@ -287,12 +281,7 @@ export default function ModelDetayPage({
   const [selectedLicense, setSelectedLicense] = useState<'personal' | 'commercial'>('personal')
   const [viewerReady, setViewerReady] = useState(false)
   const viewerRef = useRef<HTMLDivElement>(null)
-  const visibleActiveImage =
-    activeImage &&
-    (activeImage.startsWith(`/thumbnails/${slug}`) ||
-      activeImage.includes('/thumbnails/'))
-      ? activeImage
-      : null
+  const visibleActiveImage = activeImage
   useEffect(() => {
     let cancelled = false
     const markReady = () => {
@@ -664,7 +653,7 @@ export default function ModelDetayPage({
             </div>
           </div>
 
-          {/* 4 Görsel — Ön, Arka, Kenar, Üst */}
+          {/* Ürün görselleri */}
           <div
             style={{
               display: 'grid',
@@ -673,60 +662,31 @@ export default function ModelDetayPage({
               marginTop: '8px',
             }}
           >
-            {[
-              { key: 'on', label: copy.viewLabels.on },
-              { key: 'arka', label: copy.viewLabels.arka },
-              { key: 'kenar', label: copy.viewLabels.kenar },
-              { key: 'ust', label: copy.viewLabels.ust },
-            ].map((view) => {
-              const src = dynamic
-                ? dynamicViewImages[view.key as keyof typeof dynamicViewImages]
-                : `/thumbnails/${slug}-${view.key}.jpg`
-              return (
-                <div
-                  key={view.key}
-                  onClick={() => setActiveImage(src)}
-                  style={{
-                    aspectRatio: '1',
-                    background: '#111',
-                    border: `1px solid ${visibleActiveImage === src ? 'rgba(201,168,76,0.5)' : 'rgba(255,255,255,0.07)'}`,
-                    borderRadius: '2px',
-                    overflow: 'hidden',
-                    cursor: 'pointer',
-                    position: 'relative',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  {src ? (
-                    <img
-                      src={src}
-                      alt={view.label}
-                      style={{ objectFit: 'cover', width: '100%', height: '100%' }}
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none'
-                      }}
-                    />
-                  ) : null}
-                  <span
-                    style={{
-                      position: 'absolute',
-                      bottom: '4px',
-                      left: '0',
-                      right: '0',
-                      textAlign: 'center',
-                      fontSize: '9px',
-                      letterSpacing: '0.1em',
-                      color: '#4a4642',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {view.label}
-                  </span>
-                </div>
-              )
-            })}
+            {viewImageList.map((src, i) => (
+              <div
+                key={i}
+                onClick={() => setActiveImage(src)}
+                style={{
+                  aspectRatio: '1',
+                  background: '#111',
+                  border: `1px solid ${visibleActiveImage === src ? 'rgba(201,168,76,0.5)' : 'rgba(255,255,255,0.07)'}`,
+                  borderRadius: '2px',
+                  overflow: 'hidden',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <img
+                  src={src}
+                  alt={dynamic?.imageAlts?.[i] ?? dynamic?.name ?? ''}
+                  style={{ objectFit: 'cover', width: '100%', height: '100%' }}
+                  onError={(e) => { e.currentTarget.style.display = 'none' }}
+                />
+              </div>
+            ))}
           </div>
 
           {/* Yorumlar */}

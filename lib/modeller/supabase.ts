@@ -19,7 +19,9 @@ export type DbProduct3D = {
   stl_url: string | null;
   thumbnail_url: string | null;
   thumbnail_front_url?: string | null;
-  images: unknown;
+  images: string[] | null;
+  tags: string[] | null;
+  image_alts: string[] | null;
   dimensions: unknown;
   is_published: boolean;
   /** products_3d.moderation_status — published | rejected | suspended | pending */
@@ -27,6 +29,7 @@ export type DbProduct3D = {
   show_on_home: boolean;
   show_on_modeller: boolean;
   created_at: string;
+  seller_note: string | null;
 };
 
 export type Ui3DModel = {
@@ -56,6 +59,8 @@ export type Ui3DModel = {
   name_ru: string | null;
   translations?: Record<string, { name?: string; story?: string }> | null;
   contentSourceLocale?: string | null;
+  imageAlts: string[] | null;
+  images: string[] | null;
 };
 
 function normalizeJewelryType(value: string): Ui3DModel["jewelryType"] {
@@ -74,13 +79,13 @@ export function mapDbProductToUi(row: DbProduct3D): Ui3DModel {
   const height = Number(rawDimensions.height ?? 0);
   const depth = Number(rawDimensions.depth ?? 0);
   const weight = Number(rawDimensions.weight ?? 0);
-  const rawImages = (row.images ?? {}) as Record<string, unknown>;
+  const rawImages = (row.images ?? []) as string[];
 
   const thumbnailViews: Partial<Record<"on" | "arka" | "kenar" | "ust", string | null>> = {
-    on: typeof rawImages.on === "string" ? rawImages.on : null,
-    arka: typeof rawImages.arka === "string" ? rawImages.arka : null,
-    kenar: typeof rawImages.kenar === "string" ? rawImages.kenar : null,
-    ust: typeof rawImages.ust === "string" ? rawImages.ust : null,
+    on: rawImages[0] ?? null,
+    arka: rawImages[1] ?? null,
+    kenar: rawImages[2] ?? null,
+    ust: rawImages[3] ?? null,
   };
 
   return {
@@ -117,6 +122,8 @@ export function mapDbProductToUi(row: DbProduct3D): Ui3DModel {
     isPublished: row.is_published,
     showOnHome: row.show_on_home,
     showOnModeller: row.show_on_modeller,
+    imageAlts: row.image_alts ?? null,
+    images: row.images ?? null,
   };
 }
 

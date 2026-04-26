@@ -57,6 +57,7 @@ export default function ManuelKontrolMerkezi() {
       reader.onloadend = () => setImageSrc(reader.result as string);
       reader.readAsDataURL(file);
     }
+    e.target.value = "";
   };
 
   const loadDemoImage = () => {

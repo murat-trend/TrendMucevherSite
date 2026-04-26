@@ -79,20 +79,36 @@ function VideoOptimizePageInner() {
   const [outputBlob, setOutputBlob] = useState<Blob | null>(null);
   const [mp4Converting, setMp4Converting] = useState(false);
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
+  const [canUpload, setCanUpload] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [meshStats, setMeshStats] = useState<{ vertices: number; faces: number } | null>(null);
 
   const viewerRef = useRef<MeshRealtimeViewerHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pickerBusyRef = useRef<boolean>(false);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   const recordCanvasRef = useRef<HTMLCanvasElement>(null);
   const ffmpegRef = useRef<FFmpeg | null>(null);
 
-  const openMeshFilePicker = useCallback(async () => {
-    const ok = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
-    if (!ok) return;
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const ok = await checkCredits(1, () => {}, () => {});
+      if (!cancelled) setCanUpload(ok);
+    })();
+    return () => { cancelled = true; };
+  }, [checkCredits]);
+
+  const openMeshFilePicker = useCallback(() => {
+    if (pickerBusyRef.current) return;
+    if (!canUpload) {
+      void checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
+      return;
+    }
+    pickerBusyRef.current = true;
     fileInputRef.current?.click();
-  }, [billingUi, checkCredits]);
+    setTimeout(() => { pickerBusyRef.current = false; }, 500);
+  }, [canUpload, checkCredits, billingUi]);
 
   const handleFile = (file: File) => {
     const ext = file.name.split(".").pop()?.toLowerCase();
@@ -268,6 +284,17 @@ function VideoOptimizePageInner() {
 
   return (
     <main className="min-h-screen bg-background">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".stl,.glb"
+        className="sr-only"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) handleFile(f);
+        }}
+      />
       <div className="border-b border-border/60 bg-card">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
           <h1 className="font-display text-2xl font-medium tracking-[-0.02em] text-foreground">{vo.title}</h1>
@@ -293,7 +320,10 @@ function VideoOptimizePageInner() {
                 if (f) handleFile(f);
               })();
             }}
-            onClick={() => void openMeshFilePicker()}
+            onClick={(e) => {
+              e.stopPropagation();
+              void openMeshFilePicker();
+            }}
             className={`flex min-h-[400px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all ${
               dragging ? "border-accent bg-accent/[0.04]" : "border-border/60 hover:border-accent/40 hover:bg-surface-alt/50"
             }`}
@@ -310,16 +340,6 @@ function VideoOptimizePageInner() {
                 </span>
               ))}
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".stl,.glb"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-              }}
-            />
           </div>
         ) : (
           <div className="grid gap-6 lg:grid-cols-4">

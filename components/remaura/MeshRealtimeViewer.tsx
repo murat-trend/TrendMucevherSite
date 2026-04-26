@@ -422,7 +422,6 @@ export const MeshRealtimeViewer = forwardRef<MeshRealtimeViewerHandle, MeshRealt
         url,
         (gltf) => {
           dracoLoader.dispose();
-          gltf.scene.rotation.x = -Math.PI / 2;
           placeModel(gltf.scene);
         },
         undefined,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   remauraHandleBillingApiResponse,
   useRemauraBillingModal,
@@ -391,9 +391,11 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
   const [zoom, setZoom] = useState(100);
   const [compareEnabled, setCompareEnabled] = useState(false);
   const [comparePos, setComparePos] = useState(50);
+  const [canUpload, setCanUpload] = useState(false);
   const reflectionInputRef = useRef<HTMLInputElement | null>(null);
   const sceneEnvInputRef = useRef<HTMLInputElement | null>(null);
   const mainImageInputRef = useRef<HTMLInputElement | null>(null);
+  const pickerBusyRef = useRef<boolean>(false);
 
   const getFotoEditAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
     const { data: sessionData } = await createClient().auth.getSession();
@@ -436,6 +438,29 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
     return true;
   }, [billingUi, getFotoEditAuthHeaders]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const headers = await getFotoEditAuthHeaders();
+        const res = await fetch("/api/remaura/foto-edit/verify-credits", {
+          method: "POST",
+          headers,
+          credentials: "same-origin",
+          cache: "no-store",
+          body: JSON.stringify({}),
+        });
+        if (!cancelled) {
+          const body = res.ok ? (await res.json() as { ok?: boolean }) : { ok: false };
+          setCanUpload(!!body.ok);
+        }
+      } catch {
+        if (!cancelled) setCanUpload(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [getFotoEditAuthHeaders]);
+
   const controlsDisabled = !imageSrc;
 
   const filterString = useMemo(
@@ -469,23 +494,38 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
     [verifyFotoEditCreditsOnServer],
   );
 
-  const openMainImagePicker = useCallback(async () => {
-    const ok = await verifyFotoEditCreditsOnServer();
-    if (!ok) return;
+  const openMainImagePicker = useCallback(() => {
+    if (pickerBusyRef.current) return;
+    if (!canUpload) {
+      void verifyFotoEditCreditsOnServer();
+      return;
+    }
+    pickerBusyRef.current = true;
     mainImageInputRef.current?.click();
-  }, [verifyFotoEditCreditsOnServer]);
+    setTimeout(() => { pickerBusyRef.current = false; }, 500);
+  }, [canUpload, verifyFotoEditCreditsOnServer]);
 
-  const openSceneEnvPicker = useCallback(async () => {
-    const ok = await verifyFotoEditCreditsOnServer();
-    if (!ok) return;
+  const openSceneEnvPicker = useCallback(() => {
+    if (pickerBusyRef.current) return;
+    if (!canUpload) {
+      void verifyFotoEditCreditsOnServer();
+      return;
+    }
+    pickerBusyRef.current = true;
     sceneEnvInputRef.current?.click();
-  }, [verifyFotoEditCreditsOnServer]);
+    setTimeout(() => { pickerBusyRef.current = false; }, 500);
+  }, [canUpload, verifyFotoEditCreditsOnServer]);
 
-  const openReflectionPicker = useCallback(async () => {
-    const ok = await verifyFotoEditCreditsOnServer();
-    if (!ok) return;
+  const openReflectionPicker = useCallback(() => {
+    if (pickerBusyRef.current) return;
+    if (!canUpload) {
+      void verifyFotoEditCreditsOnServer();
+      return;
+    }
+    pickerBusyRef.current = true;
     reflectionInputRef.current?.click();
-  }, [verifyFotoEditCreditsOnServer]);
+    setTimeout(() => { pickerBusyRef.current = false; }, 500);
+  }, [canUpload, verifyFotoEditCreditsOnServer]);
 
   const resetAdjustments = useCallback(() => {
     setBrightness(100);
@@ -938,7 +978,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
               type="file"
               accept="image/*"
               onChange={onFile}
-              className="hidden"
+              className="sr-only"
               tabIndex={-1}
               aria-hidden
             />
@@ -999,7 +1039,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
               type="file"
               accept="image/*,.exr,.hdr"
               onChange={onReflectionMapFile}
-              className="hidden"
+              className="sr-only"
               tabIndex={-1}
               aria-hidden
             />
@@ -1008,7 +1048,7 @@ export function RemauraPhotoEditSection({ t }: RemauraPhotoEditSectionProps) {
               type="file"
               accept="image/*,.exr,.hdr"
               onChange={onSceneEnvFile}
-              className="hidden"
+              className="sr-only"
               tabIndex={-1}
               aria-hidden
             />
