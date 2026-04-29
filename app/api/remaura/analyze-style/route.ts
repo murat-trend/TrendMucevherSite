@@ -10,6 +10,14 @@ import { MAX_STYLE_REFERENCE_SLOTS } from "@/components/remaura/remaura-types";
 loadEnvConfig(process.cwd());
 
 export async function POST(req: Request) {
+  const disabled: boolean = true;
+  if (disabled) {
+    return NextResponse.json(
+      { error: "Service temporarily unavailable" },
+      { status: 503 }
+    );
+  }
+
   const startedAt = Date.now();
   let status: "ok" | "error" = "ok";
   let userId = "";
