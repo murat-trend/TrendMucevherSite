@@ -35,6 +35,7 @@ import {
 import type { OptimizedPromptResult } from "@/lib/ai/remaura/prompt-optimizer";
 import { styleAnalysisIsUsable, type StyleAnalysisResult } from "@/lib/ai/remaura/style-analyzer";
 import { styleDataUrlsToPayload } from "@/lib/remaura/data-url";
+import { compressImage } from "@/lib/remaura/compress-image";
 import type { JewelryAnalysisResult, JewelryPlatformTarget } from "@/lib/ai/remaura/jewelry-analyzer";
 import { createClient } from "@/utils/supabase/client";
 import {
@@ -500,18 +501,28 @@ function RemauraWorkspaceInner({ initialCategory = "jewelry" }: RemauraWorkspace
   const handleStyleImageUpload = useCallback((index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file?.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setStyleAnalysis(null);
-      setGenerateError(null);
-      setStyleImages((prev) => {
-        const next = [...prev];
-        next[index] = reader.result as string;
-        return next;
-      });
-    };
-    reader.readAsDataURL(file);
     e.target.value = "";
+    const applyToState = (f: File) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setStyleAnalysis(null);
+        setGenerateError(null);
+        setStyleImages((prev) => {
+          const next = [...prev];
+          next[index] = reader.result as string;
+          return next;
+        });
+      };
+      reader.readAsDataURL(f);
+    };
+    compressImage(file).then((compressed) => {
+      console.log("Original size:", file.size, "Compressed:", compressed.size);
+      if (compressed.size > 3 * 1024 * 1024) {
+        alert("Görsel çok büyük, lütfen daha küçük bir görsel yükleyin.");
+        return;
+      }
+      applyToState(compressed);
+    }).catch(() => applyToState(file));
   }, []);
 
   const removeStyleImage = useCallback((index: number) => {
