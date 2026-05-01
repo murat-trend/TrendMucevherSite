@@ -1,7 +1,8 @@
+import { useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 
 export function useRemauraCreditsCheck() {
-  const checkCredits = async (
+  const checkCredits = useCallback(async (
     requiredCredits: number = 1,
     onUnauthorized: () => void,
     onInsufficient: () => void
@@ -36,7 +37,7 @@ export function useRemauraCreditsCheck() {
     }
 
     return true;
-  };
+  }, []);
 
   return { checkCredits };
 }
