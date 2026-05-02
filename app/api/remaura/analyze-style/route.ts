@@ -1,5 +1,7 @@
 import { loadEnvConfig } from "@next/env";
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { createClient } from "@/utils/supabase/server";
 import { getOpenAIApiKey } from "@/lib/api/openai";
 import { analyzeStyleReferences } from "@/lib/ai/remaura/style-analyzer";
 import { appendRemauraJob } from "@/lib/remaura/jobs-store";
@@ -10,25 +12,38 @@ import { MAX_STYLE_REFERENCE_SLOTS } from "@/components/remaura/remaura-types";
 loadEnvConfig(process.cwd());
 
 export async function POST(req: Request) {
-  const disabled: boolean = true;
-  if (disabled) {
-    return NextResponse.json(
-      { error: "Service temporarily unavailable" },
-      { status: 503 }
-    );
-  }
-
   const startedAt = Date.now();
   let status: "ok" | "error" = "ok";
   let userId = "";
   try {
+    // 1. AUTH CHECK — herşeyden önce
+    const cookieStore = await cookies();
+    const supabase = createClient(cookieStore);
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: "Giriş yapmanız gerekli." },
+        { status: 401 }
+      );
+    }
+
+    // userId SESSION'DAN, body'den DEĞİL
+    userId = user.id;
+
+    // 2. Admin feature flag
     const settings = await getAdminSettings();
     if (!settings.features.analyzeStyleEnabled) {
       return NextResponse.json(
-        { error: "Stil analizi gecici olarak kapali." },
+        { error: "Stil analizi geçici olarak kapalı." },
         { status: 503 }
       );
     }
+
+    // 3. OpenAI key
     const apiKey = getOpenAIApiKey();
     if (!apiKey) {
       return NextResponse.json(
@@ -37,12 +52,14 @@ export async function POST(req: Request) {
       );
     }
 
+    // 4. Body parse
     const body = await req.json();
-    const billing = await requireRemauraUserAndCredits(body.userId as string | undefined);
-    if (!billing.ok) return billing.response;
-    userId = billing.userId;
 
-    // Tek görsel (eski format) veya çoklu görsel
+    // 5. Credit check — verified userId ile
+    const billing = await requireRemauraUserAndCredits(userId);
+    if (!billing.ok) return billing.response;
+
+    // 6. Image processing
     const images = body.images as Array<{ base64: string; mimeType?: string }> | undefined;
     const legacyImage = body.image as string | undefined;
     const legacyMime = (body.mimeType as string) || "image/jpeg";
