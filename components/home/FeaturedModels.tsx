@@ -10,7 +10,7 @@ export async function FeaturedModels() {
     .select("id, name, slug, thumbnail_url, personal_price, jewelry_type")
     .eq("is_published", true)
     .order("created_at", { ascending: false })
-    .limit(6);
+    .limit(9);
 
   return <FeaturedModelsClient models={data ?? []} />;
 }

@@ -19,9 +19,19 @@ const localeToTag: Record<string, string> = {
   ru: "ru-RU",
 };
 
+const GRID_SIZE = 9;
+
+const comingSoon: Record<string, string> = {
+  tr: "Yakında",
+  en: "Coming Soon",
+  de: "Demnächst",
+  ru: "Скоро",
+};
+
 export function FeaturedModelsClient({ models }: { models: FeaturedModelRow[] }) {
   const { t, locale } = useLanguage();
   const numberLocale = localeToTag[locale] ?? "tr-TR";
+  const placeholderCount = Math.max(0, GRID_SIZE - models.length);
 
   return (
     <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
@@ -46,7 +56,7 @@ export function FeaturedModelsClient({ models }: { models: FeaturedModelRow[] })
             <Link
               key={model.id}
               href={`/modeller/${model.slug}`}
-              className="group flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-border/40 bg-surface transition-colors hover:border-[#c9a84c]/40"
+              className="group flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border/40 bg-surface transition-colors hover:border-[#c9a84c]/40"
             >
               <div className="aspect-square shrink-0 overflow-hidden bg-black/20">
                 {model.thumbnail_url ? (
@@ -69,6 +79,21 @@ export function FeaturedModelsClient({ models }: { models: FeaturedModelRow[] })
                 </p>
               </div>
             </Link>
+          ))}
+
+          {Array.from({ length: placeholderCount }).map((_, i) => (
+            <div
+              key={`ph-${i}`}
+              className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border/20 bg-surface/40"
+            >
+              <div className="aspect-square shrink-0 flex items-center justify-center bg-foreground/[0.02]">
+                <span className="font-display text-3xl text-muted/15 select-none">✦</span>
+              </div>
+              <div className="flex flex-1 flex-col p-4">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted/30">—</p>
+                <p className="mt-1 text-sm font-medium text-muted/30">{comingSoon[locale] ?? comingSoon.tr}</p>
+              </div>
+            </div>
           ))}
         </div>
       )}

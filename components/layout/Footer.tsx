@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useState, useEffect } from "react";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
+import { createClient } from "@/utils/supabase/client";
 
 const FOOTER_LINKS = {
   main: [
     { href: "/", key: "home" as const },
     { href: "/modeller", key: "modeller" as const },
     { href: "/ozel-siparis", key: "customOrder" as const },
-    { href: "/remaura", key: "remaura" as const },
+    { href: "/remaura", key: "remaura" as const, adminOnly: true },
     { href: "/iletisim", key: "contact" as const },
   ],
   support: [
@@ -21,11 +23,23 @@ const FOOTER_LINKS = {
 
 export function Footer() {
   const { t } = useLanguage();
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      fetch("/api/auth/header-context", { credentials: "same-origin", cache: "no-store" })
+        .then((r) => r.json())
+        .then((ctx) => { if (ctx.signedIn) setIsSuperAdmin(ctx.isSuperAdmin); });
+    });
+  }, []);
+
   return (
     <footer className="border-t border-border/60 bg-surface-footer px-4 py-16 sm:px-6 sm:py-24 lg:px-8 dark:bg-surface-footer">
       <div className="mx-auto max-w-6xl">
         <div className="grid grid-cols-1 gap-16 sm:grid-cols-2 sm:gap-20 lg:grid-cols-4 lg:gap-16">
-          {/* Brand - premium typography */}
+          {/* Brand */}
           <div className="space-y-5">
             <Link href="/" className="group block">
               <span className="font-display block text-xl font-medium tracking-[-0.03em] text-foreground transition-colors group-hover:text-accent/90 sm:text-[1.3rem]">
@@ -35,12 +49,14 @@ export function Footer() {
                 by Murat Kaynaroğlu
               </span>
             </Link>
-            <Link
-              href="/remaura"
-              className="inline-flex items-center rounded-full border border-accent/50 bg-accent/10 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.2em] text-accent transition-all duration-300 hover:border-accent/70 hover:bg-accent/20"
-            >
-              Remaura AI
-            </Link>
+            {isSuperAdmin && (
+              <Link
+                href="/remaura"
+                className="inline-flex items-center rounded-full border border-accent/50 bg-accent/10 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.2em] text-accent transition-all duration-300 hover:border-accent/70 hover:bg-accent/20"
+              >
+                Remaura AI
+              </Link>
+            )}
           </div>
 
           {/* Main Links */}
@@ -49,16 +65,18 @@ export function Footer() {
               {t.footer.menu}
             </h3>
             <ul className="mt-5 space-y-3">
-              {FOOTER_LINKS.main.map((link) => (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="text-[13px] text-muted transition-colors hover:text-foreground"
-                  >
-                    {t.nav[link.key]}
-                  </Link>
-                </li>
-              ))}
+              {FOOTER_LINKS.main
+                .filter((link) => !("adminOnly" in link && link.adminOnly && !isSuperAdmin))
+                .map((link) => (
+                  <li key={link.href}>
+                    <Link
+                      href={link.href}
+                      className="text-[13px] text-muted transition-colors hover:text-foreground"
+                    >
+                      {t.nav[link.key]}
+                    </Link>
+                  </li>
+                ))}
             </ul>
           </div>
 
@@ -87,12 +105,14 @@ export function Footer() {
               {t.footer.getStarted}
             </h3>
             <div className="mt-5 flex flex-col gap-3">
-              <Link
-                href="/remaura"
-                className="text-[13px] font-medium text-accent transition-colors hover:text-accent/80"
-              >
-                Remaura AI
-              </Link>
+              {isSuperAdmin && (
+                <Link
+                  href="/remaura"
+                  className="text-[13px] font-medium text-accent transition-colors hover:text-accent/80"
+                >
+                  Remaura AI
+                </Link>
+              )}
               <Link
                 href="/giris"
                 className="text-[13px] font-medium text-muted transition-colors hover:text-foreground"

@@ -111,6 +111,44 @@ function TagChipInput({ tags, onChange, placeholder }: {
   );
 }
 
+// Browser → R2 doğrudan yükleme (Vercel 4.5MB limitini bypass eder)
+async function uploadViaPresign(
+  slug: string,
+  file: File,
+  kind: 'glb' | 'stl' | 'thumbnail',
+  view?: string,
+): Promise<string> {
+  const defaultContentType =
+    kind === 'glb' ? 'model/gltf-binary' :
+    kind === 'stl' ? 'model/stl' :
+    'image/jpeg'
+  const presignRes = await fetch('/api/create-upload-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      slug,
+      fileName: file.name,
+      contentType: file.type || defaultContentType,
+      size: file.size,
+      kind,
+      ...(view ? { view } : {}),
+    }),
+  })
+  if (!presignRes.ok) {
+    const err = await presignRes.json().catch(() => ({})) as { error?: string }
+    throw new Error(err.error ?? 'Presign URL alınamadı')
+  }
+  const { uploadUrl, publicUrl } = await presignRes.json() as { uploadUrl: string; publicUrl: string }
+  const uploadRes = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  })
+  if (!uploadRes.ok) throw new Error(`R2 yükleme hatası: ${uploadRes.status}`)
+  return publicUrl
+}
+
 export default function SaticiUrunlerimPage() {
   const { t, locale } = useLanguage();
   const tp = t.site.seller.products;
@@ -440,34 +478,26 @@ export default function SaticiUrunlerimPage() {
       const imageUrls: string[] = [];
       const imageAltsArr: string[] = [];
 
-      const fd = new FormData();
-      fd.set("slug", slug);
-      fd.set("name", name);
-      fd.set("story", form.story.trim());
-      fd.set("sourceLang", form.contentSourceLang);
-      if (form.glbFile) fd.set("glb", form.glbFile);
-      if (form.stlFile) fd.set("stl", form.stlFile);
-      const res = await fetch("/api/upload-model", { method: "POST", body: fd });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error ?? tp.errUploadModel);
-      }
-      const data = await res.json() as {
-        glbUrl?: string;
-        stlUrl?: string;
-        translationPatch?: {
-          translations: Record<string, { name: string; story: string }>;
-          content_source_locale: string;
-          name_en: string;
-          name_de: string;
-          name_ru: string;
-          story_en: string;
-          story_de: string;
-          story_ru: string;
-        } | null;
-      };
-      glbUrl = data.glbUrl ?? null;
-      stlUrl = data.stlUrl ?? null;
+      // PRESIGNED URL — browser → R2 direkt (Vercel 4.5MB bypass)
+      if (form.glbFile) glbUrl = await uploadViaPresign(slug, form.glbFile, 'glb')
+      if (form.stlFile) stlUrl = await uploadViaPresign(slug, form.stlFile, 'stl')
+
+      // ESKİ FormData yöntemi (413 riski — presign için devre dışı):
+      // const fd = new FormData();
+      // fd.set("slug", slug);
+      // fd.set("name", name);
+      // fd.set("story", form.story.trim());
+      // fd.set("sourceLang", form.contentSourceLang);
+      // if (form.glbFile) fd.set("glb", form.glbFile);
+      // if (form.stlFile) fd.set("stl", form.stlFile);
+      // const res = await fetch("/api/upload-model", { method: "POST", body: fd });
+      // if (!res.ok) {
+      //   const body = (await res.json().catch(() => ({}))) as { error?: string };
+      //   throw new Error(body.error ?? tp.errUploadModel);
+      // }
+      // const data = await res.json() as { glbUrl?: string; stlUrl?: string; translationPatch?: { ... } | null };
+      // glbUrl = data.glbUrl ?? null;
+      // stlUrl = data.stlUrl ?? null;
 
       // Görseller
       const imageSlots = [
@@ -478,14 +508,19 @@ export default function SaticiUrunlerimPage() {
       ];
       for (const { idx, file, alt } of imageSlots) {
         if (!file) continue;
-        const fd = new FormData();
-        fd.set("slug", slug);
-        fd.set("view", `img${idx}`);
-        fd.set("file", file);
-        const res = await fetch("/api/upload-thumbnail", { method: "POST", body: fd });
-        if (!res.ok) throw new Error(`Görsel ${idx} yüklenemedi`);
-        const data = (await res.json()) as { url?: string };
-        if (data.url) { imageUrls.push(data.url); imageAltsArr.push(alt); }
+        // PRESIGNED URL — browser → R2 direkt
+        const url = await uploadViaPresign(slug, file, 'thumbnail', `img${idx}`)
+        imageUrls.push(url)
+        imageAltsArr.push(alt)
+        // ESKİ FormData yöntemi (upload-thumbnail — presign için devre dışı):
+        // const fd = new FormData();
+        // fd.set("slug", slug);
+        // fd.set("view", `img${idx}`);
+        // fd.set("file", file);
+        // const res = await fetch("/api/upload-thumbnail", { method: "POST", body: fd });
+        // if (!res.ok) throw new Error(`Görsel ${idx} yüklenemedi`);
+        // const data = (await res.json()) as { url?: string };
+        // if (data.url) { imageUrls.push(data.url); imageAltsArr.push(alt); }
       }
       if (imageUrls.length === 0) throw new Error("En az 1 görsel yükleyin");
       thumbnailUrl = imageUrls[0] ?? null;
@@ -496,7 +531,13 @@ export default function SaticiUrunlerimPage() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      let trPatch = data.translationPatch ?? null;
+      // translationPatch artık upload-model'dan gelmiyor; /api/product-translations fallback'i kullanılıyor
+      let trPatch: {
+        translations: Record<string, { name: string; story: string }>;
+        content_source_locale: string;
+        name_en: string; name_de: string; name_ru: string;
+        story_en: string; story_de: string; story_ru: string;
+      } | null = null;
       if (!trPatch) {
         try {
           const trRes = await fetch("/api/product-translations", {

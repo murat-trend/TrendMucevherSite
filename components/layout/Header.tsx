@@ -14,11 +14,10 @@ const NAV_ITEMS = [
   { href: "/", key: "home" as const },
   { href: "/modeller", key: "modeller" as const },
   { href: "/ozel-siparis", key: "customOrder" as const },
-  { href: "/remaura", key: "remaura" as const },
-  { href: "/remaura/nedir", key: "remauraNedir" as const },
+  { href: "/remaura", key: "remaura" as const, adminOnly: true },
   { href: "/gunluk", key: "daily" as const },
   { href: "/iletisim", key: "contact" as const },
-  { href: "/admin", key: "superAdmin" as const },
+  { href: "/admin", key: "superAdmin" as const, adminOnly: true },
 ];
 
 type HeaderSession = {
@@ -26,10 +25,6 @@ type HeaderSession = {
   role: "seller" | "buyer";
   isSuperAdmin: boolean;
 };
-
-/** Mücevher tasarımı «Görsel Üret» butonu (NegativePromptPanel) ile aynı renk ve glow */
-const REMAURA_NEDIR_LINK_CLASS =
-  "inline-flex items-center rounded-[999px] bg-[#10b981] px-3 py-1.5 text-[14px] font-bold tracking-[0.02em] text-white shadow-[0_0_0_1px_rgba(16,185,129,0.3),0_0_10px_rgba(16,185,129,0.18)] transition-all hover:shadow-[0_0_0_1px_rgba(16,185,129,0.4),0_0_14px_rgba(16,185,129,0.25)]";
 
 export function Header() {
   const router = useRouter();
@@ -137,59 +132,60 @@ export function Header() {
           {/* Desktop Nav */}
           <div className="hidden items-center gap-6 lg:flex">
             <nav className="flex items-center gap-7 xl:gap-10">
-              {NAV_ITEMS.map((item) =>
-                item.key === "remaura" ? (
-                  <div key={item.href} className="group relative">
-                    <Link
-                      href={item.href}
-                      className="inline-flex items-center gap-1.5 rounded-[999px] border border-[#a65f69]/80 bg-[linear-gradient(135deg,#c4838b,#b76e79,#a65f69)] px-3 py-1.5 text-[14px] font-medium tracking-[0.02em] text-white transition-colors hover:bg-[linear-gradient(135deg,#b76e79,#a65f69,#9a5560)]"
-                    >
-                      <span className="icon-2-5d-sm inline-block">
-                        <Image src="/rem-icon-32.png" alt="" width={18} height={18} className="h-[18px] w-[18px] opacity-95" unoptimized />
-                      </span>
-                      {t.nav[item.key]}
-                    </Link>
-                    {/* Dropdown */}
-                    <div className="invisible absolute left-0 top-full z-20 mt-2 min-w-[220px] rounded-xl border border-border bg-card/95 p-2 opacity-0 shadow-2xl backdrop-blur transition-all duration-200 group-hover:visible group-hover:opacity-100">
-                      <Link href="/remaura?category=jewelry" className="block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                        {t.remauraWorkspace.categoryJewelryDesign}
+              {NAV_ITEMS.map((item) => {
+                if (item.adminOnly && !session?.isSuperAdmin) return null;
+
+                if (item.key === "remaura") {
+                  return (
+                    <div key={item.href} className="group relative">
+                      <Link
+                        href={item.href}
+                        className="inline-flex items-center gap-1.5 rounded-[999px] border border-[#a65f69]/80 bg-[linear-gradient(135deg,#c4838b,#b76e79,#a65f69)] px-3 py-1.5 text-[14px] font-medium tracking-[0.02em] text-white transition-colors hover:bg-[linear-gradient(135deg,#b76e79,#a65f69,#9a5560)]"
+                      >
+                        <span className="icon-2-5d-sm inline-block">
+                          <Image src="/rem-icon-32.png" alt="" width={18} height={18} className="h-[18px] w-[18px] opacity-95" unoptimized />
+                        </span>
+                        {t.nav[item.key]}
                       </Link>
-                      <Link href="/remaura/arka-plan-kaldir" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                        {t.remauraWorkspace.categoryBackgroundRemoval}
-                      </Link>
-                      <Link href="/remaura/foto-edit" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                        {t.remauraWorkspace.categoryPhotoEdit}
-                      </Link>
-                      <Link href="/remaura/nesne-kaldir" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                        {t.nav.nesneKaldir ?? "Nesne Kaldır"}
-                      </Link>
-                      <Link href="/remaura?category=mesh3d" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                        Remaura AI 3D <span className="text-[10px] font-normal text-muted">(görüntüden 3D)</span>
-                      </Link>
-                      <Link href="/remaura?category=ring-rail" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                        Ring Rail Resize
-                      </Link>
-                      <Link href="/convert" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                        3D Dönüştürücü
-                      </Link>
-                      <Link href="/remaura/video-optimize" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                        Video Optimizasyonu
-                      </Link>
-                      <Link href="/remaura/webm-to-mp4" onClick={() => setMobileMenuOpen(false)} className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                        WebM → MP4
-                      </Link>
-                      {/* Studio — Remaura AI altına taşındı */}
-                      <div className="my-1.5 border-t border-border/60" />
-                      <Link href="/studio" className="block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                        Studio
-                      </Link>
+                      {/* Dropdown */}
+                      <div className="invisible absolute left-0 top-full z-20 mt-2 min-w-[220px] rounded-xl border border-border bg-card/95 p-2 opacity-0 shadow-2xl backdrop-blur transition-all duration-200 group-hover:visible group-hover:opacity-100">
+                        <Link href="/remaura?category=jewelry" className="block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
+                          {t.remauraWorkspace.categoryJewelryDesign}
+                        </Link>
+                        <Link href="/remaura/arka-plan-kaldir" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
+                          {t.remauraWorkspace.categoryBackgroundRemoval}
+                        </Link>
+                        <Link href="/remaura/foto-edit" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
+                          {t.remauraWorkspace.categoryPhotoEdit}
+                        </Link>
+                        <Link href="/remaura/nesne-kaldir" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
+                          {t.nav.nesneKaldir ?? "Nesne Kaldır"}
+                        </Link>
+                        <Link href="/remaura?category=mesh3d" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
+                          Remaura AI 3D <span className="text-[10px] font-normal text-muted">(görüntüden 3D)</span>
+                        </Link>
+                        <Link href="/remaura?category=ring-rail" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
+                          Ring Rail Resize
+                        </Link>
+                        <Link href="/convert" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
+                          3D Dönüştürücü
+                        </Link>
+                        <Link href="/remaura/video-optimize" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
+                          Video Optimizasyonu
+                        </Link>
+                        <Link href="/remaura/webm-to-mp4" onClick={() => setMobileMenuOpen(false)} className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
+                          WebM → MP4
+                        </Link>
+                        <div className="my-1.5 border-t border-border/60" />
+                        <Link href="/studio" className="block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
+                          Studio
+                        </Link>
+                      </div>
                     </div>
-                  </div>
-                ) : item.key === "remauraNedir" ? (
-                  <Link key={item.href} href={item.href} className={REMAURA_NEDIR_LINK_CLASS}>
-                    {t.nav[item.key]}
-                  </Link>
-                ) : (
+                  );
+                }
+
+                return (
                   <Link
                     key={item.href}
                     href={item.href}
@@ -201,11 +197,11 @@ export function Header() {
                   >
                     {t.nav[item.key]}
                   </Link>
-                )
-              )}
+                );
+              })}
             </nav>
 
-            {/* Hesap: giriş yok → Giriş menüsü; oturum var → e-posta + profil menüsü (Etsy tarzı) */}
+            {/* Hesap: giriş yok → Giriş menüsü; oturum var → e-posta + profil menüsü */}
             {!authLoading &&
               (session ? (
                 <div className="relative" ref={accountMenuRef}>
@@ -511,45 +507,45 @@ export function Header() {
           {/* Nav linkleri */}
           <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-12 pt-2">
             <nav className="flex flex-col border-t border-border/60 pt-4">
-              {NAV_ITEMS.map((item) =>
-                item.key === "remaura" ? (
-                  <div key={item.href} className="my-2 rounded-xl border border-[#a65f69]/30 p-2">
-                    <Link
-                      href={item.href}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="inline-flex w-fit items-center gap-1.5 rounded-[999px] border border-[#a65f69]/80 bg-[linear-gradient(135deg,#c4838b,#b76e79,#a65f69)] px-3 py-1.5 text-[14px] font-medium tracking-[0.02em] text-white"
-                    >
-                      <span className="icon-2-5d-sm inline-block">
-                        <Image src="/rem-icon-32.png" alt="" width={18} height={18} className="h-[18px] w-[18px] opacity-95" unoptimized />
-                      </span>
-                      {t.nav[item.key]}
-                    </Link>
-                    <div className="mt-2 flex flex-col">
-                      {[
-                        { href: "/remaura?category=jewelry", label: t.remauraWorkspace.categoryJewelryDesign },
-                        { href: "/remaura/arka-plan-kaldir", label: t.remauraWorkspace.categoryBackgroundRemoval },
-                        { href: "/remaura/foto-edit", label: t.remauraWorkspace.categoryPhotoEdit },
-                        { href: "/remaura/nesne-kaldir", label: t.nav.nesneKaldir ?? "Nesne Kaldır" },
-                        { href: "/remaura?category=mesh3d", label: "Remaura AI 3D (görüntüden 3D)" },
-                        { href: "/remaura?category=ring-rail", label: "Ring Rail Resize" },
-                        { href: "/convert", label: "3D Dönüştürücü" },
-                        { href: "/remaura/video-optimize", label: "Video Optimizasyonu" },
-                        { href: "/remaura/webm-to-mp4", label: "WebM → MP4" },
-                        { href: "/studio", label: "Studio" },
-                      ].map((link) => (
-                        <Link key={link.href} href={link.href} onClick={() => setMobileMenuOpen(false)} className="rounded-lg px-2 py-2 text-[13px] text-foreground/85 hover:bg-foreground/[0.02]">
-                          {link.label}
-                        </Link>
-                      ))}
+              {NAV_ITEMS.map((item) => {
+                if (item.adminOnly && !session?.isSuperAdmin) return null;
+
+                if (item.key === "remaura") {
+                  return (
+                    <div key={item.href} className="my-2 rounded-xl border border-[#a65f69]/30 p-2">
+                      <Link
+                        href={item.href}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="inline-flex w-fit items-center gap-1.5 rounded-[999px] border border-[#a65f69]/80 bg-[linear-gradient(135deg,#c4838b,#b76e79,#a65f69)] px-3 py-1.5 text-[14px] font-medium tracking-[0.02em] text-white"
+                      >
+                        <span className="icon-2-5d-sm inline-block">
+                          <Image src="/rem-icon-32.png" alt="" width={18} height={18} className="h-[18px] w-[18px] opacity-95" unoptimized />
+                        </span>
+                        {t.nav[item.key]}
+                      </Link>
+                      <div className="mt-2 flex flex-col">
+                        {[
+                          { href: "/remaura?category=jewelry", label: t.remauraWorkspace.categoryJewelryDesign },
+                          { href: "/remaura/arka-plan-kaldir", label: t.remauraWorkspace.categoryBackgroundRemoval },
+                          { href: "/remaura/foto-edit", label: t.remauraWorkspace.categoryPhotoEdit },
+                          { href: "/remaura/nesne-kaldir", label: t.nav.nesneKaldir ?? "Nesne Kaldır" },
+                          { href: "/remaura?category=mesh3d", label: "Remaura AI 3D (görüntüden 3D)" },
+                          { href: "/remaura?category=ring-rail", label: "Ring Rail Resize" },
+                          { href: "/convert", label: "3D Dönüştürücü" },
+                          { href: "/remaura/video-optimize", label: "Video Optimizasyonu" },
+                          { href: "/remaura/webm-to-mp4", label: "WebM → MP4" },
+                          { href: "/studio", label: "Studio" },
+                        ].map((link) => (
+                          <Link key={link.href} href={link.href} onClick={() => setMobileMenuOpen(false)} className="rounded-lg px-2 py-2 text-[13px] text-foreground/85 hover:bg-foreground/[0.02]">
+                            {link.label}
+                          </Link>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ) : item.key === "remauraNedir" ? (
-                  <div key={item.href} className="border-b border-border/60 py-4 last:border-b-0">
-                    <Link href={item.href} onClick={() => setMobileMenuOpen(false)} className={REMAURA_NEDIR_LINK_CLASS}>
-                      {t.nav[item.key]}
-                    </Link>
-                  </div>
-                ) : (
+                  );
+                }
+
+                return (
                   <Link
                     key={item.href}
                     href={item.href}
@@ -562,8 +558,8 @@ export function Header() {
                   >
                     {t.nav[item.key]}
                   </Link>
-                )
-              )}
+                );
+              })}
             </nav>
           </div>
         </aside>
