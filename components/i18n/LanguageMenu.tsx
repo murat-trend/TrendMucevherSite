@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import type { JSX } from "react";
 import type { Locale } from "@/lib/i18n/translations";
 import { useLanguage } from "./LanguageProvider";
 
