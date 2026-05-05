@@ -65,9 +65,6 @@ html.dark {
   --font-display: var(--font-cormorant);
 }
 
-html {
-  scroll-behavior: smooth;
-}
 
 body {
   background: var(--background);

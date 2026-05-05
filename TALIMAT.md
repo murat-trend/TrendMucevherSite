@@ -1,30 +1,24 @@
-SORUN BULUNDU: /api/create-upload-url 500 Internal 
-Server Error veriyor. Server-side çakıyor.
+Console temizliği — iki küçük hata:
 
-DİAGNOSTİK:
+HATA 1: rem-icon-192.png 404
+- public/rem-icon-192.png dosyası yok ama bir yerde 
+  referans var (manifest.json veya layout.tsx)
+- Önce bul: grep -r "rem-icon-192" hangi dosyalarda 
+  geçiyor
+- Sonra:
+  a) Eğer manifest.json'da ise ve dosya yoksa, o satırı 
+     kaldır
+  b) Veya: public/ içinde başka bir uygun icon var mı? 
+     (favicon, logo PNG, vs.) Onu kullan
+- Kullanıcıya hangi yolu seçtiğini söyle
 
-1. npm run dev çalıştığı terminalin son 50 satırını 
-   göster. /api/create-upload-url çağrıldığında hangi 
-   hata fırlatıyor?
+HATA 2: scroll-behavior smooth uyarısı
+- app/layout.tsx (veya benzer root layout) içinde 
+  <html> elementinde:
+  className="..." → className="..." data-scroll-behavior="smooth"
+- Eğer scroll-behavior:smooth CSS olarak eklenmişse, 
+  o kuralı KALDIR (HTML attribute kullan)
 
-2. app/api/create-upload-url/route.ts'in tam içeriğini 
-   tekrar göster (geri getirilmiş hali). Özellikle:
-   - import'lar — @aws-sdk/client-s3 ve 
-     @aws-sdk/s3-request-presigner package.json'da 
-     yüklü mü?
-   - process.env çağrıları — env var isimleri 
-     .env.local'daki ile birebir aynı mı?
+Sadece bu iki şeye dokun. Başka hiçbir şeye dokunma.
 
-3. .env.local'da şu değişkenler var mı (sadece var/yok, 
-   değer GÖSTERME):
-   - R2_ENDPOINT
-   - R2_ACCESS_KEY_ID
-   - R2_SECRET_ACCESS_KEY
-   - R2_BUCKET_NAME
-   - R2_PUBLIC_BASE_URL
-
-4. package.json'da dependencies içinde:
-   - @aws-sdk/client-s3 var mı? Hangi versiyon?
-   - @aws-sdk/s3-request-presigner var mı? Hangi versiyon?
-
-ŞU AN KOD DEĞİŞTİRME. Sadece raporla.
+Bittiğinde değişiklikleri göster.
