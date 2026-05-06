@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { type Metadata } from "next";
 import { cookies } from "next/headers";
 import { createClient } from "@/utils/supabase/server";
@@ -9,12 +11,12 @@ export const metadata: Metadata = {
   description:
     "Cast-ready 3D jewelry models in STL and GLB format. Rings, necklaces, earrings and bracelets. Instant download, ready for your workshop.",
   alternates: {
-    canonical: "https://trendmucevher.com/modeller",
+    canonical: "https://trendmucevher.com/modeller/",
   },
   openGraph: {
     title: "3D Jewelry Models | Trend Mücevher",
     description: "Cast-ready 3D jewelry models in STL and GLB format.",
-    url: "https://trendmucevher.com/modeller",
+    url: "https://trendmucevher.com/modeller/",
   },
 };
 

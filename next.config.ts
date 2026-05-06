@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  trailingSlash: true,
   experimental: {
     proxyClientMaxBodySize: "200mb",
     optimizePackageImports: ["framer-motion"],
