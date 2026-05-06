@@ -63,11 +63,38 @@ export default async function ModelDetayPage({ params }: Props) {
   const sellerEmail =
     (data as { seller_email?: string | null }).seller_email?.trim() ?? null;
 
+  const d = data as Record<string, unknown>;
+  const nameEn = (d.name_en as string | null)?.trim() || (d.name as string);
+  const storyEn = (d.story_en as string | null)?.trim() || "";
+  const thumbnailUrl = d.thumbnail_url as string | null;
+  const personalPrice = d.personal_price as number | null;
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: nameEn,
+    ...(storyEn && { description: storyEn.slice(0, 500) }),
+    ...(thumbnailUrl && { image: thumbnailUrl }),
+    offers: {
+      "@type": "Offer",
+      ...(personalPrice != null && { price: personalPrice }),
+      priceCurrency: "TRY",
+      availability: "https://schema.org/InStock",
+      url: `https://trendmucevher.com/modeller/${slug}/`,
+    },
+  };
+
   return (
-    <ModelDetayClient
-      product={product}
-      sellerId={sellerId}
-      sellerEmail={sellerEmail}
-    />
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <ModelDetayClient
+        product={product}
+        sellerId={sellerId}
+        sellerEmail={sellerEmail}
+      />
+    </>
   );
 }
