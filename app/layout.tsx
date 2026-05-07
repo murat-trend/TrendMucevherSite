@@ -74,7 +74,6 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       type: "website",
       locale: "tr_TR",
-      alternateLocale: ["en_US", "de_DE", "ru_RU"],
       url: siteUrl,
       siteName: "Trend Mücevher",
       title: "Trend Mücevher | Yapay Zeka ile Mücevher Tasarımı",
