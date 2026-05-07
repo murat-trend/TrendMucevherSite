@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
     proxyClientMaxBodySize: "200mb",
     optimizePackageImports: ["framer-motion"],
     serverActions: {
-      bodySizeLimit: "100mb",
+      bodySizeLimit: "200mb",
     },
   },
   turbopack: {},
