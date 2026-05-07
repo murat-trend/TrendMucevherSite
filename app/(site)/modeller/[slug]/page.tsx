@@ -28,18 +28,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const image = data.thumbnail_url as string | null;
 
   return {
-    title: `${name} | Cast-Ready 3D Jewelry Model`,
+    title: { absolute: `${name} | Cast-Ready 3D Jewelry Model | Trend Mücevher` },
     description,
     alternates: { canonical },
     openGraph: {
-      title: `${name} | Cast-Ready 3D Jewelry Model`,
+      title: `${name} | Cast-Ready 3D Jewelry Model | Trend Mücevher`,
       description,
       url: canonical,
       images: image ? [{ url: image }] : undefined,
     },
     twitter: {
       card: image ? "summary_large_image" : "summary",
-      title: `${name} | Cast-Ready 3D Jewelry Model`,
+      title: `${name} | Cast-Ready 3D Jewelry Model | Trend Mücevher`,
       description,
       images: image ? [image] : undefined,
     },

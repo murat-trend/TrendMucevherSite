@@ -7,7 +7,7 @@ import { type DbProduct3D, mapDbProductToUi } from "@/lib/modeller/supabase";
 import { ModellerPageClient } from "@/components/modeller/ModellerPageClient";
 
 export const metadata: Metadata = {
-  title: "3D Jewelry Models | Trend Mücevher",
+  title: { absolute: "3D Jewelry Models | Trend Mücevher" },
   description:
     "Cast-ready 3D jewelry models in STL and GLB format. Rings, necklaces, earrings and bracelets. Instant download, ready for your workshop.",
   alternates: {
