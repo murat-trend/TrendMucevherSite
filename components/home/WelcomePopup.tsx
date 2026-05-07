@@ -15,11 +15,11 @@ export default function WelcomePopup() {
     try {
       const seen = sessionStorage.getItem(SESSION_KEY);
       if (!seen) {
-        const timer = setTimeout(() => setShow(true), 3000);
+        const timer = setTimeout(() => setShow(true), 14000);
         return () => clearTimeout(timer);
       }
     } catch {
-      const timer = setTimeout(() => setShow(true), 3000);
+      const timer = setTimeout(() => setShow(true), 14000);
       return () => clearTimeout(timer);
     }
   }, []);

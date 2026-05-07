@@ -172,9 +172,16 @@ export default function SaticiUrunlerimPage() {
       thumbnail_url: string | null;
       is_published: boolean;
       personal_price: number;
+      commercial_price: number | null;
       jewelry_type: string;
       story: string | null;
       content_source_locale: string | null;
+      glb_url: string | null;
+      stl_url: string | null;
+      images: string[] | null;
+      image_alts: string[] | null;
+      tags: string[] | null;
+      dimensions: { width: number; height: number; depth: number; weight: number } | null;
     }>
   >([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
@@ -199,11 +206,34 @@ export default function SaticiUrunlerimPage() {
   const [replyText, setReplyText] = useState<Record<string, string>>({});
   const [replySending, setReplySending] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editSlug, setEditSlug] = useState<string>("");
   const [editForm, setEditForm] = useState<{
     name: string;
     story: string;
-    personal_price: number;
     contentSourceLang: ContentSourceLocale;
+    jewelryType: JewelryType;
+    personal_price: string;
+    licensePersonal: boolean;
+    licenseCommercial: boolean;
+    commercial_price: string;
+    width: string;
+    height: string;
+    depth: string;
+    weight: string;
+    tags: string[];
+    glbFile: File | null;
+    stlFile: File | null;
+    image1: File | null;
+    image2: File | null;
+    image3: File | null;
+    image4: File | null;
+    alt1: string;
+    alt2: string;
+    alt3: string;
+    alt4: string;
+    glbUrl: string | null;
+    stlUrl: string | null;
+    imageUrls: string[];
   } | null>(null);
   const [editSaving, setEditSaving] = useState(false);
 
@@ -364,22 +394,10 @@ export default function SaticiUrunlerimPage() {
     }
     const { data } = await supabase
       .from("products_3d")
-      .select("id, name, slug, thumbnail_url, is_published, personal_price, jewelry_type, story, content_source_locale")
+      .select("id, name, slug, thumbnail_url, is_published, personal_price, commercial_price, jewelry_type, story, content_source_locale, glb_url, stl_url, images, image_alts, tags, dimensions")
       .eq("seller_id", user.id)
       .order("created_at", { ascending: false });
-    setProducts(
-      (data ?? []) as Array<{
-        id: string;
-        name: string;
-        slug: string;
-        thumbnail_url: string | null;
-        is_published: boolean;
-        personal_price: number;
-        jewelry_type: string;
-        story: string | null;
-        content_source_locale: string | null;
-      }>,
-    );
+    setProducts((data ?? []) as typeof products);
     setLoadingProducts(false);
   }, []);
 
@@ -401,32 +419,52 @@ export default function SaticiUrunlerimPage() {
     if (!editingId || !editForm || editSaving) return;
     setEditSaving(true);
     try {
+      const slug = editSlug;
+
+      // Dosya yüklemeleri (sadece yeni seçilenler)
+      let glbUrl = editForm.glbUrl;
+      let stlUrl = editForm.stlUrl;
+      if (editForm.glbFile) glbUrl = await uploadViaPresign(slug, editForm.glbFile, 'glb');
+      if (editForm.stlFile) stlUrl = await uploadViaPresign(slug, editForm.stlFile, 'stl');
+
+      // Görseller: mevcut URL'ler + yeni yüklemeler
+      const slots = [
+        { file: editForm.image1, alt: editForm.alt1.trim(), existing: editForm.imageUrls[0] ?? null, view: 'img1' },
+        { file: editForm.image2, alt: editForm.alt2.trim(), existing: editForm.imageUrls[1] ?? null, view: 'img2' },
+        { file: editForm.image3, alt: editForm.alt3.trim(), existing: editForm.imageUrls[2] ?? null, view: 'img3' },
+        { file: editForm.image4, alt: editForm.alt4.trim(), existing: editForm.imageUrls[3] ?? null, view: 'img4' },
+      ];
+      const newImageUrls: string[] = [];
+      const newImageAlts: string[] = [];
+      for (const { file, alt, existing, view } of slots) {
+        if (file) {
+          const url = await uploadViaPresign(slug, file, 'thumbnail', view);
+          newImageUrls.push(url);
+          newImageAlts.push(alt);
+        } else if (existing) {
+          newImageUrls.push(existing);
+          newImageAlts.push(alt);
+        }
+      }
+      const thumbnailUrl = newImageUrls[0] ?? editForm.imageUrls[0] ?? null;
+
+      // Çeviri
       let trPatch: {
         translations: Record<string, { name: string; story: string }>;
         content_source_locale: string;
-        name_en: string;
-        name_de: string;
-        name_ru: string;
-        story_en: string;
-        story_de: string;
-        story_ru: string;
+        name_en: string; name_de: string; name_ru: string;
+        story_en: string; story_de: string; story_ru: string;
       } | null = null;
       try {
         const trRes = await fetch("/api/product-translations", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({
-            name: editForm.name,
-            story: editForm.story,
-            sourceLang: editForm.contentSourceLang,
-          }),
+          body: JSON.stringify({ name: editForm.name, story: editForm.story, sourceLang: editForm.contentSourceLang }),
         });
         const trJson = (await trRes.json()) as { ok?: boolean; patch?: typeof trPatch };
         if (trJson.ok && trJson.patch) trPatch = trJson.patch;
-      } catch {
-        /* çeviri opsiyonel */
-      }
+      } catch { /* çeviri opsiyonel */ }
 
       const supabase = createClient();
       const { error } = await supabase
@@ -434,9 +472,23 @@ export default function SaticiUrunlerimPage() {
         .update({
           name: editForm.name,
           story: editForm.story,
-          personal_price: editForm.personal_price,
-          ...(trPatch ?? {}),
           content_source_locale: editForm.contentSourceLang,
+          jewelry_type: editForm.jewelryType,
+          personal_price: Number(editForm.personal_price) || 0,
+          commercial_price: editForm.licenseCommercial ? (Number(editForm.commercial_price) || null) : null,
+          dimensions: {
+            width: Number(editForm.width),
+            height: Number(editForm.height),
+            depth: Number(editForm.depth),
+            weight: Number(editForm.weight),
+          },
+          tags: editForm.tags,
+          glb_url: glbUrl,
+          stl_url: stlUrl,
+          thumbnail_url: thumbnailUrl,
+          images: newImageUrls.length > 0 ? newImageUrls : undefined,
+          image_alts: newImageUrls.length > 0 ? newImageAlts : undefined,
+          ...(trPatch ?? {}),
         })
         .eq("id", editingId);
 
@@ -450,7 +502,7 @@ export default function SaticiUrunlerimPage() {
     } finally {
       setEditSaving(false);
     }
-  }, [editingId, editForm, editSaving, loadProducts]);
+  }, [editingId, editSlug, editForm, editSaving, loadProducts]);
 
   const handleSave = useCallback(async () => {
     setError(null);
@@ -749,12 +801,32 @@ export default function SaticiUrunlerimPage() {
                 <button
                   type="button"
                   onClick={() => {
+                    const dims = p.dimensions ?? { width: 0, height: 0, depth: 0, weight: 0 };
+                    const imgs = p.images ?? [];
+                    const alts = p.image_alts ?? [];
                     setEditingId(p.id);
+                    setEditSlug(p.slug);
                     setEditForm({
                       name: p.name,
                       story: p.story ?? "",
-                      personal_price: p.personal_price ?? 0,
                       contentSourceLang: normalizeContentSourceLocale(p.content_source_locale),
+                      jewelryType: (p.jewelry_type as JewelryType) ?? "Yüzük",
+                      personal_price: String(p.personal_price ?? ""),
+                      licensePersonal: true,
+                      licenseCommercial: p.commercial_price != null,
+                      commercial_price: String(p.commercial_price ?? ""),
+                      width: String(dims.width ?? ""),
+                      height: String(dims.height ?? ""),
+                      depth: String(dims.depth ?? ""),
+                      weight: String(dims.weight ?? ""),
+                      tags: p.tags ?? [],
+                      glbFile: null, stlFile: null,
+                      image1: null, image2: null, image3: null, image4: null,
+                      alt1: alts[0] ?? "", alt2: alts[1] ?? "",
+                      alt3: alts[2] ?? "", alt4: alts[3] ?? "",
+                      glbUrl: p.glb_url,
+                      stlUrl: p.stl_url,
+                      imageUrls: imgs,
                     });
                   }}
                   className="mt-2 inline-flex items-center gap-1 rounded-md border border-amber-400/60 bg-amber-400 px-2 py-1 text-[11px] font-medium text-neutral-900 hover:bg-amber-300 hover:border-amber-300 transition-colors"
@@ -1010,44 +1082,131 @@ export default function SaticiUrunlerimPage() {
 
       {editingId && editForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="w-full max-w-md rounded-2xl border border-border/40 bg-[#0f1117] p-6">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-border/40 bg-[#0f1117] p-6">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="font-semibold text-foreground">{tp.editModalTitle}</h3>
               <button type="button" onClick={() => { setEditingId(null); setEditForm(null); }} className="text-muted hover:text-foreground">✕</button>
             </div>
-            <div className="flex flex-col gap-3">
-              <label className="block">
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {/* İsim */}
+              <div className="sm:col-span-2">
                 <span className="text-xs text-muted mb-1 block">{tp.fieldProductName}</span>
-                <input type="text" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="w-full rounded-lg border border-border/40 bg-black/20 px-3 py-2 text-sm text-foreground outline-none" />
-              </label>
-              <label className="block">
-                <span className="text-xs text-muted mb-1 block">{tp.fieldStoryLabel}</span>
-                <textarea value={editForm.story} onChange={(e) => setEditForm({ ...editForm, story: e.target.value })} rows={4} className="w-full rounded-lg border border-border/40 bg-black/20 px-3 py-2 text-sm text-foreground outline-none resize-none" />
-              </label>
-              <label className="block">
+                <input type="text" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className={inputCls} />
+              </div>
+
+              {/* Takı tipi */}
+              <div>
+                <span className="text-xs text-muted mb-1 block">{tp.fieldJewelryType}</span>
+                <select value={editForm.jewelryType} onChange={(e) => setEditForm({ ...editForm, jewelryType: e.target.value as JewelryType })} className={inputCls}>
+                  {(["Yüzük","Kolye","Bilezik","Küpe","Pandant","Broş"] as JewelryType[]).map((j) => <option key={j}>{j}</option>)}
+                </select>
+              </div>
+
+              {/* Dil */}
+              <div>
                 <span className="text-xs text-muted mb-1 block">{tp.fieldContentLanguage}</span>
-                <select
-                  className="w-full rounded-lg border border-border/40 bg-black/20 px-3 py-2 text-sm text-foreground outline-none"
-                  value={editForm.contentSourceLang}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      contentSourceLang: normalizeContentSourceLocale(e.target.value),
-                    })
-                  }
-                >
+                <select value={editForm.contentSourceLang} onChange={(e) => setEditForm({ ...editForm, contentSourceLang: normalizeContentSourceLocale(e.target.value) })} className={inputCls}>
                   <option value="tr">{tp.contentLangTr}</option>
                   <option value="en">{tp.contentLangEn}</option>
                   <option value="de">{tp.contentLangDe}</option>
                   <option value="ru">{tp.contentLangRu}</option>
                 </select>
-              </label>
-              <label className="block">
-                <span className="text-xs text-muted mb-1 block">{tp.fieldPrice}</span>
-                <input type="number" value={editForm.personal_price} onChange={(e) => setEditForm({ ...editForm, personal_price: Number(e.target.value) })} className="w-full rounded-lg border border-border/40 bg-black/20 px-3 py-2 text-sm text-foreground outline-none" />
-              </label>
+              </div>
+
+              {/* Hikaye */}
+              <div className="sm:col-span-2">
+                <span className="text-xs text-muted mb-1 block">{tp.fieldStoryLabel}</span>
+                <textarea value={editForm.story} onChange={(e) => setEditForm({ ...editForm, story: e.target.value })} rows={4} className={`${inputCls} resize-none`} />
+              </div>
+
+              {/* Boyutlar */}
+              <div>
+                <span className="text-xs text-muted mb-1 block">{tp.fieldWidth} (mm)</span>
+                <input type="number" value={editForm.width} onChange={(e) => setEditForm({ ...editForm, width: e.target.value })} className={inputCls} />
+              </div>
+              <div>
+                <span className="text-xs text-muted mb-1 block">{tp.fieldHeight} (mm)</span>
+                <input type="number" value={editForm.height} onChange={(e) => setEditForm({ ...editForm, height: e.target.value })} className={inputCls} />
+              </div>
+              <div>
+                <span className="text-xs text-muted mb-1 block">{tp.fieldDepth} (mm)</span>
+                <input type="number" value={editForm.depth} onChange={(e) => setEditForm({ ...editForm, depth: e.target.value })} className={inputCls} />
+              </div>
+              <div>
+                <span className="text-xs text-muted mb-1 block">{tp.fieldWeight} (g)</span>
+                <input type="number" value={editForm.weight} onChange={(e) => setEditForm({ ...editForm, weight: e.target.value })} className={inputCls} />
+              </div>
+
+              {/* Lisans & Fiyat */}
+              <div>
+                <label className="flex items-center gap-2 text-sm text-foreground mb-1">
+                  <input type="checkbox" checked={editForm.licensePersonal} onChange={(e) => setEditForm({ ...editForm, licensePersonal: e.target.checked })} className="accent-[#c9a84c]" />
+                  {tp.licensePersonal}
+                </label>
+                {editForm.licensePersonal && (
+                  <input type="number" placeholder={tp.fieldPrice} value={editForm.personal_price} onChange={(e) => setEditForm({ ...editForm, personal_price: e.target.value })} className={inputCls} />
+                )}
+              </div>
+              <div>
+                <label className="flex items-center gap-2 text-sm text-foreground mb-1">
+                  <input type="checkbox" checked={editForm.licenseCommercial} onChange={(e) => setEditForm({ ...editForm, licenseCommercial: e.target.checked })} className="accent-[#c9a84c]" />
+                  {tp.licenseCommercial}
+                </label>
+                {editForm.licenseCommercial && (
+                  <input type="number" placeholder={tp.fieldPrice} value={editForm.commercial_price} onChange={(e) => setEditForm({ ...editForm, commercial_price: e.target.value })} className={inputCls} />
+                )}
+              </div>
+
+              {/* Etiketler */}
+              <div className="sm:col-span-2">
+                <span className="text-xs text-muted mb-1 block">Etiketler</span>
+                <TagChipInput tags={editForm.tags} onChange={(tags) => setEditForm({ ...editForm, tags })} placeholder="etiket ekle, enter" />
+              </div>
+
+              {/* GLB */}
+              <div>
+                <span className="text-xs text-muted mb-1 block">GLB (değiştir)</span>
+                {editForm.glbUrl && !editForm.glbFile && (
+                  <p className="mb-1 truncate text-[11px] text-accent">{editForm.glbUrl.split("/").pop()}</p>
+                )}
+                <input type="file" accept=".glb" className={fileCls} onChange={(e) => setEditForm({ ...editForm, glbFile: e.target.files?.[0] ?? null })} />
+              </div>
+
+              {/* STL */}
+              <div>
+                <span className="text-xs text-muted mb-1 block">STL (değiştir)</span>
+                {editForm.stlUrl && !editForm.stlFile && (
+                  <p className="mb-1 truncate text-[11px] text-accent">{editForm.stlUrl.split("/").pop()}</p>
+                )}
+                <input type="file" accept=".stl" className={fileCls} onChange={(e) => setEditForm({ ...editForm, stlFile: e.target.files?.[0] ?? null })} />
+              </div>
+
+              {/* Görseller */}
+              {([1,2,3,4] as const).map((n) => {
+                const fileKey = `image${n}` as "image1"|"image2"|"image3"|"image4";
+                const altKey  = `alt${n}`   as "alt1"|"alt2"|"alt3"|"alt4";
+                const existingUrl = editForm.imageUrls[n - 1] ?? null;
+                return (
+                  <div key={n} className="sm:col-span-2 grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-xs text-muted mb-1 block">Görsel {n} (değiştir)</span>
+                      {existingUrl && !editForm[fileKey] && (
+                        <img src={existingUrl} alt={`görsel ${n}`} className="mb-1 h-14 w-14 rounded-lg object-cover border border-border/40" />
+                      )}
+                      <input type="file" accept="image/*" className={fileCls}
+                        onChange={(e) => setEditForm({ ...editForm, [fileKey]: e.target.files?.[0] ?? null })} />
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted mb-1 block">Alt {n}</span>
+                      <input type="text" value={editForm[altKey]} onChange={(e) => setEditForm({ ...editForm, [altKey]: e.target.value })} className={inputCls} />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            <div className="mt-4 flex gap-2">
+
+            <div className="mt-5 flex gap-2">
               <button type="button" onClick={() => { setEditingId(null); setEditForm(null); }} className="flex-1 rounded-lg border border-border/40 py-2 text-sm text-muted">{tp.discard}</button>
               <button type="button" onClick={() => void handleUpdate()} disabled={editSaving} className="flex-1 rounded-lg bg-[#c9a84c] py-2 text-sm font-semibold text-black disabled:opacity-50">
                 {editSaving ? tp.updating : tp.update}

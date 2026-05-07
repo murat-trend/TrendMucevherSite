@@ -113,25 +113,28 @@ export async function GET() {
   }
 
   const buyerIds = [...byBuyer.keys()];
-  let storeById: Record<string, string> = {};
+
+  type ProfileRow = { id: string; store_name: string | null; email: string | null; full_name: string | null };
+  let profileById: Record<string, ProfileRow> = {};
   if (buyerIds.length > 0) {
-    const { data: profs, error: pErr } = await supabase.from("profiles").select("id, store_name").in("id", buyerIds);
+    const { data: profs, error: pErr } = await supabase
+      .from("profiles")
+      .select("id, store_name, email, full_name")
+      .in("id", buyerIds);
     if (pErr) {
       return NextResponse.json({ error: pErr.message }, { status: 500 });
     }
-    storeById = Object.fromEntries(
-      (profs ?? []).map((r: { id: string; store_name: string | null }) => [
-        r.id,
-        typeof r.store_name === "string" ? r.store_name.trim() : "",
-      ]),
-    );
+    profileById = Object.fromEntries((profs ?? []).map((r: ProfileRow) => [r.id, r]));
   }
 
   const customers: AdminCustomerRow[] = buyerIds.map((buyer_id) => {
     const a = byBuyer.get(buyer_id)!;
-    const store = storeById[buyer_id] ?? "";
-    const display_name = a.latest_name || store || `${buyer_id.slice(0, 8)}…`;
-    const email = a.latest_email || "—";
+    const prof = profileById[buyer_id];
+    const store = typeof prof?.store_name === "string" ? prof.store_name.trim() : "";
+    const profFullName = typeof prof?.full_name === "string" ? prof.full_name.trim() : "";
+    const profEmail = typeof prof?.email === "string" ? prof.email.trim() : "";
+    const display_name = a.latest_name || profFullName || store || `${buyer_id.slice(0, 8)}…`;
+    const email = a.latest_email || profEmail || "—";
     return {
       buyer_id,
       display_name,
