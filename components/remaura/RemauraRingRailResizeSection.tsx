@@ -1,552 +1,545 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
-import { useRemauraBillingModal } from "@/components/remaura/RemauraBillingModalProvider";
-import { MeshRealtimeViewer, type MeshRealtimeViewerHandle } from "@/components/remaura/MeshRealtimeViewer";
-import { useRemauraCreditsCheck } from "@/hooks/useRemauraCreditsCheck";
-import { getRingSizeTargetMm, RING_SIZE_SWISS } from "@/lib/remaura/ring-size";
+import { useState, useEffect, useRef } from 'react';
+import * as THREE from 'three';
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import {
+  Upload,
+  Ruler,
+  Maximize2,
+  Download,
+  AlertTriangle,
+  Info,
+  Trash2,
+  Gauge
+} from 'lucide-react';
 
-type MeasureReport = {
-  error?: string;
-  outer_diameter_mm?: number;
-  inner_diameter_mm?: number;
-  inner_diameter_min_mm?: number;
-  inner_outer_ratio?: number;
-  inner_plausible?: boolean;
-  inner_std_mm?: number;
-  stability_pct?: number;
-  stability_warning?: boolean;
-  ring_axis?: string;
-  sections_used?: number;
-  sections_total?: number;
-  watertight?: boolean;
-  ring_size_eu?: number;
-  ring_size_us?: number;
-  ring_size_tr?: number;
-  ring_size_ref_mm?: number;
+// --- Constants & Data ---
+
+const RING_SIZES = [
+  { inner_dia_mm: 14.05, eu: 4, us: 3.0, tr: 4 },
+  { inner_dia_mm: 14.45, eu: 6, us: 3.5, tr: 6 },
+  { inner_dia_mm: 14.86, eu: 7, us: 4.0, tr: 7 },
+  { inner_dia_mm: 15.27, eu: 8, us: 4.5, tr: 8 },
+  { inner_dia_mm: 15.70, eu: 9, us: 5.0, tr: 9 },
+  { inner_dia_mm: 16.10, eu: 10, us: 5.5, tr: 10 },
+  { inner_dia_mm: 16.51, eu: 11, us: 6.0, tr: 11 },
+  { inner_dia_mm: 16.92, eu: 12, us: 6.5, tr: 12 },
+  { inner_dia_mm: 17.35, eu: 13, us: 7.0, tr: 13 },
+  { inner_dia_mm: 17.75, eu: 14, us: 7.5, tr: 14 },
+  { inner_dia_mm: 18.19, eu: 15, us: 8.0, tr: 15 },
+  { inner_dia_mm: 18.53, eu: 16, us: 8.5, tr: 16 },
+  { inner_dia_mm: 18.89, eu: 17, us: 9.0, tr: 17 },
+  { inner_dia_mm: 19.41, eu: 18, us: 9.5, tr: 18 },
+  { inner_dia_mm: 19.84, eu: 19, us: 10.0, tr: 19 },
+  { inner_dia_mm: 20.20, eu: 20, us: 10.5, tr: 20 },
+  { inner_dia_mm: 20.68, eu: 21, us: 11.0, tr: 21 },
+  { inner_dia_mm: 21.08, eu: 22, us: 11.5, tr: 22 },
+  { inner_dia_mm: 21.49, eu: 23, us: 12.0, tr: 23 },
+  { inner_dia_mm: 21.89, eu: 24, us: 12.5, tr: 24 },
+  { inner_dia_mm: 22.33, eu: 25, us: 13.0, tr: 25 },
+  { inner_dia_mm: 22.60, eu: 26, us: 13.5, tr: 26 },
+  { inner_dia_mm: 23.06, eu: 27, us: 14.0, tr: 27 },
+  { inner_dia_mm: 23.47, eu: 28, us: 14.5, tr: 28 },
+  { inner_dia_mm: 23.87, eu: 29, us: 15.0, tr: 29 },
+  { inner_dia_mm: 24.27, eu: 30, us: 15.5, tr: 30 },
+  { inner_dia_mm: 24.68, eu: 31, us: 16.0, tr: 31 },
+  { inner_dia_mm: 25.08, eu: 32, us: 16.5, tr: 32 },
+  { inner_dia_mm: 25.50, eu: 33, us: 17.0, tr: 33 },
+  { inner_dia_mm: 25.94, eu: 34, us: 17.5, tr: 34 },
+  { inner_dia_mm: 26.30, eu: 35, us: 18.0, tr: 35 },
+  { inner_dia_mm: 26.71, eu: 36, us: 18.5, tr: 36 },
+  { inner_dia_mm: 27.11, eu: 37, us: 19.0, tr: 37 },
+  { inner_dia_mm: 27.53, eu: 38, us: 19.5, tr: 38 },
+  { inner_dia_mm: 27.93, eu: 39, us: 20.0, tr: 39 },
+  { inner_dia_mm: 28.33, eu: 40, us: 20.5, tr: 40 },
+];
+
+type RingSize = { inner_dia_mm: number; eu: number; us: number; tr: number };
+
+type Analysis = {
+  inner_diameter_mm: number;
+  outer_diameter_mm: number;
+  ring_axis: string;
+  size_details: RingSize;
+  watertight: boolean;
+  stability_pct: number;
 };
 
-type ScaleReport = {
-  scaled?: boolean;
-  scale_factor?: number;
-  pre?: MeasureReport;
-  post?: MeasureReport | null;
-  error_mm?: number;
-  warning?: string | null;
-  validation_ok?: boolean | null;
-  tolerance_mm?: number;
-};
+const findClosestRingSize = (inner_mm: number): RingSize =>
+  RING_SIZES.reduce((prev, curr) =>
+    Math.abs(curr.inner_dia_mm - inner_mm) < Math.abs(prev.inner_dia_mm - inner_mm) ? curr : prev
+  );
 
-const EU_SIZES = Object.keys(RING_SIZE_SWISS)
-  .map(Number)
-  .sort((a, b) => a - b);
-
-function decodeRingReportHeader(b64: string | null): ScaleReport | null {
-  if (!b64) return null;
-  try {
-    const bin = atob(b64);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const text = new TextDecoder("utf-8").decode(bytes);
-    const o = JSON.parse(text) as ScaleReport & { log?: string };
-    delete o.log;
-    return o;
-  } catch {
-    return null;
-  }
-}
-
-function buildScaledFilename(seq: number): string {
-  const now = new Date();
-  const dd = String(now.getDate()).padStart(2, "0");
-  const mo = String(now.getMonth() + 1).padStart(2, "0");
-  const yyyy = now.getFullYear();
-  const HH = String(now.getHours()).padStart(2, "0");
-  const mm = String(now.getMinutes()).padStart(2, "0");
-  const ss = String(now.getSeconds()).padStart(2, "0");
-  const n = String(seq).padStart(4, "0");
-  return `remaura-ring-rail-${dd}${mo}${yyyy}-${HH}${mm}${ss}-${n}.stl`;
-}
+// --- Core Component ---
 
 export function RemauraRingRailResizeSection() {
-  const billingUi = useRemauraBillingModal();
-  const { checkCredits } = useRemauraCreditsCheck();
-  const [uploadedModel, setUploadedModel] = useState<File | null>(null);
-  const [uploadBlobUrl, setUploadBlobUrl] = useState<string | null>(null);
-  const [scaledBlobUrl, setScaledBlobUrl] = useState<string | null>(null);
-  const [scaledBlob, setScaledBlob] = useState<Blob | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const [mesh, setMesh] = useState<THREE.BufferGeometry | null>(null);
+  const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [targetSize, setTargetSize] = useState<string>('');
+  const [scaleMode, setScaleMode] = useState<'mm' | 'size'>('mm');
 
-  const [isMeasuring, setIsMeasuring] = useState(false);
-  const [measureReport, setMeasureReport] = useState<MeasureReport | null>(null);
-  const [measureError, setMeasureError] = useState<string | null>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const meshObjRef = useRef<THREE.Mesh | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
 
-  const [targetInnerMm, setTargetInnerMm] = useState("");
-  const [euRingSize, setEuRingSize] = useState<number | "">("");
-
-  const [isScaling, setIsScaling] = useState(false);
-  const [scaleReport, setScaleReport] = useState<ScaleReport | null>(null);
-
-  const inputRef = useRef<HTMLInputElement>(null);
-  const viewerRef = useRef<MeshRealtimeViewerHandle | null>(null);
-  const scaledViewerRef = useRef<MeshRealtimeViewerHandle | null>(null);
-  const downloadSeqRef = useRef(1);
-
-  const handleFile = useCallback((file: File) => {
-    if (!file.name.toLowerCase().endsWith(".stl")) {
-      setError("Sadece STL dosyaları kabul edilir.");
-      return;
-    }
-    setUploadedModel(file);
-    setUploadBlobUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(file);
-    });
-    setScaledBlobUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
-    setScaledBlob(null);
-    setScaleReport(null);
-    setMeasureReport(null);
-    setMeasureError(null);
-    setError(null);
-  }, []);
-
+  // Initialize Three.js
   useEffect(() => {
-    if (!uploadedModel) {
-      setMeasureReport(null);
-      setMeasureError(null);
-      setIsMeasuring(false);
-      return;
-    }
+    if (!viewportRef.current) return;
 
-    let cancelled = false;
-    setIsMeasuring(true);
-    setMeasureError(null);
+    const width = viewportRef.current.clientWidth;
+    const height = viewportRef.current.clientHeight;
 
-    const fd = new FormData();
-    fd.append("file", uploadedModel);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf3f4f6);
+    sceneRef.current = scene;
 
-    fetch("/api/remaura/ring-rail/measure", { method: "POST", body: fd })
-      .then(async (res) => {
-        const data = (await res.json()) as MeasureReport & { error?: string; log?: string };
-        if (cancelled) return;
-        if (!res.ok) {
-          setMeasureReport(null);
-          setMeasureError(data.error ?? "Ölçüm başarısız.");
-          return;
-        }
-        setMeasureReport(data);
-        if (typeof data.inner_diameter_mm === "number") {
-          setTargetInnerMm(data.inner_diameter_mm.toFixed(3));
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setMeasureError("Ağ hatası veya sunucu yanıt vermedi.");
-      })
-      .finally(() => {
-        if (!cancelled) setIsMeasuring(false);
-      });
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+    camera.position.set(50, 50, 50);
+    cameraRef.current = camera;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    viewportRef.current.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controlsRef.current = controls;
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(100, 100, 50);
+    scene.add(dirLight);
+
+    const grid = new THREE.GridHelper(100, 20, 0xccd1d9, 0xe5e7eb);
+    scene.add(grid);
+
+    const animate = () => {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    const handleResize = () => {
+      if (!viewportRef.current || !cameraRef.current || !rendererRef.current) return;
+      const w = viewportRef.current.clientWidth;
+      const h = viewportRef.current.clientHeight;
+      cameraRef.current.aspect = w / h;
+      cameraRef.current.updateProjectionMatrix();
+      rendererRef.current.setSize(w, h);
+    };
+    window.addEventListener('resize', handleResize);
 
     return () => {
-      cancelled = true;
+      window.removeEventListener('resize', handleResize);
+      renderer.dispose();
     };
-  }, [uploadedModel]);
-
-  const handleInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) handleFile(file);
-      e.target.value = "";
-    },
-    [handleFile]
-  );
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      const file = e.dataTransfer.files?.[0];
-      if (file) handleFile(file);
-    },
-    [handleFile]
-  );
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
   }, []);
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
+  // --- Measurement Logic ---
 
-  const handleClear = useCallback(() => {
-    setUploadedModel(null);
-    if (uploadBlobUrl) URL.revokeObjectURL(uploadBlobUrl);
-    setUploadBlobUrl(null);
-    if (scaledBlobUrl) URL.revokeObjectURL(scaledBlobUrl);
-    setScaledBlobUrl(null);
-    setScaledBlob(null);
-    setMeasureReport(null);
-    setMeasureError(null);
-    setScaleReport(null);
-    setTargetInnerMm("");
-    setEuRingSize("");
-    setError(null);
-  }, [uploadBlobUrl, scaledBlobUrl]);
+  const analyzeMesh = (geometry: THREE.BufferGeometry): Analysis => {
+    geometry.computeBoundingBox();
+    const box = geometry.boundingBox!;
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
 
-  const onEuSizeChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    const v = e.target.value;
-    if (v === "") {
-      setEuRingSize("");
-      return;
+    const maxDim = Math.max(size.x, size.y, size.z);
+    let scale = 1.0;
+    if (maxDim < 1.0) scale = 1000.0;
+    else if (maxDim < 10.0) scale = 10.0;
+
+    if (scale !== 1.0) {
+      geometry.scale(scale, scale, scale);
+      geometry.computeBoundingBox();
+      geometry.boundingBox!.getSize(size);
+      geometry.boundingBox!.getCenter(center);
     }
-    const n = parseInt(v, 10);
-    setEuRingSize(n);
-    setTargetInnerMm(getRingSizeTargetMm(n).toFixed(3));
-  }, []);
 
-  const handleScale = useCallback(async () => {
-    if (!uploadedModel) return;
-    const creditOk = await checkCredits(1, billingUi.openUnauthorized, billingUi.openInsufficientCredits);
-    if (!creditOk) return;
-    const mm = parseFloat(targetInnerMm.replace(",", "."));
-    if (!Number.isFinite(mm) || mm <= 0 || mm > 50) {
-      setError("Hedef iç çap 0–50 mm arasında geçerli bir sayı olmalı.");
-      return;
-    }
-    setError(null);
-    setIsScaling(true);
-    setScaleReport(null);
-    setScaledBlobUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
-    setScaledBlob(null);
+    const pos = geometry.attributes.position;
+    const vCount = pos.count;
 
-    try {
-      const fd = new FormData();
-      fd.append("file", uploadedModel);
-      fd.append("targetInnerMm", String(mm));
+    const analyzeAxis = (axisName: string) => {
+      const dists = new Float32Array(vCount);
+      let avgDist = 0;
 
-      const res = await fetch("/api/remaura/ring-rail/scale", { method: "POST", body: fd });
+      for (let i = 0; i < vCount; i++) {
+        const x = pos.getX(i) - center.x;
+        const y = pos.getY(i) - center.y;
+        const z = pos.getZ(i) - center.z;
 
-      if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        setError(data.error ?? "Boyutlandırma başarısız.");
-        return;
+        let d: number;
+        if (axisName === 'X') d = Math.sqrt(y * y + z * z);
+        else if (axisName === 'Y') d = Math.sqrt(x * x + z * z);
+        else d = Math.sqrt(x * x + y * y);
+
+        dists[i] = d;
+        avgDist += d;
       }
+      avgDist /= vCount;
 
-      const blob = await res.blob();
-      const hdr = res.headers.get("x-ring-report");
-      const rep = decodeRingReportHeader(hdr);
-      setScaleReport(rep);
-      setScaledBlob(blob);
-      setScaledBlobUrl(URL.createObjectURL(blob));
-    } catch {
-      setError("Boyutlandırma isteği başarısız.");
-    } finally {
-      setIsScaling(false);
+      const sortedDists = Array.from(dists).sort((a, b) => a - b);
+      const innerIdxStart = Math.floor(vCount * 0.05);
+      const innerIdxEnd = Math.floor(vCount * 0.15);
+      const innerRadius = sortedDists[Math.floor((innerIdxStart + innerIdxEnd) / 2)];
+      const outerRadius = sortedDists[Math.floor(vCount * 0.95)];
+
+      const sampleSet = sortedDists.slice(innerIdxStart, innerIdxEnd);
+      const sampleMean = sampleSet.reduce((a, b) => a + b, 0) / sampleSet.length;
+      const sampleVar = sampleSet.reduce((a, b) => a + Math.pow(b - sampleMean, 2), 0) / sampleSet.length;
+      const stability = 1.0 / (1.0 + Math.sqrt(sampleVar));
+
+      return { inner_dia: innerRadius * 2, outer_dia: outerRadius * 2, stability, axis: axisName };
+    };
+
+    const results = [analyzeAxis('X'), analyzeAxis('Y'), analyzeAxis('Z')];
+    const best = results.reduce((prev, curr) => curr.stability > prev.stability ? curr : prev);
+
+    return {
+      inner_diameter_mm: best.inner_dia,
+      outer_diameter_mm: best.outer_dia,
+      ring_axis: best.axis,
+      size_details: findClosestRingSize(best.inner_dia),
+      watertight: true,
+      stability_pct: (1 - best.stability) * 100,
+    };
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setLoading(true);
+    setError(null);
+    setAnalysis(null);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const loader = new STLLoader();
+        const geometry = loader.parse(event.target!.result as ArrayBuffer);
+
+        const report = analyzeMesh(geometry);
+        setAnalysis(report);
+        setTargetSize(report.inner_diameter_mm.toFixed(2));
+
+        if (meshObjRef.current && sceneRef.current) {
+          sceneRef.current.remove(meshObjRef.current);
+        }
+
+        const material = new THREE.MeshPhongMaterial({
+          color: 0x94a3b8,
+          specular: 0x111111,
+          shininess: 200,
+          side: THREE.DoubleSide,
+        });
+
+        const meshObj = new THREE.Mesh(geometry, material);
+
+        // Auto-rotate based on detected ring axis
+        if (report.ring_axis === 'X') {
+          meshObj.rotation.z = Math.PI / 2;
+        } else if (report.ring_axis === 'Z') {
+          meshObj.rotation.x = Math.PI / 2;
+        }
+        // Y: no rotation needed
+
+        meshObjRef.current = meshObj;
+        sceneRef.current!.add(meshObj);
+
+        const box = geometry.boundingBox!;
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+
+        meshObj.position.sub(center);
+
+        const maxDim = Math.max(size.x, size.y, size.z);
+        cameraRef.current!.position.set(maxDim * 2, maxDim * 2, maxDim * 2);
+        cameraRef.current!.lookAt(0, 0, 0);
+        controlsRef.current!.target.set(0, 0, 0);
+
+        setMesh(geometry);
+      } catch (err) {
+        setError("Failed to parse STL file. Ensure it is a valid binary or ASCII STL.");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const downloadScaledMesh = () => {
+    if (!mesh || !analysis) return;
+
+    const scaleFactor = parseFloat(targetSize) / analysis.inner_diameter_mm;
+    const scaledGeo = mesh.clone();
+    scaledGeo.scale(scaleFactor, scaleFactor, scaleFactor);
+
+    const meshToExport = new THREE.Mesh(scaledGeo);
+    const exporter = new STLExporter();
+    const result = exporter.parse(meshToExport, { binary: true });
+
+    const blob = new Blob([result], { type: 'application/octet-stream' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `resized_ring_${targetSize}mm.stl`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
+  const clear = () => {
+    setMesh(null);
+    setAnalysis(null);
+    if (meshObjRef.current && sceneRef.current) {
+      sceneRef.current.remove(meshObjRef.current);
+      meshObjRef.current = null;
     }
-  }, [billingUi, checkCredits, uploadedModel, targetInnerMm]);
-
-  const handleDownloadScaled = useCallback(() => {
-    if (!scaledBlob) return;
-    const name = buildScaledFilename(downloadSeqRef.current++);
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(scaledBlob);
-    a.download = name;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }, [scaledBlob]);
+  };
 
   return (
-    <section className="mx-auto w-full max-w-6xl">
-      <div className="mb-4 text-center">
-        <h2 className="text-lg font-bold uppercase tracking-widest text-amber-400">
-          Ring Rail Resize
-        </h2>
-        <p className="mt-1 text-[10px] text-muted">
-          Yüzük ve ray modellerini hassas ölçülendirme
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="flex flex-col rounded-xl border border-border bg-black/20 p-3 dark:border-white/10">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
-              Model Yükle
-            </span>
+    <div className="flex flex-col h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
+      <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between z-10 shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="bg-indigo-600 p-2 rounded-lg">
+            <Gauge className="text-white w-5 h-5" />
           </div>
-
-          {!uploadedModel ? (
-            <label
-              htmlFor="ring-rail-upload"
-              className={`flex h-[480px] cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed transition-colors xl:h-[560px] ${
-                isDragging
-                  ? "border-amber-400 bg-amber-500/10"
-                  : "border-border/50 bg-black/10 hover:border-amber-400/50"
-              }`}
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-            >
-              <input
-                id="ring-rail-upload"
-                ref={inputRef}
-                type="file"
-                accept=".stl"
-                className="hidden"
-                onChange={handleInputChange}
-              />
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-muted"
-              >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" x2="12" y1="3" y2="15" />
-              </svg>
-              <span className="text-sm font-medium text-foreground">STL Model Yükle</span>
-              <span className="text-[10px] text-muted">Sadece .stl formatı</span>
-            </label>
-          ) : (
-            <div className="relative h-[480px] overflow-hidden rounded-xl border border-border bg-black/20 dark:border-white/10 xl:h-[560px]">
-              <div className="relative z-[1] h-full w-full">
-                <MeshRealtimeViewer
-                  ref={viewerRef}
-                  modelUrl={uploadBlobUrl}
-                  zScaleMm={1.0}
-                  fileType="stl"
-                />
-              </div>
-              <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-[2] bg-gradient-to-t from-black/80 to-transparent px-3 pb-2.5 pt-10">
-                <p className="truncate text-xs font-semibold text-white">{uploadedModel.name}</p>
-                <p className="text-[10px] text-white/50">
-                  {(uploadedModel.size / (1024 * 1024)).toFixed(2)} MB
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleClear}
-                className="absolute right-2 top-2 z-[2] flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white transition-colors hover:bg-red-600 focus:outline-none"
-                aria-label="Modeli kaldır"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M18 6 6 18" />
-                  <path d="m6 6 12 12" />
-                </svg>
-              </button>
-            </div>
-          )}
+          <h1 className="text-xl font-bold tracking-tight">Ring Rail Measure</h1>
         </div>
-
-        <div className="flex flex-col rounded-xl border border-border bg-black/20 p-3 dark:border-white/10">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
-              Boyutlandırılmış Model
-            </span>
-          </div>
-          {scaledBlobUrl ? (
-            <div className="relative h-[480px] overflow-hidden rounded-xl border border-border bg-black/20 dark:border-white/10 xl:h-[560px]">
-              <div className="relative z-[1] h-full w-full">
-                <MeshRealtimeViewer
-                  ref={scaledViewerRef}
-                  modelUrl={scaledBlobUrl}
-                  zScaleMm={1.0}
-                  fileType="stl"
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="relative flex h-[480px] items-center justify-center rounded-lg border border-dashed border-border/70 bg-[#0b0f14] xl:h-[560px]">
-              <span className="text-xs text-muted/50">
-                {isScaling ? "Boyutlandırılıyor…" : "Ölçüm yapıp boyutlandırın"}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-4 flex flex-col gap-3">
-        {error ? <p className="text-xs text-red-600 dark:text-red-400">{error}</p> : null}
-
-        {uploadedModel ? (
-          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-            <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">
-              Ölçüm
-            </p>
-            {isMeasuring ? (
-              <p className="text-xs text-muted">Kesit analizi çalışıyor…</p>
-            ) : measureError ? (
-              <p className="text-xs text-amber-600 dark:text-amber-400">{measureError}</p>
-            ) : measureReport ? (
-              <div className="grid gap-1 text-[11px] text-foreground/90">
-                <p>
-                  Dış çap: <span className="font-mono">{measureReport.outer_diameter_mm} mm</span>
-                </p>
-                <p>
-                  İç çap (nominal):{" "}
-                  <span className="font-mono">{measureReport.inner_diameter_mm} mm</span>
-                </p>
-                <p>
-                  İç çap (min):{" "}
-                  <span className="font-mono">{measureReport.inner_diameter_min_mm} mm</span>
-                </p>
-                <p>
-                  Eksen: {measureReport.ring_axis} · Kesit: {measureReport.sections_used}/
-                  {measureReport.sections_total}
-                </p>
-                <p>
-                  EU / US / TR (tahmin):{" "}
-                  <span className="font-mono">
-                    {measureReport.ring_size_eu} / {measureReport.ring_size_us} /{" "}
-                    {measureReport.ring_size_tr}
-                  </span>
-                </p>
-                {measureReport.inner_outer_ratio != null ? (
-                  <p className="text-muted">
-                    İç/dış çap oranı:{" "}
-                    <span className="font-mono">{measureReport.inner_outer_ratio}</span>
-                  </p>
-                ) : null}
-                {measureReport.inner_plausible === false ? (
-                  <p className="text-amber-500">
-                    Uyarı: Ölçülen iç çap bu model için şüpheli görünüyor (oran veya mm aralığı
-                    tipik yüzük dışı). Boyutlandırmadan önce değeri kontrol edin.
-                  </p>
-                ) : null}
-                <p className="text-muted">
-                  Mesh: {measureReport.watertight ? "kapalı (watertight)" : "açık"}
-                </p>
-                {measureReport.stability_warning ? (
-                  <p className="text-amber-500">
-                    Uyarı: İç çap kesitler arası sapma %{measureReport.stability_pct?.toFixed(1)}{" "}
-                    (eşik %5). Eksen veya model karmaşık olabilir.
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">
-            Boyut Ayarları
-          </p>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <label className="flex min-w-0 flex-1 flex-col gap-1">
-              <span className="text-[10px] text-muted">EU numara (referans)</span>
-              <select
-                value={euRingSize === "" ? "" : String(euRingSize)}
-                onChange={onEuSizeChange}
-                disabled={!uploadedModel || isMeasuring}
-                className="rounded-lg border border-border bg-black/30 px-2 py-1.5 text-xs text-foreground [color-scheme:light] disabled:opacity-50"
-              >
-                <option value="" className="bg-white text-zinc-900">
-                  — Seçin —
-                </option>
-                {EU_SIZES.map((s) => (
-                  <option key={s} value={s} className="bg-white text-zinc-900">
-                    {s} ({getRingSizeTargetMm(s).toFixed(2)} mm iç çap)
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex min-w-0 flex-1 flex-col gap-1">
-              <span className="text-[10px] text-muted">Hedef iç çap (mm)</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={targetInnerMm}
-                onChange={(e) => setTargetInnerMm(e.target.value)}
-                disabled={!uploadedModel || isMeasuring}
-                className="rounded-lg border border-border bg-black/30 px-2 py-1.5 text-xs font-mono text-foreground disabled:opacity-50"
-                placeholder="örn. 17.35"
-              />
-            </label>
+        <div className="flex items-center gap-4">
+          {mesh && (
             <button
-              type="button"
-              onClick={handleScale}
-              disabled={!uploadedModel || isMeasuring || isScaling || !measureReport}
-              className="shrink-0 rounded-lg bg-amber-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={clear}
+              className="text-slate-500 hover:text-red-600 transition-colors flex items-center gap-2 text-sm font-medium"
             >
-              {isScaling ? "İşleniyor…" : "Boyutlandır"}
+              <Trash2 className="w-4 h-4" />
+              Reset
             </button>
-          </div>
+          )}
         </div>
+      </header>
 
-        {scaleReport ? (
-          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-            <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">
-              Doğrulama
-            </p>
-            <div className="text-[11px] space-y-1">
-              <p>
-                Ölçek: <span className="font-mono">{scaleReport.scale_factor}</span>
-              </p>
-              {scaleReport.post ? (
-                <>
-                  <p>
-                    Son iç çap:{" "}
-                    <span className="font-mono">{scaleReport.post.inner_diameter_mm} mm</span>
-                  </p>
-                  <p>
-                    Hata:{" "}
-                    <span className="font-mono">
-                      {scaleReport.error_mm !== undefined ? `${scaleReport.error_mm >= 0 ? "+" : ""}${scaleReport.error_mm} mm` : "—"}
-                    </span>
-                  </p>
-                  <p>
-                    Tolerans: ±{scaleReport.tolerance_mm ?? 0.03} mm —{" "}
-                    {scaleReport.validation_ok === true ? (
-                      <span className="text-emerald-500">OK</span>
-                    ) : scaleReport.validation_ok === false ? (
-                      <span className="text-amber-500">Uyarı</span>
-                    ) : (
-                      <span className="text-muted">—</span>
-                    )}
-                  </p>
-                </>
-              ) : (
-                <p className="text-amber-500">Son ölçüm alınamadı.</p>
-              )}
-              {scaleReport.warning ? (
-                <p className="text-amber-500">{scaleReport.warning}</p>
-              ) : null}
+      <main className="flex flex-1 overflow-hidden">
+        <aside className="w-96 bg-white border-r border-slate-200 overflow-y-auto p-6 flex flex-col gap-6 shrink-0">
+          {!mesh ? (
+            <div className="flex flex-col gap-4">
+              <label className="group flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-slate-300 rounded-2xl cursor-pointer bg-slate-50 hover:bg-indigo-50 hover:border-indigo-300 transition-all">
+                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                  <div className="bg-white p-4 rounded-full shadow-sm group-hover:scale-110 transition-transform mb-4">
+                    <Upload className="w-8 h-8 text-indigo-600" />
+                  </div>
+                  <p className="mb-2 text-sm text-slate-700 font-semibold">Click or drag STL file</p>
+                  <p className="text-xs text-slate-500">Binary or ASCII STL (max 50MB)</p>
+                </div>
+                <input type="file" className="hidden" accept=".stl" onChange={handleFileUpload} />
+              </label>
+
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 flex gap-3">
+                <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800 leading-relaxed">
+                  This tool uses vertex analysis to detect the finger hole. Ensure the ring is centered for best results.
+                </p>
+              </div>
             </div>
-            {scaledBlob ? (
-              <button
-                type="button"
-                onClick={handleDownloadScaled}
-                className="mt-3 w-full rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-500/20"
-              >
-                STL indir
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-    </section>
+          ) : (
+            <div className="flex flex-col gap-6">
+              <section className="bg-slate-50 rounded-2xl p-5 border border-slate-100">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                    <Ruler className="w-4 h-4" />
+                    Auto-Measurement
+                  </h2>
+                  <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                    Detected
+                  </span>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex justify-between items-end border-b border-slate-200 pb-3">
+                    <span className="text-sm text-slate-600 font-medium">Inner Diameter</span>
+                    <span className="text-2xl font-black text-indigo-600">
+                      {analysis!.inner_diameter_mm.toFixed(2)}
+                      <span className="text-xs ml-1 font-bold text-slate-400">mm</span>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white p-3 rounded-xl border border-slate-200">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">TR / EU Size</p>
+                      <p className="text-lg font-bold">{analysis!.size_details.tr}</p>
+                    </div>
+                    <div className="bg-white p-3 rounded-xl border border-slate-200">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">US Size</p>
+                      <p className="text-lg font-bold">{analysis!.size_details.us}</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-slate-500">Confidence Score</span>
+                      <span className="font-bold text-slate-700">{Math.round(100 - analysis!.stability_pct)}%</span>
+                    </div>
+                    <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-indigo-500 h-full transition-all duration-1000"
+                        style={{ width: `${Math.min(100, Math.max(0, 100 - analysis!.stability_pct))}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="flex flex-col gap-4">
+                <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                  <Maximize2 className="w-4 h-4" />
+                  Resize Rail
+                </h2>
+
+                <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex bg-white rounded-lg p-1 border border-slate-200 shadow-sm">
+                      <button
+                        onClick={() => setScaleMode('mm')}
+                        className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${scaleMode === 'mm' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}
+                      >
+                        MM
+                      </button>
+                      <button
+                        onClick={() => setScaleMode('size')}
+                        className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${scaleMode === 'size' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}
+                      >
+                        Size
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {scaleMode === 'mm' ? (
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 block mb-2 uppercase">Target Inner Diameter</label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={targetSize}
+                            onChange={(e) => setTargetSize(e.target.value)}
+                            className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-bold text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                          />
+                          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">mm</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 block mb-2 uppercase">Target TR / EU Size</label>
+                        <select
+                          className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-bold text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none transition-all cursor-pointer"
+                          value={RING_SIZES.find(s => s.inner_dia_mm.toFixed(2) === parseFloat(targetSize).toFixed(2))?.eu ?? ''}
+                          onChange={(e) => {
+                            const size = RING_SIZES.find(s => s.eu === parseInt(e.target.value));
+                            if (size) setTargetSize(size.inner_dia_mm.toFixed(2));
+                          }}
+                        >
+                          {RING_SIZES.map(s => (
+                            <option key={s.eu} value={s.eu}>Size {s.eu} ({s.inner_dia_mm}mm)</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    <div className="bg-white/80 rounded-xl p-3 border border-indigo-100 flex items-center justify-between">
+                      <span className="text-xs font-medium text-slate-600">Scale Factor</span>
+                      <span className="text-sm font-black text-indigo-700">
+                        x{(parseFloat(targetSize) / (analysis?.inner_diameter_mm ?? 1)).toFixed(4)}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={downloadScaledMesh}
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2 mt-2 active:scale-95"
+                    >
+                      <Download className="w-5 h-5" />
+                      Export Resized STL
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <div className="mt-auto pt-6 text-center">
+                <p className="text-[10px] text-slate-400 font-medium">
+                  Analysis Engine v1.2.1 • Client-side
+                </p>
+              </div>
+            </div>
+          )}
+        </aside>
+
+        <section className="flex-1 relative bg-slate-100">
+          <div ref={viewportRef} className="w-full h-full cursor-move" />
+
+          {loading && (
+            <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex flex-col items-center justify-center z-20">
+              <div className="relative">
+                <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" />
+                <Gauge className="absolute inset-0 m-auto w-6 h-6 text-indigo-600 animate-pulse" />
+              </div>
+              <p className="mt-4 text-slate-700 font-bold animate-pulse tracking-wide">Analyzing Rail Geometry...</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="absolute inset-0 flex items-center justify-center p-6 z-30">
+              <div className="bg-white border border-red-100 rounded-2xl shadow-2xl p-8 max-w-md text-center">
+                <div className="bg-red-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <AlertTriangle className="w-8 h-8 text-red-600" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 mb-2">Analysis Error</h3>
+                <p className="text-slate-600 text-sm mb-6">{error}</p>
+                <button
+                  onClick={() => setError(null)}
+                  className="bg-slate-900 text-white font-bold px-6 py-2 rounded-lg hover:bg-slate-800 transition-colors"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!mesh && !loading && (
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+              <div className="text-center opacity-30 select-none">
+                <Ruler className="w-24 h-24 mx-auto text-slate-400 mb-4" />
+                <p className="text-2xl font-black text-slate-400 uppercase tracking-tighter">Preview Environment</p>
+              </div>
+            </div>
+          )}
+
+          {mesh && !loading && (
+            <div className="absolute bottom-6 right-6 flex flex-col gap-2">
+              <div className="bg-white/90 backdrop-blur border border-slate-200 rounded-lg px-4 py-2 shadow-sm pointer-events-none">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Model Stats</p>
+                <p className="text-xs font-bold text-slate-700">
+                  {mesh.attributes.position.count.toLocaleString()} Vertices • {analysis?.ring_axis}-Axis Hole
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
+      </main>
+    </div>
   );
 }
