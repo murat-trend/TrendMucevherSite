@@ -11,14 +11,20 @@ import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { createClient } from "@/utils/supabase/client";
 import { CurrencySwitcher } from "@/components/CurrencySwitcher";
 
-const NAV_ITEMS = [
-  { href: "/", key: "home" as const },
-  { href: "/modeller", key: "modeller" as const },
-  { href: "/ozel-siparis", key: "customOrder" as const },
-  { href: "/remaura", key: "remaura" as const, adminOnly: true },
-  { href: "/gunluk", key: "daily" as const },
-  { href: "/iletisim", key: "contact" as const },
-  { href: "/admin", key: "superAdmin" as const, adminOnly: true },
+type NavKey = "home" | "modeller" | "customOrder" | "remaura" | "daily" | "contact" | "superAdmin";
+type NavItem =
+  | { href: string; key: NavKey; label?: never; adminOnly?: boolean }
+  | { href: string; key?: never; label: string; adminOnly?: boolean };
+
+const NAV_ITEMS: NavItem[] = [
+  { href: "/", key: "home" },
+  { href: "/modeller", key: "modeller" },
+  { href: "/ozel-siparis", key: "customOrder" },
+  { href: "/egitim/matrixgold", label: "Eğitim" },
+  { href: "/remaura", key: "remaura", adminOnly: true },
+  { href: "/gunluk", key: "daily" },
+  { href: "/iletisim", key: "contact" },
+  { href: "/admin", key: "superAdmin", adminOnly: true },
 ];
 
 type HeaderSession = {
@@ -196,7 +202,7 @@ export function Header() {
                         : "text-[14px] font-medium tracking-[0.02em] text-foreground/80 transition-colors hover:text-foreground"
                     }
                   >
-                    {t.nav[item.key]}
+                    {item.label ?? t.nav[item.key!]}
                   </Link>
                 );
               })}
@@ -560,7 +566,7 @@ export function Header() {
                         : "border-b border-border/60 py-4 text-[14px] font-medium tracking-[0.02em] text-foreground transition-colors last:border-b-0 hover:bg-foreground/[0.02]"
                     }
                   >
-                    {t.nav[item.key]}
+                    {item.label ?? t.nav[item.key!]}
                   </Link>
                 );
               })}
