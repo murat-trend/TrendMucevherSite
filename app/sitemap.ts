@@ -1,6 +1,8 @@
 import { MetadataRoute } from "next";
 import { createClient } from "@supabase/supabase-js";
 
+export const dynamic = "force-dynamic";
+
 const BASE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://trendmucevher.com").replace(/\/$/, "");
 
 function getSupabase() {
