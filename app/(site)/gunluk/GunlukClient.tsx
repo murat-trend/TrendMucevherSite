@@ -6,6 +6,7 @@ import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { BLOG_CATEGORIES } from "@/lib/blog/categories";
 import type { PostRow } from "@/lib/blog/types";
 import type { Locale } from "@/lib/i18n/translations";
+import { pickLocalizedPostText } from "@/lib/blog/post-translations-anthropic";
 
 const LOCALE_TAG: Record<Locale, string> = {
   tr: "tr-TR",
@@ -53,6 +54,7 @@ function PostCard({ post }: { post: PostRow }) {
   const g = t.gunluk;
   const href = `/gunluk/${post.slug}`;
   const date = post.published_at || post.created_at;
+  const { title, excerpt } = pickLocalizedPostText(locale, post.translations, post);
   return (
     <article className="group flex flex-col overflow-hidden rounded-2xl border border-white/[0.1] bg-gradient-to-br from-[#12141a]/95 via-[#0c0d11] to-[#08090c] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:border-[#c69575]/35">
       <Link href={href} className="relative aspect-[16/9] w-full overflow-hidden bg-black/40">
@@ -82,9 +84,9 @@ function PostCard({ post }: { post: PostRow }) {
           </span>
         </div>
         <Link href={href} className="mt-3 block">
-          <h2 className="font-display text-lg font-semibold tracking-tight text-zinc-50 transition-colors group-hover:text-[#e4d0bf]">{post.title}</h2>
+          <h2 className="font-display text-lg font-semibold tracking-tight text-zinc-50 transition-colors group-hover:text-[#e4d0bf]">{title}</h2>
         </Link>
-        {post.excerpt ? <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-zinc-400">{post.excerpt}</p> : null}
+        {excerpt ? <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-zinc-400">{excerpt}</p> : null}
         <Link href={href} className="mt-4 inline-flex text-sm font-medium text-[#c9a88a] hover:text-[#e4d0bf]">
           {g.readMore} →
         </Link>

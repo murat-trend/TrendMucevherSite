@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BLOG_CATEGORIES } from "@/lib/blog/categories";
 import type { PostRow } from "@/lib/blog/types";
 import { ADMIN_PRIMARY_BUTTON_CLASS } from "@/components/admin/ui/adminPrimaryButton";
@@ -44,6 +44,7 @@ const emptyForm = {
   content: "",
   excerpt: "",
   cover_image_url: "",
+  content_image_url: "",
   category: "genel",
   seo_title: "",
   seo_description: "",
@@ -63,7 +64,10 @@ export function AdminBlogPage() {
   const [polishing, setPolishing] = useState(false);
   const [seoSuggesting, setSeoSuggesting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingContent, setUploadingContent] = useState(false);
   const [modalErr, setModalErr] = useState<string | null>(null);
+  const contentTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const contentCursorRef = useRef<number>(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -105,6 +109,7 @@ export function AdminBlogPage() {
       content: p.content ?? "",
       excerpt: p.excerpt ?? "",
       cover_image_url: p.cover_image_url ?? "",
+      content_image_url: (p as PostRow & { content_image_url?: string | null }).content_image_url ?? "",
       category: p.category || "genel",
       seo_title: p.seo_title ?? "",
       seo_description: p.seo_description ?? "",
@@ -142,6 +147,7 @@ export function AdminBlogPage() {
     content: form.content,
     excerpt: form.excerpt.trim() || null,
     cover_image_url: form.cover_image_url.trim() || null,
+    content_image_url: form.content_image_url.trim() || null,
     category: form.category,
     tags: form.keywords.trim() || null,
     is_published: isPublished,
@@ -296,6 +302,36 @@ export function AdminBlogPage() {
     }
   };
 
+  const uploadContentImage = async (file: File) => {
+    setUploadingContent(true);
+    setModalErr(null);
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      const res = await fetch("/api/admin/blog/upload-cover", { method: "POST", body: fd, credentials: "include" });
+      const j = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok) {
+        setModalErr(j.error ?? "Yükleme başarısız");
+        return;
+      }
+      if (j.url) {
+        const url = j.url;
+        setForm((f) => {
+          const pos = contentCursorRef.current;
+          const before = f.content.slice(0, pos);
+          const after = f.content.slice(pos);
+          const pad = before.length > 0 && !before.endsWith("\n") ? "\n" : "";
+          const newContent = before + pad + "[içerik-görseli]\n" + after;
+          return { ...f, content_image_url: url, content: newContent };
+        });
+      }
+    } catch {
+      setModalErr("Yükleme ağ hatası");
+    } finally {
+      setUploadingContent(false);
+    }
+  };
+
   return (
     <div className="space-y-8 pb-10">
       <div className="rounded-2xl border border-white/[0.14] bg-gradient-to-br from-[#14161d] via-[#0e1015] to-[#08090c] p-6 shadow-[0_1px_0_rgba(255,255,255,0.06)_inset] sm:p-8">
@@ -423,8 +459,12 @@ export function AdminBlogPage() {
                   </button>
                 </div>
                 <textarea
+                  ref={contentTextareaRef}
                   value={form.content}
                   onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
+                  onSelect={(e) => { contentCursorRef.current = (e.target as HTMLTextAreaElement).selectionStart; }}
+                  onKeyUp={(e) => { contentCursorRef.current = (e.target as HTMLTextAreaElement).selectionStart; }}
+                  onClick={(e) => { contentCursorRef.current = (e.target as HTMLTextAreaElement).selectionStart; }}
                   rows={14}
                   placeholder="İçinizdekini yazın..."
                   className="mt-1 min-h-[220px] w-full resize-y rounded-xl border border-white/[0.12] bg-[#0e1015] px-3 py-3 text-sm leading-relaxed text-zinc-100 placeholder:text-zinc-600"
@@ -463,6 +503,36 @@ export function AdminBlogPage() {
                 <input
                   value={form.cover_image_url}
                   onChange={(e) => setForm((f) => ({ ...f, cover_image_url: e.target.value }))}
+                  placeholder="https://..."
+                  className="mt-2 w-full rounded-lg border border-white/[0.1] bg-[#0e1015] px-3 py-2 text-xs text-zinc-300"
+                />
+              </div>
+
+              <div className="rounded-xl border border-white/[0.08] bg-black/20 p-3">
+                <p className="text-xs font-medium text-zinc-500">İçerik görseli (R2)</p>
+                <p className="mt-0.5 text-[10px] text-zinc-600">
+                  Yükleme sonrası içerikteki cursor pozisyonuna <span className="font-mono text-zinc-500">[içerik-görseli]</span> eklenir.
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <label className={SECONDARY_BTN + " cursor-pointer"}>
+                    <Upload className="h-4 w-4" />
+                    {uploadingContent ? "Yükleniyor…" : "Yükle"}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      disabled={uploadingContent}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void uploadContentImage(f);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+                <input
+                  value={form.content_image_url}
+                  onChange={(e) => setForm((f) => ({ ...f, content_image_url: e.target.value }))}
                   placeholder="https://..."
                   className="mt-2 w-full rounded-lg border border-white/[0.1] bg-[#0e1015] px-3 py-2 text-xs text-zinc-300"
                 />

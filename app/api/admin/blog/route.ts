@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { requireBlogAdminJson } from "@/lib/admin/blog-admin-auth";
 import { generateSlug } from "@/lib/blog/slugify";
+import { buildPostTranslations, postTranslationsToDbPatch } from "@/lib/blog/post-translations-anthropic";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -102,6 +103,9 @@ export async function POST(req: Request) {
       ? Math.max(1, Math.floor(body.read_time_minutes))
       : estimateReadMinutes(content);
 
+  const translations = await buildPostTranslations(title, content ?? "", excerpt ?? "");
+  const translationPatch = translations ? postTranslationsToDbPatch(translations) : {};
+
   const now = new Date().toISOString();
   const row = {
     title,
@@ -117,6 +121,7 @@ export async function POST(req: Request) {
     seo_description,
     read_time_minutes: read_time,
     published_at: isPublished ? now : null,
+    ...translationPatch,
   };
 
   const { data: inserted, error } = await supabase.from("posts").insert(row).select("*").single();
@@ -203,6 +208,19 @@ export async function PATCH(req: Request) {
   const nextContent = typeof patch.content === "string" ? patch.content : (existing.content as string | null);
   if (patch.read_time_minutes === undefined && typeof patch.content === "string") {
     patch.read_time_minutes = estimateReadMinutes(nextContent);
+  }
+
+  const translationTriggered =
+    typeof patch.title === "string" ||
+    typeof patch.content === "string" ||
+    typeof patch.excerpt === "string";
+
+  if (translationTriggered) {
+    const effectiveTitle   = typeof patch.title   === "string" ? patch.title   : (existing.title as string);
+    const effectiveContent = typeof patch.content === "string" ? patch.content : (existing.content as string | null) ?? "";
+    const effectiveExcerpt = typeof patch.excerpt === "string" ? patch.excerpt : (existing.excerpt as string | null) ?? "";
+    const quad = await buildPostTranslations(effectiveTitle, effectiveContent, effectiveExcerpt);
+    if (quad) Object.assign(patch, postTranslationsToDbPatch(quad));
   }
 
   const { data: updated, error } = await supabase.from("posts").update(patch).eq("id", id).select("*").single();
