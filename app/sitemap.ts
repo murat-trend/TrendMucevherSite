@@ -34,7 +34,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const { data: products, error: productsError } = await supabase
     .from("products_3d")
-    .select("slug, created_at")
+    .select("slug, updated_at, created_at")
     .eq("is_published", true);
 
   const productPages: MetadataRoute.Sitemap =
@@ -43,8 +43,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       : products
           .filter((p) => typeof p.slug === "string" && p.slug.length > 0)
           .map((p) => {
-            const row = p as { slug: string; created_at?: string | null };
-            const raw = row.created_at;
+            const row = p as { slug: string; updated_at?: string | null; created_at?: string | null };
+            const raw = row.updated_at || row.created_at;
             return {
               url: `${BASE_URL}/modeller/${row.slug}`,
               lastModified: raw ? new Date(raw) : new Date(),
