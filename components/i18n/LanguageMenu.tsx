@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import type { JSX } from "react";
 import type { Locale } from "@/lib/i18n/translations";
 import { useLanguage } from "./LanguageProvider";
+import { useCurrency } from "@/context/CurrencyContext";
 
 const FlagTR = () => (
   <svg viewBox="0 0 300 200" className="h-4 w-6 rounded-[2px]" aria-hidden>
@@ -61,12 +62,17 @@ type LanguageMenuProps = {
 
 export function LanguageMenu({ variant = "default", align = "start" }: LanguageMenuProps) {
   const { locale, setLocale, t } = useLanguage();
+  const { setCurrency } = useCurrency();
   const isGlass = variant === "glass";
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const handleSelect = (code: Locale) => {
     setLocale(code);
+    if (code === "tr") setCurrency("TRY");
+    else if (code === "en") setCurrency("USD");
+    else if (code === "de") setCurrency("EUR");
+    else if (code === "ru") setCurrency("RUB");
     setOpen(false);
   };
 

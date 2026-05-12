@@ -9,6 +9,7 @@ export const CURRENCIES = [
   { code: "USD", symbol: "$", label: "US Dollar",    locale: "en-US" },
   { code: "EUR", symbol: "€", label: "Euro",         locale: "de-DE" },
   { code: "GBP", symbol: "£", label: "Pound Sterling", locale: "en-GB" },
+  { code: "RUB", symbol: "₽", label: "₽ Ruble", locale: "ru-RU" },
 ];
 
 // Conversion rates from TRY: 1 TRY = X foreign unit
@@ -16,7 +17,8 @@ const RATES = {
   TRY: 1,
   USD: 0.022,
   EUR: 0.019,
-  GBP: 1 / 48,
+  GBP: 0.0162,
+  RUB: 1.64,
 };
 
 const CurrencyContext = createContext(null);
