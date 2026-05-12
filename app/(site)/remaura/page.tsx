@@ -6,6 +6,7 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://trendmucevher.com";
 const pageUrl = `${siteUrl}/remaura`;
 
 export const metadata: Metadata = {
+  robots: { index: false, follow: false },
   title: "Remaura AI | Takı Gorsel Duzenleme ve Arka Plan Kaldirma",
   description:
     "Remaura AI ile taki gorsellerinde arka plan kaldirma, metal tonu duzeltme ve vitrin uyumlu export islemlerini tek ekranda yonetin.",

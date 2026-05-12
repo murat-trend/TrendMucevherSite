@@ -15,7 +15,6 @@ const FOOTER_LINKS = {
   ],
   support: [
     { href: "/nasil-calisir", key: "howItWorks" as const },
-    { href: "/fiyatlandirma", key: "pricing" as const },
     { href: "/hakkimizda", key: "about" as const },
     { href: "/satici-ol", key: "becomeSeller" as const },
   ],

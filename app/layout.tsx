@@ -5,6 +5,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { ThemeScript } from "@/components/theme/ThemeScript";
 import { LanguageProvider } from "@/components/i18n/LanguageProvider";
+import { CurrencyProvider } from "@/context/CurrencyContext";
 import { cookies } from "next/headers";
 import { createClient } from "@/utils/supabase/server";
 
@@ -44,22 +45,21 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: new URL(siteUrl),
     title: {
-      default: "Trend Mücevher | Yapay Zeka ile Mücevher Tasarımı ve 3D Model",
-      template: "%s | Trend Mücevher",
+      default: "Murat Kaynaroğlu | Gothic & Luxury 3D Jewelry STL Files",
+      template: "%s | Murat Kaynaroğlu",
     },
     description:
-      "REMAURA AI ile yapay zeka destekli mücevher tasarımı, 3D model üretimi ve dijital satış platformu. Türkiye'nin ilk AI mücevher ekosistemi.",
+      "Casting-ready gothic and luxury 3D jewelry STL files by designer Murat Kaynaroğlu. Instant digital download.",
     keywords: [
-      "mücevher tasarımı",
-      "yapay zeka takı",
-      "3D mücevher modeli",
-      "REMAURA AI",
-      "dijital mücevher",
-      "takı tasarım platformu",
+      "gothic jewelry STL",
+      "luxury ring STL file",
+      "3D jewelry model",
+      "casting ready STL",
+      "fantasy jewelry design",
     ],
     authors: [{ name: "Murat Kaynaroğlu", url: siteUrl }],
     creator: "Murat Kaynaroğlu",
-    publisher: "Trend Mücevher",
+    publisher: "Murat Kaynaroğlu",
     robots: {
       index: true,
       follow: true,
@@ -73,17 +73,17 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     openGraph: {
       type: "website",
-      locale: "tr_TR",
+      locale: "en_US",
       url: siteUrl,
-      siteName: "Trend Mücevher",
-      title: "Trend Mücevher | Yapay Zeka ile Mücevher Tasarımı",
-      description: "REMAURA AI ile yapay zeka destekli mücevher tasarımı ve 3D model üretimi.",
-      images: [{ url: ogImageUrl, width: 1200, height: 630, alt: "Trend Mücevher - REMAURA AI" }],
+      siteName: "Murat Kaynaroğlu",
+      title: "Murat Kaynaroğlu | Gothic & Luxury 3D Jewelry STL Files",
+      description: "Casting-ready gothic and luxury 3D jewelry STL files by designer Murat Kaynaroğlu. Instant digital download.",
+      images: [{ url: ogImageUrl, width: 1200, height: 630, alt: "Murat Kaynaroğlu - Gothic & Luxury 3D Jewelry" }],
     },
     twitter: {
       card: "summary_large_image",
-      title: "Trend Mücevher | REMAURA AI",
-      description: "Yapay zeka ile mücevher tasarımı ve 3D model üretim platformu.",
+      title: "Murat Kaynaroğlu | Gothic & Luxury 3D Jewelry STL Files",
+      description: "Casting-ready gothic and luxury 3D jewelry STL files. Instant digital download.",
       images: [ogImageUrl],
     },
     verification: {
@@ -112,7 +112,9 @@ export default function RootLayout({
         />
         <ThemeScript />
         <ThemeProvider>
-          <LanguageProvider>{children}</LanguageProvider>
+          <LanguageProvider>
+            <CurrencyProvider>{children}</CurrencyProvider>
+          </LanguageProvider>
         </ThemeProvider>
       </body>
     </html>

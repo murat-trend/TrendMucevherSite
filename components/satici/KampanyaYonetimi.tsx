@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import type { ComponentType } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
@@ -566,10 +565,7 @@ export default function KampanyaYonetimi() {
 
           {insufficient && (
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-              {sc.insufficientCredits}{" "}
-              <Link href="/fiyatlandirma" className="font-medium underline underline-offset-2 hover:text-red-100">
-                {sc.buyCredits}
-              </Link>
+              {sc.insufficientCredits}
             </div>
           )}
 

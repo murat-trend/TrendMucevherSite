@@ -4,6 +4,7 @@ import RemauraNedirClient from "./RemauraNedirClient";
 const pageUrl = "https://trendmucevher.com/remaura/nedir";
 
 export const metadata: Metadata = {
+  robots: { index: false, follow: false },
   title: "REMAURA AI Nedir? | Yapay Zeka ile Mücevher Tasarımı ve 3D Üretim Platformu",
   description:
     "REMAURA AI, takı ve dijital üretim sektörüne özel tasarımdan satışa kadar tüm süreci otomatikleştiren dünyanın ilk yapay zekâ destekli uçtan uca üretim ve satış platformudur.",

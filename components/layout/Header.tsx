@@ -9,6 +9,7 @@ import { UtilityCluster } from "@/components/layout/UtilityCluster";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { createClient } from "@/utils/supabase/client";
+import { CurrencySwitcher } from "@/components/CurrencySwitcher";
 
 const NAV_ITEMS = [
   { href: "/", key: "home" as const },
@@ -351,6 +352,7 @@ export function Header() {
                 </div>
               ))}
 
+            <CurrencySwitcher align="end" />
             <UtilityCluster languageLayout="menu" languageMenuAlign="end" />
           </div>
 
@@ -500,6 +502,8 @@ export function Header() {
           <div className="shrink-0 border-t border-border/60 px-6 py-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{t.header.language}</p>
             <div className="mt-3"><LanguageMenu align="start" /></div>
+            <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">Para Birimi</p>
+            <div className="mt-3"><CurrencySwitcher align="start" /></div>
             <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{t.header.theme}</p>
             <div className="mt-3 flex justify-start"><ThemeToggle compact /></div>
           </div>

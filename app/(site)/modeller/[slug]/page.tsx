@@ -13,7 +13,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const supabase = createClient(cookieStore);
   const { data } = await supabase
     .from("products_3d")
-    .select("name, name_en, story_en, thumbnail_url")
+    .select("name, name_en, story_en, thumbnail_url, tags")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -23,23 +23,26 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const rawStory = (data.story_en as string | null)?.trim() || "";
   const description =
     rawStory.slice(0, 155) ||
-    `${name} — Cast-ready 3D jewelry model in GLB and STL format.`;
+    `${name} — Casting-ready gothic and luxury 3D jewelry STL file by Murat Kaynaroğlu. Instant digital download.`;
   const canonical = `https://trendmucevher.com/modeller/${slug}/`;
   const image = data.thumbnail_url as string | null;
+  const tags = Array.isArray(data.tags) ? (data.tags as string[]) : [];
+  const keywords = [name, "STL file", "3D jewelry model", "casting ready", ...tags].filter(Boolean);
 
   return {
-    title: { absolute: `${name} | Cast-Ready 3D Jewelry Model | Trend Mücevher` },
+    title: { absolute: `${name} | Cast-Ready 3D Jewelry STL | Murat Kaynaroğlu` },
     description,
+    keywords,
     alternates: { canonical },
     openGraph: {
-      title: `${name} | Cast-Ready 3D Jewelry Model | Trend Mücevher`,
+      title: `${name} | Cast-Ready 3D Jewelry STL | Murat Kaynaroğlu`,
       description,
       url: canonical,
-      images: image ? [{ url: image }] : undefined,
+      images: image ? [{ url: image, alt: name }] : undefined,
     },
     twitter: {
       card: image ? "summary_large_image" : "summary",
-      title: `${name} | Cast-Ready 3D Jewelry Model | Trend Mücevher`,
+      title: `${name} | Cast-Ready 3D Jewelry STL | Murat Kaynaroğlu`,
       description,
       images: image ? [image] : undefined,
     },
@@ -75,12 +78,25 @@ export default async function ModelDetayPage({ params }: Props) {
     name: nameEn,
     ...(storyEn && { description: storyEn.slice(0, 500) }),
     ...(thumbnailUrl && { image: thumbnailUrl }),
+    brand: {
+      "@type": "Brand",
+      name: "Murat Kaynaroğlu",
+    },
+    author: {
+      "@type": "Person",
+      name: "Murat Kaynaroğlu",
+      url: "https://trendmucevher.com",
+    },
     offers: {
       "@type": "Offer",
       ...(personalPrice != null && { price: personalPrice }),
       priceCurrency: "TRY",
       availability: "https://schema.org/InStock",
       url: `https://trendmucevher.com/modeller/${slug}/`,
+      seller: {
+        "@type": "Person",
+        name: "Murat Kaynaroğlu",
+      },
     },
   };
 

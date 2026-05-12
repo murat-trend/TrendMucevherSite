@@ -12,21 +12,17 @@ function getSupabase() {
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPages: MetadataRoute.Sitemap = [
-    { url: BASE_URL, priority: 1, changeFrequency: "daily" },
-    { url: `${BASE_URL}/modeller`, priority: 0.9, changeFrequency: "daily" },
-    { url: `${BASE_URL}/remaura`, priority: 0.9, changeFrequency: "weekly" },
-    { url: `${BASE_URL}/remaura/nedir`, priority: 0.8, changeFrequency: "monthly" },
-    { url: `${BASE_URL}/remaura/arka-plan-kaldir`, priority: 0.7, changeFrequency: "monthly" },
-    { url: `${BASE_URL}/remaura/foto-edit`, priority: 0.7, changeFrequency: "monthly" },
-    { url: `${BASE_URL}/remaura/nesne-kaldir`, priority: 0.7, changeFrequency: "monthly" },
-    { url: `${BASE_URL}/convert`, priority: 0.7, changeFrequency: "monthly" },
-    { url: `${BASE_URL}/ozel-siparis`, priority: 0.8, changeFrequency: "monthly" },
-    { url: `${BASE_URL}/fiyatlandirma`, priority: 0.8, changeFrequency: "weekly" },
-    { url: `${BASE_URL}/gunluk`, priority: 0.7, changeFrequency: "weekly" },
-    { url: `${BASE_URL}/hakkimizda`, priority: 0.6, changeFrequency: "monthly" },
-    { url: `${BASE_URL}/iletisim`, priority: 0.6, changeFrequency: "monthly" },
-    { url: `${BASE_URL}/nasil-calisir`, priority: 0.6, changeFrequency: "monthly" },
-    { url: `${BASE_URL}/satici-ol`, priority: 0.7, changeFrequency: "monthly" },
+    { url: `${BASE_URL}/`,                               priority: 1,   changeFrequency: "daily"   },
+    { url: `${BASE_URL}/modeller/`,                      priority: 0.9, changeFrequency: "daily"   },
+    { url: `${BASE_URL}/remaura/arka-plan-kaldir/`,      priority: 0.8, changeFrequency: "monthly" },
+    { url: `${BASE_URL}/remaura/foto-edit/`,             priority: 0.8, changeFrequency: "monthly" },
+    { url: `${BASE_URL}/remaura/webm-to-mp4/`,           priority: 0.7, changeFrequency: "monthly" },
+    { url: `${BASE_URL}/convert/`,                       priority: 0.7, changeFrequency: "monthly" },
+    { url: `${BASE_URL}/ozel-siparis/`,                  priority: 0.8, changeFrequency: "monthly" },
+    { url: `${BASE_URL}/iletisim/`,                      priority: 0.6, changeFrequency: "monthly" },
+    { url: `${BASE_URL}/nasil-calisir/`,                 priority: 0.6, changeFrequency: "monthly" },
+    { url: `${BASE_URL}/hakkimizda/`,                    priority: 0.6, changeFrequency: "monthly" },
+    { url: `${BASE_URL}/gunluk/`,                        priority: 0.7, changeFrequency: "weekly"  },
   ];
 
   const supabase = getSupabase();
