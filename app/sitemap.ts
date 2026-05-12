@@ -20,6 +20,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE_URL}/remaura/foto-edit/`,             priority: 0.8, changeFrequency: "monthly" },
     { url: `${BASE_URL}/remaura/webm-to-mp4/`,           priority: 0.7, changeFrequency: "monthly" },
     { url: `${BASE_URL}/convert/`,                       priority: 0.7, changeFrequency: "monthly" },
+    { url: `${BASE_URL}/egitim/matrixgold/`,              priority: 0.8, changeFrequency: "weekly"  },
     { url: `${BASE_URL}/ozel-siparis/`,                  priority: 0.8, changeFrequency: "monthly" },
     { url: `${BASE_URL}/iletisim/`,                      priority: 0.6, changeFrequency: "monthly" },
     { url: `${BASE_URL}/nasil-calisir/`,                 priority: 0.6, changeFrequency: "monthly" },
