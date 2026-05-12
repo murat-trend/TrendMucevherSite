@@ -14,8 +14,8 @@ export const CURRENCIES = [
 // Conversion rates from TRY: 1 TRY = X foreign unit
 const RATES = {
   TRY: 1,
-  USD: 1 / 38,
-  EUR: 1 / 42,
+  USD: 0.022,
+  EUR: 0.019,
   GBP: 1 / 48,
 };
 

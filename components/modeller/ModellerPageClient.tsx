@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useLanguage } from '@/components/i18n/LanguageProvider'
+import { useCurrency } from '@/context/CurrencyContext'
 import { useState } from 'react'
 import { type Ui3DModel } from '@/lib/modeller/supabase'
 import { jewelryTypeLabel } from '@/lib/modeller/jewelry-labels'
@@ -139,6 +140,7 @@ function getPageCopy(locale: string) {
 
 export function ModellerPageClient({ models }: { models: Ui3DModel[] }) {
   const { locale } = useLanguage()
+  const { formatPrice } = useCurrency()
   const copy = getPageCopy(locale)
   const [selectedCategory, setSelectedCategory] = useState<ModellerCategoryId | null>(null)
 
@@ -265,7 +267,7 @@ export function ModellerPageClient({ models }: { models: Ui3DModel[] }) {
                   </p>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: '0.5rem' }}>
                     <span style={{ color: '#c9a84c', fontFamily: 'var(--font-serif)', fontSize: '1.3rem', fontWeight: 300 }}>
-                      ₺{product.price.toLocaleString(localeMap[locale] ?? 'tr-TR')}
+                      {formatPrice(product.price)}
                     </span>
                     <span style={{ fontSize: '10px', letterSpacing: '0.15em', color: '#4a4642', textTransform: 'uppercase' }}>
                       {copy.inspect} →

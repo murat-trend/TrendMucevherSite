@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import dynamicImport from 'next/dynamic'
 import { useLanguage } from '@/components/i18n/LanguageProvider'
+import { useCurrency } from '@/context/CurrencyContext'
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { jewelryTypeLabel } from '@/lib/modeller/jewelry-labels'
@@ -111,6 +112,7 @@ type Props = {
 
 export function ModelDetayClient({ product, sellerId, sellerEmail: initialSellerEmail }: Props) {
   const { locale } = useLanguage()
+  const { formatPrice } = useCurrency()
   const copy = getDetailCopy(locale)
   const slug = product.slug
 
@@ -565,7 +567,7 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
           <div style={{ marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
             <div style={{ fontSize: '10px', letterSpacing: '0.2em', color: '#4a4642', textTransform: 'uppercase', marginBottom: '6px' }}>{copy.priceTitle}</div>
             <div style={{ fontFamily: 'var(--font-serif)', fontSize: '2.5rem', fontWeight: 300, color: '#c9a84c' }}>
-              ₺{localizedProduct.price.toLocaleString(copy.currencyLocale)}
+              {formatPrice(localizedProduct.price)}
             </div>
           </div>
 
@@ -597,14 +599,14 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
                 <input type="radio" name="license" checked={selectedLicense === 'personal'} onChange={() => setSelectedLicense('personal')} />
                 Kişisel Kullanım
               </span>
-              <span style={{ color: '#c9a84c' }}>₺{personalPrice.toLocaleString(copy.currencyLocale)}</span>
+              <span style={{ color: '#c9a84c' }}>{formatPrice(personalPrice)}</span>
             </label>
             <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', color: '#d5cfc5', fontSize: '12px' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                 <input type="radio" name="license" checked={selectedLicense === 'commercial'} onChange={() => setSelectedLicense('commercial')} />
                 Ticari Kullanım
               </span>
-              <span style={{ color: '#c9a84c' }}>₺{commercialPrice.toLocaleString(copy.currencyLocale)}</span>
+              <span style={{ color: '#c9a84c' }}>{formatPrice(commercialPrice)}</span>
             </label>
           </div>
 
@@ -614,7 +616,7 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
             onClick={() => void handleAddToCart()}
             style={{ width: '100%', padding: '16px', background: 'transparent', border: '1px solid #c9a84c', color: '#c9a84c', fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.25em', textTransform: 'uppercase', cursor: 'pointer', borderRadius: '2px', marginBottom: '12px', transition: 'all 0.2s', display: 'block', textAlign: 'center', textDecoration: 'none' }}
           >
-            {copy.buy} — ₺{selectedPrice.toLocaleString(copy.currencyLocale)}
+            {copy.buy} — {formatPrice(selectedPrice)}
           </button>
 
           {(storeName || sellerEmail) && (

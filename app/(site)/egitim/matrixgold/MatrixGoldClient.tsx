@@ -24,15 +24,14 @@ const CONTENT = {
     curriculumTitle: "Eğitim Müfredatı",
     total: "Toplam",
     modules: [
-      { no: "01", baslik: "Arayüz ve Temel Araçlar",            sure: "~1.5 saat" },
-      { no: "02", baslik: "Yüzük ve Kaşlı Tasarımlar",          sure: "~2.5 saat" },
-      { no: "03", baslik: "Kolye ve Pendant Geometrisi",         sure: "~2 saat"   },
-      { no: "04", baslik: "Bilezik ve Kelepçe Yapıları",         sure: "~2 saat"   },
-      { no: "05", baslik: "Taş Yerleştirme ve Pave Tekniği",     sure: "~3 saat"   },
-      { no: "06", baslik: "Organik Formlar ve Sculpt",           sure: "~2.5 saat" },
-      { no: "07", baslik: "Render ve Sunum Hazırlama",           sure: "~2 saat"   },
-      { no: "08", baslik: "Döküme Hazırlık ve STL Export",       sure: "~2 saat"   },
-      { no: "09", baslik: "İleri Teknikler ve Proje",            sure: "~4 saat"   },
+      { no: "01", baslik: "Arayüz ve temel komutlar" },
+      { no: "02", baslik: "Çizim temelleri" },
+      { no: "03", baslik: "Alyans ve tek taş" },
+      { no: "04", baslik: "3 taş · 5 taş modeller" },
+      { no: "05", baslik: "Erkek yüzüğü kasaları — sınırsız kasa tipi" },
+      { no: "06", baslik: "Küpe ve bilezik yapımı" },
+      { no: "07", baslik: "İleri modelleme teknikleri" },
+      { no: "08", baslik: "Döküme hazır çıktı ve STL export" },
     ],
     forWhomTitle: "Bu Eğitim Kimler İçin?",
     forWhom: [
@@ -71,15 +70,14 @@ const CONTENT = {
     curriculumTitle: "Course Curriculum",
     total: "Total",
     modules: [
-      { no: "01", baslik: "Interface & Core Tools",              sure: "~1.5 hrs" },
-      { no: "02", baslik: "Ring & Bezel Designs",               sure: "~2.5 hrs" },
-      { no: "03", baslik: "Necklace & Pendant Geometry",        sure: "~2 hrs"   },
-      { no: "04", baslik: "Bracelet & Cuff Structures",         sure: "~2 hrs"   },
-      { no: "05", baslik: "Stone Setting & Pavé Technique",     sure: "~3 hrs"   },
-      { no: "06", baslik: "Organic Forms & Sculpting",          sure: "~2.5 hrs" },
-      { no: "07", baslik: "Rendering & Presentation",           sure: "~2 hrs"   },
-      { no: "08", baslik: "Casting Prep & STL Export",          sure: "~2 hrs"   },
-      { no: "09", baslik: "Advanced Techniques & Project",      sure: "~4 hrs"   },
+      { no: "01", baslik: "Interface & core commands" },
+      { no: "02", baslik: "Drawing fundamentals" },
+      { no: "03", baslik: "Wedding band & solitaire" },
+      { no: "04", baslik: "3-stone · 5-stone designs" },
+      { no: "05", baslik: "Men's ring shanks — unlimited shank types" },
+      { no: "06", baslik: "Earring & bracelet construction" },
+      { no: "07", baslik: "Advanced modeling techniques" },
+      { no: "08", baslik: "Casting-ready output & STL export" },
     ],
     forWhomTitle: "Who Is This Course For?",
     forWhom: [
@@ -234,15 +232,8 @@ export function MatrixGoldClient() {
                   {m.no}
                 </span>
                 <span className="flex-1 text-[14px] text-foreground/85">{m.baslik}</span>
-                <span className="shrink-0 text-[13px] text-muted">{m.sure}</span>
               </div>
             ))}
-          </div>
-          <div className="flex items-center justify-between border-t border-border/60 bg-[#c9a84c]/5 px-5 py-3.5">
-            <span className="text-[13px] font-semibold uppercase tracking-wider text-foreground/70">
-              {c.total}
-            </span>
-            <span className="font-display text-base font-semibold text-[#c9a84c]">~22 {lang === "tr" ? "saat" : "hrs"}</span>
           </div>
         </div>
       </section>
