@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
+import { useCurrency } from "@/context/CurrencyContext";
 
 export type FeaturedModelRow = {
   id: string;
@@ -31,6 +32,7 @@ const comingSoon: Record<string, string> = {
 export function FeaturedModelsClient({ models }: { models: FeaturedModelRow[] }) {
   const { t, locale } = useLanguage();
   const numberLocale = localeToTag[locale] ?? "tr-TR";
+  const { formatPrice } = useCurrency();
   const placeholderCount = Math.max(0, GRID_SIZE - models.length);
 
   return (
@@ -75,7 +77,7 @@ export function FeaturedModelsClient({ models }: { models: FeaturedModelRow[] })
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-muted">{model.jewelry_type}</p>
                 <p className="mt-1 font-medium text-foreground">{model.name}</p>
                 <p className="mt-auto pt-2 text-sm text-[#c9a84c]">
-                  ₺{model.personal_price?.toLocaleString(numberLocale)}
+                  {formatPrice(model.personal_price)}
                 </p>
               </div>
             </Link>

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { pickLocalizedPostText } from "@/lib/blog/post-translations-anthropic";
 import type { PostRow } from "@/lib/blog/types";
@@ -50,24 +50,62 @@ function RelatedCard({ post, locale }: { post: PostRow; locale: Locale }) {
 
 const CONTENT_PLACEHOLDER = "[içerik-görseli]";
 
+function parseInline(text: string): ReactNode[] {
+  const pattern = /\*\*(.+?)\*\*|\[([^\]]+)\]\(([^)]+)\)/g;
+  const nodes: ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = pattern.exec(text)) !== null) {
+    if (m.index > last) nodes.push(text.slice(last, m.index));
+    if (m[1] !== undefined) {
+      nodes.push(<strong key={m.index}>{m[1]}</strong>);
+    } else {
+      nodes.push(
+        <a key={m.index} href={m[3]} className="text-[#c9a88a] underline hover:text-[#e4d0bf]">
+          {m[2]}
+        </a>,
+      );
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes;
+}
+
+function renderSegment(text: string, segIdx: number): ReactNode[] {
+  return text.split(/\n\n+/).map((para, pIdx) => {
+    const trimmed = para.trim();
+    if (!trimmed) return null;
+    const lines = trimmed.split("\n");
+    const lineNodes: ReactNode[] = [];
+    lines.forEach((line, li) => {
+      parseInline(line).forEach((node) => lineNodes.push(node));
+      if (li < lines.length - 1) lineNodes.push(<br key={`br-${segIdx}-${pIdx}-${li}`} />);
+    });
+    return (
+      <p key={`${segIdx}-${pIdx}`} className="leading-relaxed text-zinc-300">
+        {lineNodes}
+      </p>
+    );
+  });
+}
+
 function renderContent(content: string, contentImageUrl: string | null) {
   if (!content) return null;
+
   if (!contentImageUrl || !content.includes(CONTENT_PLACEHOLDER)) {
-    return <div className="whitespace-pre-wrap text-base leading-relaxed text-zinc-300">{content}</div>;
+    return <div className="space-y-4 text-base">{renderSegment(content, 0)}</div>;
   }
+
   const parts = content.split(CONTENT_PLACEHOLDER);
   return (
-    <div className="space-y-6 text-base leading-relaxed text-zinc-300">
+    <div className="space-y-4 text-base">
       {parts.map((part, i) => (
         <Fragment key={i}>
-          {part ? <div className="whitespace-pre-wrap">{part}</div> : null}
+          {renderSegment(part, i)}
           {i < parts.length - 1 ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={contentImageUrl}
-              alt=""
-              className="w-full rounded-lg"
-            />
+            <img src={contentImageUrl} alt="" className="w-full rounded-lg" />
           ) : null}
         </Fragment>
       ))}

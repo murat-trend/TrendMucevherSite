@@ -9,6 +9,10 @@ import { createClient } from "@/utils/supabase/server";
 export const runtime = 'nodejs';
 export const dynamic = "force-dynamic";
 
+export const config = {
+  api: { bodyParser: { sizeLimit: "20mb" } },
+};
+
 const s3 = new S3Client({
   region: "auto",
   endpoint: process.env.R2_ENDPOINT!,

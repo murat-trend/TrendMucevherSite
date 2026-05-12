@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
+import { useCurrency } from "@/context/CurrencyContext";
 import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { type DbProduct3D, mapDbProductToUi } from "@/lib/modeller/supabase";
@@ -15,6 +16,7 @@ const featuredModels = [
 
 export function FeaturedProducts() {
   const { t, locale } = useLanguage();
+  const { formatPrice } = useCurrency();
   const [storedModels, setStoredModels] = useState<ReturnType<typeof mapDbProductToUi>[]>([]);
 
   useEffect(() => {
@@ -136,7 +138,7 @@ export function FeaturedProducts() {
                 </h3>
                 <div className="mt-3 flex items-center justify-between">
                   <span className="font-display text-xl text-accent">
-                    ₺{model.price.toLocaleString(localeMap[locale] ?? "tr-TR")}
+                    {formatPrice(model.price)}
                   </span>
                   <span className="text-[12px] font-medium tracking-[0.08em] text-accent transition-all duration-300 group-hover:tracking-[0.1em]">
                     {inspectLabel} →
