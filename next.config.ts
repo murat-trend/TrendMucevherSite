@@ -10,10 +10,11 @@ const nextConfig: NextConfig = {
     },
   },
   outputFileTracingExcludes: {
-    "/api/remaura/mesh/process": [
-      "./scripts/**",
+    "**": [
       "./public/models/**",
       "./public/convert-output/**",
+      "./public/videos/**",
+      "./scripts/**",
     ],
   },
   turbopack: {},

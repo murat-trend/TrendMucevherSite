@@ -170,9 +170,6 @@ export function Header() {
                         <Link href="/remaura?category=mesh3d" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
                           Remaura AI 3D <span className="text-[10px] font-normal text-muted">(görüntüden 3D)</span>
                         </Link>
-                        <Link href="/remaura?category=ring-rail" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                          Ring Rail Resize
-                        </Link>
                         <Link href="/convert" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
                           3D Dönüştürücü
                         </Link>
@@ -536,7 +533,6 @@ export function Header() {
                           { href: "/remaura/foto-edit", label: t.remauraWorkspace.categoryPhotoEdit },
                           { href: "/remaura/nesne-kaldir", label: t.nav.nesneKaldir ?? "Nesne Kaldır" },
                           { href: "/remaura?category=mesh3d", label: "Remaura AI 3D (görüntüden 3D)" },
-                          { href: "/remaura?category=ring-rail", label: "Ring Rail Resize" },
                           { href: "/convert", label: "3D Dönüştürücü" },
                           { href: "/remaura/video-optimize", label: "Video Optimizasyonu" },
                           { href: "/remaura/webm-to-mp4", label: "WebM → MP4" },
