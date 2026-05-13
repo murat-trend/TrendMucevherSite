@@ -9,72 +9,18 @@ loadEnvConfig(process.cwd());
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-async function translateTheme(turkishText: string): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || !turkishText.trim()) return turkishText;
-  try {
-    const Anthropic = (await import("@anthropic-ai/sdk")).default;
-    const client = new Anthropic({ apiKey });
-    const msg = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 150,
-      messages: [
-        {
-          role: "user",
-          content: `Translate this Turkish jewelry design description to concise English for an image generation prompt. Return ONLY the translation, no explanation, no quotes:\n\n${turkishText}`,
-        },
-      ],
-    });
-    const block = msg.content[0];
-    return block?.type === "text" ? block.text.trim() : turkishText;
-  } catch {
-    return turkishText;
-  }
-}
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 
-async function uploadReferenceToFal(
-  base64: string,
-  falKey: string
-): Promise<string | null> {
-  try {
-    const { fal } = await import("@fal-ai/client");
-    fal.config({ credentials: falKey });
-    const raw = base64.includes(",") ? base64.split(",")[1] : base64;
-    const mimeMatch = base64.match(/data:([^;]+);/);
-    const mime = mimeMatch?.[1] ?? "image/jpeg";
-    const buffer = Buffer.from(raw, "base64");
-    const file = new File([buffer], "reference.jpg", { type: mime });
-    const url = await fal.storage.upload(file);
-    return url;
-  } catch (e) {
-    console.error("[koleksiyon-edit/uret] fal storage upload failed:", e);
-    return null;
-  }
-}
-
-const SYSTEM_PROMPT =
-  "Professional jewelry product photography. " +
-  "Single jewelry piece centered on pure white background. " +
-  "Studio lighting, sharp edges, clean silhouette. " +
-  "No gemstones, empty settings only. " +
-  "Ultra detailed metal surface.";
-
-const METAL_MAP: Record<string, string> = {
-  "Sarı Altın": "yellow gold",
-  "Rose Gold": "rose gold",
-  "Beyaz Altın": "white gold",
-  "Gümüş": "sterling silver",
-};
-
-export async function POST(req: Request) {
+async function requireSuperAdmin(): Promise<
+  { ok: true } | { ok: false; response: NextResponse }
+> {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
   if (!user) {
-    return NextResponse.json({ error: "Oturum gerekli" }, { status: 401 });
+    return { ok: false, response: NextResponse.json({ error: "Oturum gerekli" }, { status: 401 }) };
   }
   const { data: profile } = await supabase
     .from("profiles")
@@ -82,23 +28,62 @@ export async function POST(req: Request) {
     .eq("id", user.id)
     .maybeSingle();
   if (!isRemauraSuperAdminUserId(user.id) && profile?.role !== "admin") {
-    return NextResponse.json({ error: "Yetkisiz" }, { status: 403 });
+    return { ok: false, response: NextResponse.json({ error: "Yetkisiz" }, { status: 403 }) };
   }
+  return { ok: true };
+}
+
+// ─── Claude translation ───────────────────────────────────────────────────────
+
+async function translateToEnglish(text: string): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || !text.trim()) return text;
+  try {
+    const Anthropic = (await import("@anthropic-ai/sdk")).default;
+    const client = new Anthropic({ apiKey });
+    const msg = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 200,
+      system:
+        "Translate this jewelry description to English for AI image generation. Return only the translation.",
+      messages: [{ role: "user", content: text }],
+    });
+    const block = msg.content[0];
+    return block?.type === "text" ? block.text.trim() : text;
+  } catch {
+    return text;
+  }
+}
+
+// ─── fal.ai reference upload ──────────────────────────────────────────────────
+
+async function uploadRefToFal(base64: string, falKey: string): Promise<string | null> {
+  try {
+    const { fal } = await import("@fal-ai/client");
+    fal.config({ credentials: falKey });
+    const raw = base64.includes(",") ? base64.split(",")[1] : base64;
+    const mime = base64.match(/data:([^;]+);/)?.[1] ?? "image/jpeg";
+    const blob = new Blob([Buffer.from(raw, "base64")], { type: mime });
+    const file = new File([blob], "reference.jpg", { type: mime });
+    return await fal.storage.upload(file);
+  } catch (e) {
+    console.error("[uret] fal storage upload failed:", e);
+    return null;
+  }
+}
+
+// ─── Route ────────────────────────────────────────────────────────────────────
+
+export async function POST(req: Request) {
+  const auth = await requireSuperAdmin();
+  if (!auth.ok) return auth.response;
 
   const falKey = process.env.FAL_KEY;
   if (!falKey) {
     return NextResponse.json({ error: "FAL_KEY yapılandırılmamış." }, { status: 500 });
   }
 
-  const body = await req.json();
-  const {
-    takiTipi,
-    tema,
-    formKarakterleri,
-    metalRengi,
-    referansGorsel,
-  } = body as {
-    koleksiyonAdi?: string;
+  const body = await req.json() as {
     takiTipi?: string;
     tema?: string;
     formKarakterleri?: string[];
@@ -106,32 +91,34 @@ export async function POST(req: Request) {
     referansGorsel?: string;
   };
 
+  const { takiTipi, tema, formKarakterleri, metalRengi, referansGorsel } = body;
+
   if (!tema?.trim()) {
     return NextResponse.json({ error: "Tema / açıklama gerekli." }, { status: 400 });
   }
 
   const [temaEn, refUrl] = await Promise.all([
-    translateTheme(tema),
-    referansGorsel ? uploadReferenceToFal(referansGorsel, falKey) : Promise.resolve(null),
+    translateToEnglish(tema),
+    referansGorsel ? uploadRefToFal(referansGorsel, falKey) : Promise.resolve(null),
   ]);
 
   const formStr = Array.isArray(formKarakterleri) && formKarakterleri.length > 0
-    ? formKarakterleri.join(", ")
+    ? formKarakterleri.join(", ").toLowerCase()
     : "";
-  const metalEn = METAL_MAP[metalRengi ?? ""] ?? metalRengi ?? "gold";
 
-  const userPrompt = [
-    `${takiTipi || "jewelry"} jewelry`,
+  const prompt = [
+    `${(takiTipi ?? "jewelry").toLowerCase()} jewelry`,
     temaEn,
     formStr,
-    `${metalEn} metal`,
-    "women's collection, no stones, empty bezel only",
-    "filigree details, NURBS-ready geometry",
+    `${(metalRengi ?? "gold").toLowerCase()} metal`,
+    "women's collection",
+    "no gemstones, empty settings only",
+    "professional product photography, pure white background",
+    "centered single object, sharp edges, studio lighting",
+    "ultra detailed metal surface texture",
   ]
     .filter(Boolean)
     .join(", ");
-
-  const fullPrompt = `${SYSTEM_PROMPT} ${userPrompt}`;
 
   try {
     const { fal } = await import("@fal-ai/client");
@@ -139,7 +126,7 @@ export async function POST(req: Request) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const input: any = {
-      prompt: fullPrompt,
+      prompt,
       num_images: 4,
       image_size: "square_hd",
       guidance_scale: 3.5,
@@ -147,27 +134,19 @@ export async function POST(req: Request) {
       safety_tolerance: "5",
       output_format: "jpeg",
     };
-    if (refUrl) {
-      input.image_url = refUrl;
-    }
+    if (refUrl) input.image_url = refUrl;
 
-    const result = await fal.subscribe("fal-ai/flux-pro/v1.1", {
-      input,
-      logs: false,
-    });
+    const result = await fal.subscribe("fal-ai/flux-pro/v1.1", { input, logs: false });
 
     type FalImage = { url: string };
-    const images: string[] = ((result.data as { images?: FalImage[] })?.images ?? []).map(
+    const images = ((result.data as { images?: FalImage[] })?.images ?? []).map(
       (img) => img.url
     );
 
     return NextResponse.json({ images });
   } catch (err: unknown) {
-    console.error("[koleksiyon-edit/uret] fal error:", err);
-    const e = err as { message?: string; status?: number };
-    return NextResponse.json(
-      { error: e?.message || "Görsel üretimi başarısız." },
-      { status: e?.status || 500 }
-    );
+    console.error("[uret] fal error:", err);
+    const e = err as { message?: string };
+    return NextResponse.json({ error: e?.message ?? "Görsel üretimi başarısız." }, { status: 500 });
   }
 }

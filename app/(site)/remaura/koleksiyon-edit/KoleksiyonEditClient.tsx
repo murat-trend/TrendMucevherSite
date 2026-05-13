@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -13,425 +13,500 @@ const FORM_KARAKTERLERI = [
   "Organik",
   "Filigran",
   "Kabartmalı",
+  "Asimetrik",
 ] as const;
 type FormKarakteri = (typeof FORM_KARAKTERLERI)[number];
 
 const METAL_RENGI = [
-  { label: "Sarı Altın", color: "#D4AF37" },
-  { label: "Rose Gold", color: "#B76E79" },
-  { label: "Beyaz Altın", color: "#D8D8D8" },
-  { label: "Gümüş", color: "#C0C0C0" },
+  { label: "Sarı Altın", hex: "#D4AF37" },
+  { label: "Rose Gold", hex: "#B76E79" },
+  { label: "Beyaz Altın", hex: "#E0E0E0" },
+  { label: "Gümüş", hex: "#C0C0C0" },
+  { label: "Oksitlenmiş Gümüş", hex: "#707070" },
 ] as const;
 type MetalRengi = (typeof METAL_RENGI)[number]["label"];
 
+const ACCENT = "#b76e79";
+const ACCENT_LIGHT = "#c4838b";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type PopupState =
+type LoadState =
+  | { kind: "idle" }
+  | { kind: "generating" }
+  | { kind: "op"; index: number; label: string }
+  | { kind: "saving"; index: number };
+
+type Modal =
   | { type: "replace"; index: number; searchPrompt: string; replacePrompt: string }
-  | { type: "recolor"; index: number; selectPrompt: string; newColor: string }
-  | { type: "upscale"; index: number; mode: "conservative" | "creative" }
-  | { type: "style"; index: number; stylePrompt: string };
+  | { type: "recolor"; index: number; selectPrompt: string; colorPrompt: string };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Reusable UI pieces ───────────────────────────────────────────────────────
 
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((res, rej) => {
-    const reader = new FileReader();
-    reader.onload = () => res(reader.result as string);
-    reader.onerror = rej;
-    reader.readAsDataURL(file);
-  });
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      style={{
+        fontSize: 9,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: "0.35em",
+        color: "rgba(255,255,255,0.35)",
+      }}
+    >
+      {children}
+    </span>
+  );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+function FieldInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      style={{
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: 8,
+        padding: "8px 12px",
+        fontSize: 13,
+        color: "white",
+        outline: "none",
+        width: "100%",
+        ...(props.style ?? {}),
+      }}
+      onFocus={(e) => {
+        e.currentTarget.style.borderColor = "rgba(183,110,121,0.5)";
+        props.onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
+        props.onBlur?.(e);
+      }}
+    />
+  );
+}
 
-function SmallBtn({
-  children,
+function FieldTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      {...props}
+      style={{
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: 8,
+        padding: "8px 12px",
+        fontSize: 13,
+        color: "white",
+        outline: "none",
+        width: "100%",
+        resize: "none",
+        lineHeight: 1.6,
+        ...(props.style ?? {}),
+      }}
+      onFocus={(e) => {
+        e.currentTarget.style.borderColor = "rgba(183,110,121,0.5)";
+        props.onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
+        props.onBlur?.(e);
+      }}
+    />
+  );
+}
+
+function ChipBtn({
+  active,
   onClick,
-  loading,
-  accent,
+  children,
 }: {
-  children: React.ReactNode;
+  active: boolean;
   onClick: () => void;
-  loading?: boolean;
-  accent?: boolean;
+  children: React.ReactNode;
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      disabled={loading}
-      className="px-2 py-1 rounded text-[9px] font-bold uppercase tracking-[0.1em] border transition-all disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
-      style={
-        accent
-          ? {
-              backgroundColor: "rgba(183,110,121,0.18)",
-              borderColor: "#b76e79",
-              color: "#c4838b",
-            }
-          : {
-              backgroundColor: "rgba(255,255,255,0.04)",
-              borderColor: "rgba(255,255,255,0.1)",
-              color: "rgba(255,255,255,0.5)",
-            }
-      }
+      style={{
+        padding: "6px 10px",
+        borderRadius: 6,
+        fontSize: 10,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: "0.1em",
+        border: "1px solid",
+        cursor: "pointer",
+        transition: "all 0.15s",
+        background: active ? "rgba(183,110,121,0.16)" : "rgba(255,255,255,0.03)",
+        borderColor: active ? ACCENT : "rgba(255,255,255,0.08)",
+        color: active ? ACCENT_LIGHT : "rgba(255,255,255,0.4)",
+      }}
     >
       {children}
     </button>
   );
 }
 
-function Spinner() {
+function ActionBtn({
+  onClick,
+  disabled,
+  accent,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  accent?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        padding: "4px 8px",
+        borderRadius: 5,
+        fontSize: 9,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: "0.1em",
+        border: "1px solid",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.4 : 1,
+        transition: "all 0.15s",
+        whiteSpace: "nowrap",
+        background: accent ? "rgba(183,110,121,0.18)" : "rgba(255,255,255,0.04)",
+        borderColor: accent ? ACCENT : "rgba(255,255,255,0.1)",
+        color: accent ? ACCENT_LIGHT : "rgba(255,255,255,0.5)",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Spinner({ size = 16 }: { size?: number }) {
   return (
     <div
-      className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin"
-      style={{ borderColor: "#b76e79", borderTopColor: "transparent" }}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        border: `2px solid ${ACCENT}`,
+        borderTopColor: "transparent",
+        animation: "spin 0.7s linear infinite",
+        flexShrink: 0,
+      }}
     />
   );
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+function GridSkeleton() {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, maxWidth: 768 }}>
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div
+            style={{
+              aspectRatio: "1",
+              borderRadius: 12,
+              background: "rgba(255,255,255,0.05)",
+              animation: "pulse 1.5s ease-in-out infinite",
+            }}
+          />
+          <div
+            style={{
+              height: 24,
+              borderRadius: 6,
+              background: "rgba(255,255,255,0.03)",
+              animation: "pulse 1.5s ease-in-out infinite",
+              animationDelay: `${i * 0.1}s`,
+            }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export function KoleksiyonEditClient() {
-  // Form state
+  // Form
   const [koleksiyonAdi, setKoleksiyonAdi] = useState("");
   const [takiTipi, setTakiTipi] = useState<TakiTipi>("Yüzük");
   const [tema, setTema] = useState("");
   const [formKarakterleri, setFormKarakterleri] = useState<FormKarakteri[]>([]);
   const [metalRengi, setMetalRengi] = useState<MetalRengi>("Sarı Altın");
-  const [referansGorsel, setReferansGorsel] = useState<string | null>(null);
-  const [referansName, setReferansName] = useState("");
+  const [refBase64, setRefBase64] = useState<string | null>(null);
+  const [refName, setRefName] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Result state
+  // Results
   const [images, setImages] = useState<string[]>([]);
-  const [generating, setGenerating] = useState(false);
-  const [opLoading, setOpLoading] = useState<number | null>(null);
+  const [load, setLoad] = useState<LoadState>({ kind: "idle" });
   const [saved, setSaved] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
-  // Popup state
-  const [popup, setPopup] = useState<PopupState | null>(null);
-  const [popupLoading, setPopupLoading] = useState(false);
+  // Modal
+  const [modal, setModal] = useState<Modal | null>(null);
+  const [modalLoading, setModalLoading] = useState(false);
 
-  // ─── Handlers ───────────────────────────────────────────────────────────────
+  // ─── Helpers ────────────────────────────────────────────────────────────────
 
-  function toggleForm(k: FormKarakteri) {
-    setFormKarakterleri((p) =>
-      p.includes(k) ? p.filter((x) => x !== k) : [...p, k]
-    );
-  }
+  const isOpBusy = (index: number) =>
+    (load.kind === "op" && load.index === index) ||
+    (load.kind === "saving" && load.index === index);
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const b64 = await fileToBase64(file);
-    setReferansGorsel(b64);
-    setReferansName(file.name);
-  }
+  const toggleForm = (k: FormKarakteri) =>
+    setFormKarakterleri((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]));
+
+  const handleFileChange = useCallback(async (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      setRefBase64(reader.result as string);
+      setRefName(file.name);
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  // ─── Generate ───────────────────────────────────────────────────────────────
 
   async function handleUret() {
-    if (!tema.trim()) {
-      setError("Tema / açıklama boş bırakılamaz.");
-      return;
-    }
+    if (!tema.trim()) { setError("Tema / açıklama boş bırakılamaz."); return; }
     setError(null);
-    setGenerating(true);
+    setLoad({ kind: "generating" });
     setImages([]);
     setSaved(new Set());
     try {
       const res = await fetch("/api/remaura/koleksiyon-edit/uret", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          koleksiyonAdi,
-          takiTipi,
-          tema,
-          formKarakterleri,
-          metalRengi,
-          referansGorsel,
-        }),
+        body: JSON.stringify({ takiTipi, tema, formKarakterleri, metalRengi, referansGorsel: refBase64 }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Üretim başarısız.");
-        return;
-      }
+      if (!res.ok) { setError(data.error ?? "Üretim başarısız."); return; }
       setImages(data.images ?? []);
-    } catch {
-      setError("Bağlantı hatası.");
-    } finally {
-      setGenerating(false);
-    }
+    } catch { setError("Bağlantı hatası."); }
+    finally { setLoad({ kind: "idle" }); }
   }
+
+  // ─── Stability helper ────────────────────────────────────────────────────────
 
   async function callStability(
     index: number,
-    payload: Record<string, unknown>
+    payload: Record<string, unknown>,
+    label: string
   ): Promise<string | null> {
-    setOpLoading(index);
+    setLoad({ kind: "op", index, label });
     try {
       const res = await fetch("/api/remaura/koleksiyon-edit/stability", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: images[index], ...payload }),
+        body: JSON.stringify({ image: images[index], ...payload }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "İşlem başarısız.");
-        return null;
-      }
+      if (!res.ok) { setError(data.error ?? "İşlem başarısız."); return null; }
       return data.image ?? null;
-    } catch {
-      setError("Bağlantı hatası.");
-      return null;
-    } finally {
-      setOpLoading(null);
-    }
+    } catch { setError("Bağlantı hatası."); return null; }
+    finally { setLoad({ kind: "idle" }); }
   }
 
-  function replaceImage(index: number, newSrc: string) {
-    setImages((prev) => {
-      const next = [...prev];
-      next[index] = newSrc;
-      return next;
-    });
+  function replaceImg(index: number, src: string) {
+    setImages((prev) => { const n = [...prev]; n[index] = src; return n; });
   }
+
+  // ─── Per-image actions ───────────────────────────────────────────────────────
 
   async function handleRemoveBg(index: number) {
-    const result = await callStability(index, { operation: "remove-bg" });
-    if (result) replaceImage(index, result);
+    const result = await callStability(index, { action: "remove-background" }, "BG kaldırılıyor");
+    if (result) replaceImg(index, result);
+  }
+
+  async function handleUpscale(index: number) {
+    const result = await callStability(index, { action: "upscale" }, "Upscale");
+    if (result) replaceImg(index, result);
+  }
+
+  async function handleModalSubmit() {
+    if (!modal) return;
+    setModalLoading(true);
+    try {
+      let result: string | null = null;
+      if (modal.type === "replace") {
+        result = await callStability(
+          modal.index,
+          { action: "search-replace", searchPrompt: modal.searchPrompt, replacePrompt: modal.replacePrompt },
+          "Değiştiriliyor"
+        );
+      } else {
+        result = await callStability(
+          modal.index,
+          { action: "recolor", selectPrompt: modal.selectPrompt, colorPrompt: modal.colorPrompt },
+          "Renklendiriliyor"
+        );
+      }
+      if (result) replaceImg(modal.index, result);
+      setModal(null);
+    } finally { setModalLoading(false); }
   }
 
   async function handleSave(index: number) {
-    setOpLoading(index);
+    setLoad({ kind: "saving", index });
     try {
       const res = await fetch("/api/remaura/koleksiyon-edit/kaydet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          koleksiyonAdi,
-          gorselUrl: images[index],
-          tip: takiTipi,
-          tema,
-          metal: metalRengi,
-        }),
+        body: JSON.stringify({ gorselUrl: images[index], koleksiyonAdi, tip: takiTipi, tema, metal: metalRengi }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Kayıt başarısız.");
-        return;
-      }
+      if (!res.ok) { setError(data.error ?? "Kayıt başarısız."); return; }
       setSaved((p) => new Set([...p, index]));
-    } catch {
-      setError("Bağlantı hatası.");
-    } finally {
-      setOpLoading(null);
-    }
+    } catch { setError("Bağlantı hatası."); }
+    finally { setLoad({ kind: "idle" }); }
   }
 
-  async function handlePopupSubmit() {
-    if (!popup) return;
-    setPopupLoading(true);
-    try {
-      let result: string | null = null;
+  // ─── Drag-drop ───────────────────────────────────────────────────────────────
 
-      if (popup.type === "replace") {
-        result = await callStability(popup.index, {
-          operation: "search-replace",
-          searchPrompt: popup.searchPrompt,
-          replacePrompt: popup.replacePrompt,
-        });
-      } else if (popup.type === "recolor") {
-        result = await callStability(popup.index, {
-          operation: "search-recolor",
-          selectPrompt: popup.selectPrompt,
-          newColor: popup.newColor,
-        });
-      } else if (popup.type === "upscale") {
-        result = await callStability(popup.index, {
-          operation: "upscale",
-          upscaleMode: popup.mode,
-        });
-      } else if (popup.type === "style") {
-        if (!referansGorsel) {
-          setError("Stil transferi için önce referans görsel yükleyin.");
-          return;
-        }
-        result = await callStability(popup.index, {
-          operation: "style-transfer",
-          referenceBase64: referansGorsel,
-          stylePrompt: popup.stylePrompt,
-        });
-      }
-
-      if (result) replaceImage(popup.index, result);
-      setPopup(null);
-    } finally {
-      setPopupLoading(false);
-    }
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file?.type.startsWith("image/")) handleFileChange(file);
   }
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 
-  const accent = "#b76e79";
-  const accentLight = "#c4838b";
-
   return (
-    <div className="min-h-screen bg-[#080808] text-white font-display flex flex-col">
+    <div style={{ minHeight: "100vh", background: "#080808", color: "white", display: "flex", flexDirection: "column", fontFamily: "var(--font-display, sans-serif)" }}>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+        ::placeholder { color: rgba(255,255,255,0.18); }
+      `}</style>
+
       {/* Header */}
-      <div className="shrink-0 border-b border-white/[0.06] px-8 py-4 flex items-center gap-3">
-        <span
-          className="text-[10px] font-bold uppercase tracking-[0.4em]"
-          style={{ color: accent }}
-        >
-          Remaura
-        </span>
-        <span className="text-white/20 text-xs">/</span>
-        <span className="text-[10px] font-medium uppercase tracking-[0.3em] text-white/40">
-          Koleksiyon Edit
-        </span>
+      <div style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "14px 28px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.4em", color: ACCENT }}>Remaura</span>
+        <span style={{ color: "rgba(255,255,255,0.2)" }}>/</span>
+        <span style={{ fontSize: 10, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.35)" }}>Koleksiyon Edit</span>
       </div>
 
-      <div className="flex flex-1 min-h-0">
-        {/* ─── Left panel ─────────────────────────────────────────────────────── */}
-        <div className="w-[340px] shrink-0 border-r border-white/[0.06] overflow-y-auto">
-          <div className="p-5 flex flex-col gap-5">
+      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+        {/* ── Left panel ─────────────────────────────────────────────────── */}
+        <div style={{ width: 340, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.06)", overflowY: "auto" }}>
+          <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 20 }}>
 
             {/* Referans görsel */}
-            <div className="flex flex-col gap-2">
-              <label className="field-label">Referans Görsel <span className="text-white/20 normal-case tracking-normal font-normal">(opsiyonel)</span></label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <Label>Referans Görsel <span style={{ textTransform: "none", letterSpacing: "normal", fontWeight: 400, color: "rgba(255,255,255,0.2)" }}>(opsiyonel)</span></Label>
               <div
-                className="relative border border-dashed border-white/10 rounded-xl overflow-hidden cursor-pointer hover:border-[#b76e79]/40 transition-colors"
-                style={{ minHeight: 88 }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={onDrop}
                 onClick={() => fileRef.current?.click()}
+                style={{
+                  border: "1px dashed rgba(255,255,255,0.1)",
+                  borderRadius: 12,
+                  cursor: "pointer",
+                  overflow: "hidden",
+                  minHeight: 80,
+                  display: "flex",
+                  alignItems: "center",
+                  transition: "border-color 0.15s",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = "rgba(183,110,121,0.4)")}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)")}
               >
-                {referansGorsel ? (
-                  <div className="flex items-center gap-3 p-3">
+                {refBase64 ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 12, width: "100%" }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={referansGorsel}
-                      alt="ref"
-                      className="w-14 h-14 object-cover rounded-lg"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] text-white/60 truncate">{referansName}</p>
+                    <img src={refBase64} alt="ref" style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 8, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{refName}</p>
                       <button
-                        className="text-[9px] text-white/30 hover:text-white/60 mt-1"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setReferansGorsel(null);
-                          setReferansName("");
-                          if (fileRef.current) fileRef.current.value = "";
-                        }}
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setRefBase64(null); setRefName(""); if (fileRef.current) fileRef.current.value = ""; }}
+                        style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", background: "none", border: "none", cursor: "pointer", marginTop: 4, padding: 0 }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.6)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.3)")}
                       >
                         Kaldır
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center py-6 gap-1">
-                    <svg className="w-5 h-5 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", padding: "20px 0", gap: 6 }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    <span className="text-[9px] text-white/25 uppercase tracking-[0.2em]">Görsel yükle</span>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", textTransform: "uppercase", letterSpacing: "0.2em" }}>Sürükle veya tıkla</span>
                   </div>
                 )}
               </div>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileChange}
-              />
+              <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileChange(f); }} />
             </div>
 
             {/* Koleksiyon adı */}
-            <div className="flex flex-col gap-1.5">
-              <label className="field-label">Koleksiyon Adı</label>
-              <input
-                type="text"
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <Label>Koleksiyon Adı</Label>
+              <FieldInput
                 value={koleksiyonAdi}
                 onChange={(e) => setKoleksiyonAdi(e.target.value)}
                 placeholder="Opsiyonel"
-                className="field-input"
               />
             </div>
 
             {/* Takı tipi */}
-            <div className="flex flex-col gap-1.5">
-              <label className="field-label">Takı Tipi</label>
-              <div className="flex flex-wrap gap-1.5">
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <Label>Takı Tipi</Label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {TAKI_TIPI.map((t) => (
-                  <ChoiceBtn
-                    key={t}
-                    active={takiTipi === t}
-                    onClick={() => setTakiTipi(t)}
-                  >
-                    {t}
-                  </ChoiceBtn>
+                  <ChipBtn key={t} active={takiTipi === t} onClick={() => setTakiTipi(t)}>{t}</ChipBtn>
                 ))}
               </div>
             </div>
 
             {/* Tema */}
-            <div className="flex flex-col gap-1.5">
-              <label className="field-label">Tema / Açıklama</label>
-              <textarea
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <Label>Tema / Açıklama</Label>
+              <FieldTextarea
+                rows={4}
                 value={tema}
                 onChange={(e) => setTema(e.target.value)}
-                rows={4}
                 placeholder={"Türkçe yaz.\n\nÖrn: lotus çiçeği, ince kol, boş yuva, kadın yüzüğü"}
-                className="field-input resize-none leading-relaxed"
               />
             </div>
 
             {/* Form karakteri */}
-            <div className="flex flex-col gap-1.5">
-              <label className="field-label">
-                Form Karakteri{" "}
-                <span className="text-white/20 normal-case tracking-normal font-normal">(çoklu)</span>
-              </label>
-              <div className="flex flex-wrap gap-1.5">
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <Label>Form Karakteri <span style={{ textTransform: "none", letterSpacing: "normal", fontWeight: 400, color: "rgba(255,255,255,0.2)" }}>(çoklu)</span></Label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {FORM_KARAKTERLERI.map((k) => (
-                  <ChoiceBtn
-                    key={k}
-                    active={formKarakterleri.includes(k)}
-                    onClick={() => toggleForm(k)}
-                  >
-                    {k}
-                  </ChoiceBtn>
+                  <ChipBtn key={k} active={formKarakterleri.includes(k)} onClick={() => toggleForm(k)}>{k}</ChipBtn>
                 ))}
               </div>
             </div>
 
             {/* Metal rengi */}
-            <div className="flex flex-col gap-1.5">
-              <label className="field-label">Metal Rengi</label>
-              <div className="flex flex-wrap gap-1.5">
-                {METAL_RENGI.map(({ label, color }) => (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <Label>Metal Rengi</Label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {METAL_RENGI.map(({ label, hex }) => (
                   <button
                     key={label}
+                    type="button"
                     onClick={() => setMetalRengi(label)}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-[0.1em] border transition-all"
-                    style={
-                      metalRengi === label
-                        ? {
-                            backgroundColor: "rgba(183,110,121,0.15)",
-                            borderColor: accent,
-                            color: accentLight,
-                          }
-                        : {
-                            backgroundColor: "rgba(255,255,255,0.03)",
-                            borderColor: "rgba(255,255,255,0.08)",
-                            color: "rgba(255,255,255,0.45)",
-                          }
-                    }
+                    style={{
+                      display: "flex", alignItems: "center", gap: 6,
+                      padding: "5px 10px", borderRadius: 6,
+                      fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em",
+                      border: "1px solid", cursor: "pointer", transition: "all 0.15s",
+                      background: metalRengi === label ? "rgba(183,110,121,0.16)" : "rgba(255,255,255,0.03)",
+                      borderColor: metalRengi === label ? ACCENT : "rgba(255,255,255,0.08)",
+                      color: metalRengi === label ? ACCENT_LIGHT : "rgba(255,255,255,0.4)",
+                    }}
                   >
-                    <span
-                      className="w-2.5 h-2.5 rounded-full border border-white/20 shrink-0"
-                      style={{ backgroundColor: color }}
-                    />
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: hex, border: "1px solid rgba(255,255,255,0.2)", flexShrink: 0 }} />
                     {label}
                   </button>
                 ))}
@@ -440,158 +515,98 @@ export function KoleksiyonEditClient() {
 
             {/* Error */}
             {error && (
-              <p className="text-[11px] text-red-400/80 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+              <div style={{ fontSize: 11, color: "rgba(248,113,113,0.85)", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, padding: "8px 12px" }}>
                 {error}
-              </p>
+              </div>
             )}
 
             {/* Üret */}
             <button
+              type="button"
               onClick={handleUret}
-              disabled={generating}
-              className="w-full py-3 rounded-xl text-[10px] font-bold uppercase tracking-[0.3em] border transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              disabled={load.kind === "generating"}
               style={{
-                backgroundColor: generating
-                  ? "rgba(183,110,121,0.07)"
-                  : "rgba(183,110,121,0.14)",
-                borderColor: accent,
-                color: accentLight,
+                width: "100%", padding: "12px 0", borderRadius: 12,
+                fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em",
+                border: `1px solid ${ACCENT}`, cursor: load.kind === "generating" ? "not-allowed" : "pointer",
+                opacity: load.kind === "generating" ? 0.6 : 1,
+                transition: "all 0.15s",
+                background: "rgba(183,110,121,0.14)", color: ACCENT_LIGHT,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
               }}
             >
-              {generating && <Spinner />}
-              {generating ? "Üretiliyor…" : "Üret"}
+              {load.kind === "generating" && <Spinner />}
+              {load.kind === "generating" ? "Üretiliyor…" : "Görsel Üret"}
             </button>
+
           </div>
         </div>
 
-        {/* ─── Right panel ────────────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto p-5">
-          {generating && images.length === 0 && (
-            <div className="h-full flex items-center justify-center">
-              <div className="flex flex-col items-center gap-4">
-                <Spinner />
-                <p className="text-[9px] uppercase tracking-[0.35em] text-white/25">
-                  4 görsel üretiliyor
-                </p>
-              </div>
-            </div>
-          )}
+        {/* ── Right panel ────────────────────────────────────────────────── */}
+        <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
 
-          {!generating && images.length === 0 && (
-            <div className="h-full flex items-center justify-center">
-              <p className="text-[9px] uppercase tracking-[0.3em] text-white/12">
+          {load.kind === "generating" && <GridSkeleton />}
+
+          {load.kind !== "generating" && images.length === 0 && (
+            <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <p style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.35em", color: "rgba(255,255,255,0.1)" }}>
                 Görseller burada görünecek
               </p>
             </div>
           )}
 
           {images.length > 0 && (
-            <div className="grid grid-cols-2 gap-4 max-w-3xl">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, maxWidth: 768 }}>
               {images.map((src, i) => (
-                <div key={i} className="flex flex-col gap-2">
-                  {/* Image card */}
-                  <div className="relative aspect-square rounded-xl overflow-hidden border border-white/[0.06] bg-black">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={src}
-                      alt={`Konsept ${i + 1}`}
-                      className="w-full h-full object-cover"
-                    />
+                <div key={i} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
 
-                    {/* Loading overlay */}
-                    {opLoading === i && (
-                      <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
-                        <div className="flex flex-col items-center gap-2">
-                          <Spinner />
-                          <span className="text-[8px] uppercase tracking-[0.2em] text-white/40">
-                            İşleniyor…
-                          </span>
-                        </div>
+                  {/* Image */}
+                  <div style={{ position: "relative", aspectRatio: "1", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,0.06)", background: "#000" }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={src} alt={`Konsept ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+
+                    {/* Op loading overlay */}
+                    {isOpBusy(i) && (
+                      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                        <Spinner size={24} />
+                        <span style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: "0.25em", color: "rgba(255,255,255,0.4)" }}>
+                          {load.kind === "op" ? load.label : "Kaydediliyor"}
+                        </span>
                       </div>
                     )}
 
-                    {/* Saved badge */}
+                    {/* Badges */}
+                    <div style={{ position: "absolute", top: 8, left: 8, fontSize: 8, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "rgba(0,0,0,0.55)", color: "rgba(255,255,255,0.4)" }}>
+                      {i + 1} / 4
+                    </div>
                     {saved.has(i) && (
-                      <div
-                        className="absolute top-2 right-2 text-[8px] font-bold uppercase tracking-[0.15em] px-2 py-0.5 rounded-md"
-                        style={{ backgroundColor: "rgba(183,110,121,0.85)", color: "white" }}
-                      >
+                      <div style={{ position: "absolute", top: 8, right: 8, fontSize: 8, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: "rgba(183,110,121,0.85)", color: "white", textTransform: "uppercase", letterSpacing: "0.1em" }}>
                         Kaydedildi
                       </div>
                     )}
-
-                    {/* Index badge */}
-                    <div
-                      className="absolute top-2 left-2 text-[8px] font-bold px-1.5 py-0.5 rounded"
-                      style={{
-                        backgroundColor: "rgba(0,0,0,0.55)",
-                        color: "rgba(255,255,255,0.4)",
-                      }}
-                    >
-                      {i + 1} / 4
-                    </div>
                   </div>
 
                   {/* Action buttons */}
-                  <div className="flex flex-wrap gap-1.5">
-                    <SmallBtn
-                      onClick={() => handleRemoveBg(i)}
-                      loading={opLoading === i}
-                    >
-                      BG Kaldır
-                    </SmallBtn>
-
-                    <SmallBtn
-                      onClick={() =>
-                        setPopup({ type: "upscale", index: i, mode: "conservative" })
-                      }
-                      loading={opLoading === i}
-                    >
-                      Upscale
-                    </SmallBtn>
-
-                    <SmallBtn
-                      onClick={() =>
-                        setPopup({ type: "recolor", index: i, selectPrompt: "", newColor: "" })
-                      }
-                      loading={opLoading === i}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                    <ActionBtn onClick={() => handleRemoveBg(i)} disabled={isOpBusy(i)}>Remove BG</ActionBtn>
+                    <ActionBtn onClick={() => handleUpscale(i)} disabled={isOpBusy(i)}>Upscale</ActionBtn>
+                    <ActionBtn
+                      onClick={() => setModal({ type: "recolor", index: i, selectPrompt: "", colorPrompt: "" })}
+                      disabled={isOpBusy(i)}
                     >
                       Recolor
-                    </SmallBtn>
-
-                    <SmallBtn
-                      onClick={() =>
-                        setPopup({
-                          type: "replace",
-                          index: i,
-                          searchPrompt: "",
-                          replacePrompt: "",
-                        })
-                      }
-                      loading={opLoading === i}
+                    </ActionBtn>
+                    <ActionBtn
+                      onClick={() => setModal({ type: "replace", index: i, searchPrompt: "", replacePrompt: "" })}
+                      disabled={isOpBusy(i)}
                     >
                       Değiştir
-                    </SmallBtn>
-
-                    {referansGorsel && (
-                      <SmallBtn
-                        onClick={() =>
-                          setPopup({ type: "style", index: i, stylePrompt: "" })
-                        }
-                        loading={opLoading === i}
-                      >
-                        Stil Al
-                      </SmallBtn>
-                    )}
-
-                    <SmallBtn
-                      onClick={() => handleSave(i)}
-                      loading={opLoading === i}
-                      accent
-                    >
+                    </ActionBtn>
+                    <ActionBtn onClick={() => handleSave(i)} disabled={isOpBusy(i)} accent>
                       {saved.has(i) ? "Tekrar Kaydet" : "Kaydet"}
-                    </SmallBtn>
+                    </ActionBtn>
                   </div>
+
                 </div>
               ))}
             </div>
@@ -599,204 +614,88 @@ export function KoleksiyonEditClient() {
         </div>
       </div>
 
-      {/* ─── Popup ──────────────────────────────────────────────────────────── */}
-      {popup && (
+      {/* ── Modal ────────────────────────────────────────────────────────── */}
+      {modal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => !popupLoading && setPopup(null)}
+          style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+          onClick={() => !modalLoading && setModal(null)}
         >
           <div
-            className="w-[320px] rounded-2xl border border-white/10 bg-[#111] p-5 flex flex-col gap-4"
+            style={{ width: 320, borderRadius: 16, border: "1px solid rgba(255,255,255,0.1)", background: "#111", padding: 20, display: "flex", flexDirection: "column", gap: 16 }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* ── Upscale ── */}
-            {popup.type === "upscale" && (
-              <>
-                <p className="text-[10px] font-bold uppercase tracking-[0.3em]" style={{ color: accentLight }}>
-                  Upscale Modu
-                </p>
-                <div className="flex gap-2">
-                  {(["conservative", "creative"] as const).map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => setPopup({ ...popup, mode: m })}
-                      className="flex-1 py-2 rounded-lg text-[9px] font-bold uppercase tracking-[0.15em] border transition-all"
-                      style={
-                        popup.mode === m
-                          ? { backgroundColor: "rgba(183,110,121,0.18)", borderColor: accent, color: accentLight }
-                          : { backgroundColor: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.4)" }
-                      }
-                    >
-                      {m === "conservative" ? "Conservative" : "Creative"}
-                    </button>
-                  ))}
-                </div>
-                {popup.mode === "creative" && (
-                  <p className="text-[9px] text-white/30">
-                    Creative upscale yaklaşık 2–3 dakika sürebilir.
-                  </p>
-                )}
-              </>
-            )}
+            {/* Title */}
+            <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", color: ACCENT_LIGHT }}>
+              {modal.type === "replace" ? "Ara & Değiştir" : "Renklendirme"}
+            </p>
 
-            {/* ── Replace ── */}
-            {popup.type === "replace" && (
-              <>
-                <p className="text-[10px] font-bold uppercase tracking-[0.3em]" style={{ color: accentLight }}>
-                  Ara & Değiştir
-                </p>
-                <div className="flex flex-col gap-3">
-                  <div>
-                    <label className="field-label">Ne arıyorsun?</label>
-                    <input
-                      className="field-input mt-1"
-                      placeholder="örn. the ring band"
-                      value={popup.searchPrompt}
-                      onChange={(e) => setPopup({ ...popup, searchPrompt: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="field-label">Ne olsun?</label>
-                    <input
-                      className="field-input mt-1"
-                      placeholder="örn. twisted rope pattern band"
-                      value={popup.replacePrompt}
-                      onChange={(e) => setPopup({ ...popup, replacePrompt: e.target.value })}
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* ── Recolor ── */}
-            {popup.type === "recolor" && (
-              <>
-                <p className="text-[10px] font-bold uppercase tracking-[0.3em]" style={{ color: accentLight }}>
-                  Renklendirme
-                </p>
-                <div className="flex flex-col gap-3">
-                  <div>
-                    <label className="field-label">Neyi renklendireyim?</label>
-                    <input
-                      className="field-input mt-1"
-                      placeholder="örn. the ring"
-                      value={popup.selectPrompt}
-                      onChange={(e) => setPopup({ ...popup, selectPrompt: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="field-label">Hangi renk / metal?</label>
-                    <input
-                      className="field-input mt-1"
-                      placeholder="örn. rose gold metal"
-                      value={popup.newColor}
-                      onChange={(e) => setPopup({ ...popup, newColor: e.target.value })}
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* ── Style Transfer ── */}
-            {popup.type === "style" && (
-              <>
-                <p className="text-[10px] font-bold uppercase tracking-[0.3em]" style={{ color: accentLight }}>
-                  Referans Stil Uygula
-                </p>
-                <div>
-                  <label className="field-label">Prompt (opsiyonel)</label>
-                  <input
-                    className="field-input mt-1"
-                    placeholder="örn. jewelry product photo, gold"
-                    value={popup.stylePrompt}
-                    onChange={(e) => setPopup({ ...popup, stylePrompt: e.target.value })}
+            {/* Replace inputs */}
+            {modal.type === "replace" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  <Label>Ne arıyorsun?</Label>
+                  <FieldInput
+                    value={modal.searchPrompt}
+                    onChange={(e) => setModal({ ...modal, searchPrompt: e.target.value })}
+                    placeholder="örn. the ring band"
                   />
                 </div>
-              </>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  <Label>Ne olsun?</Label>
+                  <FieldInput
+                    value={modal.replacePrompt}
+                    onChange={(e) => setModal({ ...modal, replacePrompt: e.target.value })}
+                    placeholder="örn. twisted rope pattern"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Recolor inputs */}
+            {modal.type === "recolor" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  <Label>Neyi?</Label>
+                  <FieldInput
+                    value={modal.selectPrompt}
+                    onChange={(e) => setModal({ ...modal, selectPrompt: e.target.value })}
+                    placeholder="örn. the ring"
+                  />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  <Label>Hangi renk / metal?</Label>
+                  <FieldInput
+                    value={modal.colorPrompt}
+                    onChange={(e) => setModal({ ...modal, colorPrompt: e.target.value })}
+                    placeholder="örn. rose gold metal"
+                  />
+                </div>
+              </div>
             )}
 
             {/* Buttons */}
-            <div className="flex gap-2 pt-1">
+            <div style={{ display: "flex", gap: 8, paddingTop: 4 }}>
               <button
-                onClick={() => setPopup(null)}
-                disabled={popupLoading}
-                className="flex-1 py-2 rounded-lg text-[9px] font-bold uppercase tracking-[0.15em] border border-white/10 text-white/40 disabled:opacity-40"
+                type="button"
+                onClick={() => setModal(null)}
+                disabled={modalLoading}
+                style={{ flex: 1, padding: "9px 0", borderRadius: 8, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.4)", background: "none", cursor: "pointer", opacity: modalLoading ? 0.4 : 1 }}
               >
                 İptal
               </button>
               <button
-                onClick={handlePopupSubmit}
-                disabled={popupLoading}
-                className="flex-1 py-2 rounded-lg text-[9px] font-bold uppercase tracking-[0.15em] border flex items-center justify-center gap-1.5 disabled:opacity-40"
-                style={{ backgroundColor: "rgba(183,110,121,0.18)", borderColor: accent, color: accentLight }}
+                type="button"
+                onClick={handleModalSubmit}
+                disabled={modalLoading}
+                style={{ flex: 1, padding: "9px 0", borderRadius: 8, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", border: `1px solid ${ACCENT}`, background: "rgba(183,110,121,0.18)", color: ACCENT_LIGHT, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: modalLoading ? 0.7 : 1 }}
               >
-                {popupLoading && <Spinner />}
-                {popupLoading ? "İşleniyor…" : "Uygula"}
+                {modalLoading && <Spinner size={12} />}
+                {modalLoading ? "İşleniyor…" : "Uygula"}
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* Global styles for reuse */}
-      <style jsx global>{`
-        .field-label {
-          font-size: 9px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.35em;
-          color: rgba(255, 255, 255, 0.35);
-        }
-        .field-input {
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 0.5rem;
-          padding: 0.5rem 0.75rem;
-          font-size: 0.875rem;
-          color: white;
-          outline: none;
-          width: 100%;
-          transition: border-color 0.15s;
-        }
-        .field-input::placeholder {
-          color: rgba(255, 255, 255, 0.18);
-        }
-        .field-input:focus {
-          border-color: rgba(183, 110, 121, 0.5);
-        }
-      `}</style>
     </div>
-  );
-}
-
-function ChoiceBtn({
-  children,
-  active,
-  onClick,
-}: {
-  children: React.ReactNode;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="px-2.5 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-[0.1em] border transition-all"
-      style={
-        active
-          ? {
-              backgroundColor: "rgba(183,110,121,0.16)",
-              borderColor: "#b76e79",
-              color: "#c4838b",
-            }
-          : {
-              backgroundColor: "rgba(255,255,255,0.03)",
-              borderColor: "rgba(255,255,255,0.08)",
-              color: "rgba(255,255,255,0.4)",
-            }
-      }
-    >
-      {children}
-    </button>
   );
 }
