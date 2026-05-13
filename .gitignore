@@ -67,3 +67,5 @@ docs/cad/
 data/
 
 .vercel
+.claude/
+.claire/
