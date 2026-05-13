@@ -257,93 +257,107 @@ export function AdminCoursesPage() {
       )}
 
       {/* Table */}
-      <FinanceScrollTable>
-        <thead>
-          <tr>
+      <FinanceScrollTable
+        minWidthPx={700}
+        colgroup={
+          <colgroup>
+            <col style={{ width: "5%" }} />
+            <col style={{ width: "35%" }} />
+            <col style={{ width: "15%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "21%" }} />
+          </colgroup>
+        }
+        headerCells={
+          <>
             <th className={FINANCE_TH}>Sıra</th>
             <th className={FINANCE_TH}>Başlık</th>
             <th className={FINANCE_TH}>Kategori</th>
             <th className={FINANCE_TH}>Fiyat (₺)</th>
             <th className={FINANCE_TH}>Durum</th>
             <th className={FINANCE_TH}>İşlemler</th>
-          </tr>
-        </thead>
-        <tbody>
-          {loading && (
-            <tr>
-              <td colSpan={6} className="py-10 text-center text-sm text-zinc-500">
-                <Loader2 className="inline h-4 w-4 animate-spin mr-2" />
-                Yükleniyor…
-              </td>
-            </tr>
-          )}
-          {!loading && courses.length === 0 && (
-            <tr>
-              <td colSpan={6} className="py-10 text-center text-sm text-zinc-500">
-                Henüz kurs yok. Yeni kurs ekleyin.
-              </td>
-            </tr>
-          )}
-          {!loading &&
-            courses.map((c) => (
-              <tr key={c.id} className="border-t border-white/[0.04] hover:bg-white/[0.02]">
-                <td className="px-4 py-3 text-center text-xs text-zinc-500">{c.sort_order}</td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    {c.thumbnail_url && (
-                      <img
-                        src={c.thumbnail_url}
-                        alt=""
-                        className="h-9 w-9 rounded-lg object-cover shrink-0 border border-white/[0.08]"
-                      />
-                    )}
-                    <div>
-                      <p className="text-sm font-medium text-zinc-100">{c.title_tr}</p>
-                      {c.title_en && (
-                        <p className="text-xs text-zinc-500">{c.title_en}</p>
-                      )}
-                      <p className="text-[11px] text-zinc-600 font-mono mt-0.5">{c.slug}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-xs text-zinc-400 capitalize">{c.category}</td>
-                <td className="px-4 py-3 text-sm text-zinc-200">
-                  {c.price_try.toLocaleString("tr-TR")} ₺
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                      c.is_published
-                        ? "bg-emerald-500/15 text-emerald-400"
-                        : "bg-zinc-700/40 text-zinc-400"
-                    }`}
-                  >
-                    {c.is_published ? "Yayında" : "Taslak"}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className={SECONDARY_BTN}
-                      onClick={() => openEdit(c)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                      Düzenle
-                    </button>
-                    <button
-                      type="button"
-                      className={DANGER_BTN}
-                      onClick={() => void remove(c.id, c.title_tr)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
+          </>
+        }
+        bodyRows={
+          <>
+            {loading && (
+              <tr>
+                <td colSpan={6} className="py-10 text-center text-sm text-zinc-500">
+                  <Loader2 className="inline h-4 w-4 animate-spin mr-2" />
+                  Yükleniyor…
                 </td>
               </tr>
-            ))}
-        </tbody>
-      </FinanceScrollTable>
+            )}
+            {!loading && courses.length === 0 && (
+              <tr>
+                <td colSpan={6} className="py-10 text-center text-sm text-zinc-500">
+                  Henüz kurs yok. Yeni kurs ekleyin.
+                </td>
+              </tr>
+            )}
+            {!loading &&
+              courses.map((c) => (
+                <tr key={c.id} className="border-t border-white/[0.04] hover:bg-white/[0.02]">
+                  <td className="px-4 py-3 text-center text-xs text-zinc-500">{c.sort_order}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      {c.thumbnail_url && (
+                        <img
+                          src={c.thumbnail_url}
+                          alt=""
+                          className="h-9 w-9 rounded-lg object-cover shrink-0 border border-white/[0.08]"
+                        />
+                      )}
+                      <div>
+                        <p className="text-sm font-medium text-zinc-100">{c.title_tr}</p>
+                        {c.title_en && (
+                          <p className="text-xs text-zinc-500">{c.title_en}</p>
+                        )}
+                        <p className="text-[11px] text-zinc-600 font-mono mt-0.5">{c.slug}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-zinc-400 capitalize">{c.category}</td>
+                  <td className="px-4 py-3 text-sm text-zinc-200">
+                    {c.price_try.toLocaleString("tr-TR")} ₺
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                        c.is_published
+                          ? "bg-emerald-500/15 text-emerald-400"
+                          : "bg-zinc-700/40 text-zinc-400"
+                      }`}
+                    >
+                      {c.is_published ? "Yayında" : "Taslak"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className={SECONDARY_BTN}
+                        onClick={() => openEdit(c)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Düzenle
+                      </button>
+                      <button
+                        type="button"
+                        className={DANGER_BTN}
+                        onClick={() => void remove(c.id, c.title_tr)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+          </>
+        }
+        bodyMaxHeightClass="max-h-[480px]"
+      />
 
       {/* Modal */}
       {modalOpen && (
