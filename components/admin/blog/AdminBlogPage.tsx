@@ -6,6 +6,9 @@ import type { PostRow } from "@/lib/blog/types";
 import { ADMIN_PRIMARY_BUTTON_CLASS } from "@/components/admin/ui/adminPrimaryButton";
 import { FinanceScrollTable, FINANCE_TH } from "@/components/admin/finance/FinanceScrollTable";
 import { Loader2, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, Upload } from "lucide-react";
+import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import TipTapLink from "@tiptap/extension-link";
 
 const generateSlug = (title: string): string => {
   const s = title
@@ -27,6 +30,119 @@ const SECONDARY_BTN =
 
 const DANGER_BTN =
   "inline-flex items-center justify-center rounded-xl border border-rose-500/35 bg-rose-500/12 px-3 py-2 text-xs font-medium text-rose-100 hover:bg-rose-500/18";
+
+function ToolbarBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "rounded px-2 py-1 text-xs font-medium transition-colors select-none",
+        active ? "bg-white/[0.14] text-zinc-100" : "text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-200",
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+
+type BlogEditorProps = {
+  initialContent: string;
+  onChange: (html: string) => void;
+  onEditorReady: (editor: Editor) => void;
+};
+
+function toHtml(raw: string): string {
+  if (!raw) return "";
+  if (raw.trimStart().startsWith("<")) return raw;
+  return raw
+    .split(/\n\n+/)
+    .map((para) => `<p>${para.trim().replace(/\n/g, "<br>")}</p>`)
+    .join("");
+}
+
+function BlogEditor({ initialContent, onChange, onEditorReady }: BlogEditorProps) {
+  const editor = useEditor({
+    extensions: [StarterKit, TipTapLink.configure({ openOnClick: false })],
+    content: toHtml(initialContent),
+    onUpdate({ editor: ed }) {
+      onChange(ed.getHTML());
+    },
+    onCreate({ editor: ed }) {
+      onEditorReady(ed);
+    },
+    editorProps: {
+      attributes: {
+        class: "min-h-[220px] px-3 py-3 text-sm leading-relaxed text-zinc-100 focus:outline-none prose prose-invert prose-sm max-w-none",
+      },
+    },
+  });
+
+  return (
+    <div className="mt-1 overflow-hidden rounded-xl border border-white/[0.12] bg-[#0e1015]">
+      <div className="flex flex-wrap items-center gap-0.5 border-b border-white/[0.1] px-2 py-1.5">
+        <ToolbarBtn active={editor?.isActive("bold")} onClick={() => editor?.chain().focus().toggleBold().run()}>
+          <strong>B</strong>
+        </ToolbarBtn>
+        <ToolbarBtn active={editor?.isActive("italic")} onClick={() => editor?.chain().focus().toggleItalic().run()}>
+          <em>I</em>
+        </ToolbarBtn>
+        <ToolbarBtn active={editor?.isActive("strike")} onClick={() => editor?.chain().focus().toggleStrike().run()}>
+          <s>S</s>
+        </ToolbarBtn>
+        <span className="mx-1 h-4 w-px bg-white/10" />
+        <ToolbarBtn
+          active={editor?.isActive("heading", { level: 2 })}
+          onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
+        >
+          H2
+        </ToolbarBtn>
+        <ToolbarBtn
+          active={editor?.isActive("heading", { level: 3 })}
+          onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}
+        >
+          H3
+        </ToolbarBtn>
+        <span className="mx-1 h-4 w-px bg-white/10" />
+        <ToolbarBtn
+          active={editor?.isActive("bulletList")}
+          onClick={() => editor?.chain().focus().toggleBulletList().run()}
+        >
+          •—
+        </ToolbarBtn>
+        <ToolbarBtn
+          active={editor?.isActive("orderedList")}
+          onClick={() => editor?.chain().focus().toggleOrderedList().run()}
+        >
+          1.
+        </ToolbarBtn>
+        <span className="mx-1 h-4 w-px bg-white/10" />
+        <ToolbarBtn
+          active={editor?.isActive("link")}
+          onClick={() => {
+            if (editor?.isActive("link")) {
+              editor.chain().focus().unsetLink().run();
+            } else {
+              const url = prompt("URL girin:");
+              if (url) editor?.chain().focus().setLink({ href: url }).run();
+            }
+          }}
+        >
+          🔗
+        </ToolbarBtn>
+      </div>
+      <EditorContent editor={editor} />
+    </div>
+  );
+}
 
 const COL = (
   <colgroup>
@@ -66,8 +182,7 @@ export function AdminBlogPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadingContent, setUploadingContent] = useState(false);
   const [modalErr, setModalErr] = useState<string | null>(null);
-  const contentTextareaRef = useRef<HTMLTextAreaElement>(null);
-  const contentCursorRef = useRef<number>(0);
+  const editorRef = useRef<Editor | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -137,7 +252,8 @@ export function AdminBlogPage() {
   };
 
   const estimateRead = useMemo(() => {
-    const words = form.content.trim().split(/\s+/).filter(Boolean).length;
+    const text = form.content.replace(/<[^>]*>/g, " ");
+    const words = text.trim().split(/\s+/).filter(Boolean).length;
     return Math.max(1, Math.min(120, Math.ceil(words / 200)));
   }, [form.content]);
 
@@ -197,7 +313,7 @@ export function AdminBlogPage() {
   };
 
   const aiPolish = async () => {
-    const raw = form.content.trim();
+    const raw = editorRef.current?.getText().trim() ?? form.content.replace(/<[^>]*>/g, " ").trim();
     if (!raw) {
       setModalErr("Önce bir metin yazın.");
       return;
@@ -217,7 +333,12 @@ export function AdminBlogPage() {
         return;
       }
       if (j.text) {
-        setForm((f) => ({ ...f, content: j.text! }));
+        const html = j.text
+          .split(/\n\n+/)
+          .map((p: string) => `<p>${p.trim().replace(/\n/g, "<br>")}</p>`)
+          .join("");
+        setForm((f) => ({ ...f, content: html }));
+        editorRef.current?.commands.setContent(html);
       }
     } catch {
       setModalErr("Ağ hatası");
@@ -239,7 +360,7 @@ export function AdminBlogPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ title, content: form.content }),
+        body: JSON.stringify({ title, content: form.content.replace(/<[^>]*>/g, " ") }),
       });
       const j = (await res.json()) as {
         seoTitle?: string;
@@ -315,15 +436,8 @@ export function AdminBlogPage() {
         return;
       }
       if (j.url) {
-        const url = j.url;
-        setForm((f) => {
-          const pos = contentCursorRef.current;
-          const before = f.content.slice(0, pos);
-          const after = f.content.slice(pos);
-          const pad = before.length > 0 && !before.endsWith("\n") ? "\n" : "";
-          const newContent = before + pad + "[içerik-görseli]\n" + after;
-          return { ...f, content_image_url: url, content: newContent };
-        });
+        setForm((f) => ({ ...f, content_image_url: j.url! }));
+        editorRef.current?.chain().focus().insertContent("[içerik-görseli]").run();
       }
     } catch {
       setModalErr("Yükleme ağ hatası");
@@ -458,16 +572,11 @@ export function AdminBlogPage() {
                     AI ile Düzenle
                   </button>
                 </div>
-                <textarea
-                  ref={contentTextareaRef}
-                  value={form.content}
-                  onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-                  onSelect={(e) => { contentCursorRef.current = (e.target as HTMLTextAreaElement).selectionStart; }}
-                  onKeyUp={(e) => { contentCursorRef.current = (e.target as HTMLTextAreaElement).selectionStart; }}
-                  onClick={(e) => { contentCursorRef.current = (e.target as HTMLTextAreaElement).selectionStart; }}
-                  rows={14}
-                  placeholder="İçinizdekini yazın..."
-                  className="mt-1 min-h-[220px] w-full resize-y rounded-xl border border-white/[0.12] bg-[#0e1015] px-3 py-3 text-sm leading-relaxed text-zinc-100 placeholder:text-zinc-600"
+                <BlogEditor
+                  key={editingId ?? "new-post"}
+                  initialContent={form.content}
+                  onChange={(html) => setForm((f) => ({ ...f, content: html }))}
+                  onEditorReady={(ed) => { editorRef.current = ed; }}
                 />
               </div>
 
@@ -511,7 +620,7 @@ export function AdminBlogPage() {
               <div className="rounded-xl border border-white/[0.08] bg-black/20 p-3">
                 <p className="text-xs font-medium text-zinc-500">İçerik görseli (R2)</p>
                 <p className="mt-0.5 text-[10px] text-zinc-600">
-                  Yükleme sonrası içerikteki cursor pozisyonuna <span className="font-mono text-zinc-500">[içerik-görseli]</span> eklenir.
+                  Yükleme sonrası editördeki imleç pozisyonuna <span className="font-mono text-zinc-500">[içerik-görseli]</span> eklenir.
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-3">
                   <label className={SECONDARY_BTN + " cursor-pointer"}>

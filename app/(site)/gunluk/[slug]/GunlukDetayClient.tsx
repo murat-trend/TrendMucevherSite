@@ -90,8 +90,28 @@ function renderSegment(text: string, segIdx: number): ReactNode[] {
   });
 }
 
+function isHtmlContent(content: string): boolean {
+  return /<\/?[a-z][\s\S]*>/i.test(content);
+}
+
 function renderContent(content: string, contentImageUrl: string | null) {
   if (!content) return null;
+
+  if (isHtmlContent(content)) {
+    const withImage = contentImageUrl
+      ? content.replace(
+          CONTENT_PLACEHOLDER,
+          `<img src="${contentImageUrl}" alt="" class="w-full rounded-lg my-4" />`,
+        )
+      : content;
+    return (
+      <div
+        className="prose prose-invert prose-sm max-w-none space-y-4 text-base [&_a]:text-[#c9a88a] [&_a]:underline [&_a:hover]:text-[#e4d0bf]"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: withImage }}
+      />
+    );
+  }
 
   if (!contentImageUrl || !content.includes(CONTENT_PLACEHOLDER)) {
     return <div className="space-y-4 text-base">{renderSegment(content, 0)}</div>;
