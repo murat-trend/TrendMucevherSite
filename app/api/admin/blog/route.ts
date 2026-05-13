@@ -94,6 +94,7 @@ export async function POST(req: Request) {
   const content = typeof body.content === "string" ? body.content : null;
   const excerpt = typeof body.excerpt === "string" ? body.excerpt.trim() || null : null;
   const cover_image_url = typeof body.cover_image_url === "string" ? body.cover_image_url.trim() || null : null;
+  const content_image_url = typeof body.content_image_url === "string" ? body.content_image_url.trim() || null : null;
   const category = typeof body.category === "string" && body.category.trim() ? body.category.trim() : "genel";
   const tags = parseTags(body.tags);
   const seo_title = typeof body.seo_title === "string" ? body.seo_title.trim() || null : null;
@@ -103,7 +104,8 @@ export async function POST(req: Request) {
       ? Math.max(1, Math.floor(body.read_time_minutes))
       : estimateReadMinutes(content);
 
-  const translations = await buildPostTranslations(title, content ?? "", excerpt ?? "");
+  const plainContent = content ? content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim() : "";
+  const translations = await buildPostTranslations(title, plainContent, excerpt ?? "");
   const translationPatch = translations ? postTranslationsToDbPatch(translations) : {};
 
   const now = new Date().toISOString();
@@ -113,6 +115,7 @@ export async function POST(req: Request) {
     content,
     excerpt,
     cover_image_url,
+    content_image_url,
     category,
     tags,
     is_published: isPublished,
@@ -181,6 +184,7 @@ export async function PATCH(req: Request) {
   if (typeof body.content === "string") patch.content = body.content;
   if (typeof body.excerpt === "string") patch.excerpt = body.excerpt.trim() || null;
   if (typeof body.cover_image_url === "string") patch.cover_image_url = body.cover_image_url.trim() || null;
+  if (typeof body.content_image_url === "string") patch.content_image_url = body.content_image_url.trim() || null;
   if (typeof body.category === "string") patch.category = body.category.trim() || "genel";
   if (body.tags !== undefined) patch.tags = parseTagsPatch(body.tags);
   if (typeof body.seo_title === "string") patch.seo_title = body.seo_title.trim() || null;
@@ -217,7 +221,8 @@ export async function PATCH(req: Request) {
 
   if (translationTriggered) {
     const effectiveTitle   = typeof patch.title   === "string" ? patch.title   : (existing.title as string);
-    const effectiveContent = typeof patch.content === "string" ? patch.content : (existing.content as string | null) ?? "";
+    const rawContent       = typeof patch.content === "string" ? patch.content : (existing.content as string | null) ?? "";
+    const effectiveContent = rawContent.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
     const effectiveExcerpt = typeof patch.excerpt === "string" ? patch.excerpt : (existing.excerpt as string | null) ?? "";
     const quad = await buildPostTranslations(effectiveTitle, effectiveContent, effectiveExcerpt);
     if (quad) Object.assign(patch, postTranslationsToDbPatch(quad));
