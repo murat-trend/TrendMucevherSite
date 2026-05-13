@@ -28,16 +28,31 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const rows = (data ?? []) as { session_id: string | null; ip_address: string | null }[];
+  const rows = (data ?? []) as {
+    session_id: string | null;
+    ip_address: string | null;
+    page_path: string;
+    created_at: string;
+  }[];
 
-  const identifiers = new Set<string>();
+  // group by identifier → keep most recent page_path
+  const byId = new Map<string, { page_path: string; created_at: string }>();
   for (const r of rows) {
-    if (r.session_id) {
-      identifiers.add(`s:${r.session_id}`);
-    } else if (r.ip_address) {
-      identifiers.add(`ip:${r.ip_address}`);
+    const id = r.session_id ? `s:${r.session_id}` : r.ip_address ? `ip:${r.ip_address}` : null;
+    if (!id) continue;
+    const prev = byId.get(id);
+    if (!prev || r.created_at > prev.created_at) {
+      byId.set(id, { page_path: r.page_path, created_at: r.created_at });
     }
   }
 
-  return NextResponse.json({ count: identifiers.size, since });
+  const now = Date.now();
+  const sessions = Array.from(byId.values())
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .map((s) => ({
+      page_path: s.page_path,
+      since_seconds: Math.floor((now - new Date(s.created_at).getTime()) / 1000),
+    }));
+
+  return NextResponse.json({ count: byId.size, sessions, since });
 }

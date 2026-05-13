@@ -651,12 +651,16 @@ export function AdminDashboard() {
   const [liveLoading, setLiveLoading] = useState(true);
   const [liveError, setLiveError] = useState<string | null>(null);
   const [activeVisitors, setActiveVisitors] = useState<number | null>(null);
+  const [activeSessions, setActiveSessions] = useState<{ page_path: string; since_seconds: number }[]>([]);
 
   useEffect(() => {
     const fetchActive = () => {
       void fetch("/api/admin/active-visitors", { credentials: "include" })
         .then((r) => r.json())
-        .then((j: { count?: number }) => { if (typeof j.count === "number") setActiveVisitors(j.count); })
+        .then((j: { count?: number; sessions?: { page_path: string; since_seconds: number }[] }) => {
+          if (typeof j.count === "number") setActiveVisitors(j.count);
+          if (Array.isArray(j.sessions)) setActiveSessions(j.sessions);
+        })
         .catch(() => {});
     };
     fetchActive();
@@ -693,19 +697,45 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-6 lg:space-y-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="font-display text-3xl font-semibold tracking-[-0.02em] text-zinc-50">Dashboard</h1>
-          <p className="text-sm text-zinc-500">Genel sistem performansı ve özet</p>
+      <header className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-1">
+            <h1 className="font-display text-3xl font-semibold tracking-[-0.02em] text-zinc-50">Dashboard</h1>
+            <p className="text-sm text-zinc-500">Genel sistem performansı ve özet</p>
+          </div>
+          {activeVisitors !== null && (
+            <div className="flex items-center gap-2.5 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] px-4 py-2.5">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
+              </span>
+              <span className="text-sm font-semibold tabular-nums text-emerald-300">{activeVisitors}</span>
+              <span className="text-xs text-emerald-400/70">şu an sitede · son 5 dk</span>
+            </div>
+          )}
         </div>
-        {activeVisitors !== null && (
-          <div className="flex items-center gap-2.5 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] px-4 py-2.5">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
-            </span>
-            <span className="text-sm font-semibold tabular-nums text-emerald-300">{activeVisitors}</span>
-            <span className="text-xs text-emerald-400/70">şu an sitede · son 5 dk</span>
+
+        {activeSessions.length > 0 && (
+          <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02]">
+            <div className="border-b border-white/[0.06] px-4 py-2.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Aktif Sayfalar</span>
+            </div>
+            <ul className="divide-y divide-white/[0.04]">
+              {activeSessions.slice(0, 10).map((s, i) => {
+                const mins = Math.floor(s.since_seconds / 60);
+                const secs = s.since_seconds % 60;
+                const ago = mins > 0 ? `${mins} dk önce` : `${secs} sn önce`;
+                return (
+                  <li key={i} className="flex items-center justify-between gap-4 px-4 py-2.5">
+                    <span className="font-mono text-[13px] text-zinc-300 truncate max-w-[70%]">{s.page_path}</span>
+                    <span className="shrink-0 text-[11px] tabular-nums text-zinc-500">{ago}</span>
+                  </li>
+                );
+              })}
+            </ul>
+            {activeSessions.length > 10 && (
+              <p className="px-4 py-2 text-[11px] text-zinc-600">+{activeSessions.length - 10} daha…</p>
+            )}
           </div>
         )}
       </header>
