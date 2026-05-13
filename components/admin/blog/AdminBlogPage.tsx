@@ -9,6 +9,7 @@ import { Loader2, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, Upload } fr
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import TipTapLink from "@tiptap/extension-link";
+import TipTapImage from "@tiptap/extension-image";
 
 const generateSlug = (title: string): string => {
   const s = title
@@ -31,18 +32,35 @@ const SECONDARY_BTN =
 const DANGER_BTN =
   "inline-flex items-center justify-center rounded-xl border border-rose-500/35 bg-rose-500/12 px-3 py-2 text-xs font-medium text-rose-100 hover:bg-rose-500/18";
 
+// Image extension with inline-style alignment support
+const AlignableImage = TipTapImage.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      style: {
+        default: null,
+        parseHTML: (el) => el.getAttribute("style"),
+        renderHTML: (attrs) => (attrs.style ? { style: attrs.style as string } : {}),
+      },
+    };
+  },
+});
+
 function ToolbarBtn({
   active,
+  title,
   onClick,
   children,
 }: {
   active?: boolean;
+  title?: string;
   onClick: () => void;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
+      title={title}
       onClick={onClick}
       className={[
         "rounded px-2 py-1 text-xs font-medium transition-colors select-none",
@@ -58,6 +76,8 @@ type BlogEditorProps = {
   initialContent: string;
   onChange: (html: string) => void;
   onEditorReady: (editor: Editor) => void;
+  onUploadImage: (file: File) => void;
+  uploadingContent: boolean;
 };
 
 function toHtml(raw: string): string {
@@ -69,9 +89,21 @@ function toHtml(raw: string): string {
     .join("");
 }
 
-function BlogEditor({ initialContent, onChange, onEditorReady }: BlogEditorProps) {
+const IMG_ALIGN = {
+  left:   "display:block;margin-left:0;margin-right:auto",
+  center: "display:block;margin:0 auto",
+  right:  "display:block;margin-left:auto;margin-right:0",
+} as const;
+
+function BlogEditor({ initialContent, onChange, onEditorReady, onUploadImage, uploadingContent }: BlogEditorProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const editor = useEditor({
-    extensions: [StarterKit, TipTapLink.configure({ openOnClick: false })],
+    extensions: [
+      StarterKit,
+      TipTapLink.configure({ openOnClick: false, HTMLAttributes: { rel: "noopener noreferrer" } }),
+      AlignableImage.configure({ inline: false, allowBase64: false }),
+    ],
     content: toHtml(initialContent),
     onUpdate({ editor: ed }) {
       onChange(ed.getHTML());
@@ -86,58 +118,79 @@ function BlogEditor({ initialContent, onChange, onEditorReady }: BlogEditorProps
     },
   });
 
+  const activeImgAlign = (align: keyof typeof IMG_ALIGN) =>
+    editor?.getAttributes("image").style === IMG_ALIGN[align];
+
   return (
     <div className="mt-1 overflow-hidden rounded-xl border border-white/[0.12] bg-[#0e1015]">
       <div className="flex flex-wrap items-center gap-0.5 border-b border-white/[0.1] px-2 py-1.5">
-        <ToolbarBtn active={editor?.isActive("bold")} onClick={() => editor?.chain().focus().toggleBold().run()}>
+
+        {/* Metin biçimlendirme */}
+        <ToolbarBtn active={editor?.isActive("bold")} title="Kalın" onClick={() => editor?.chain().focus().toggleBold().run()}>
           <strong>B</strong>
         </ToolbarBtn>
-        <ToolbarBtn active={editor?.isActive("italic")} onClick={() => editor?.chain().focus().toggleItalic().run()}>
+        <ToolbarBtn active={editor?.isActive("italic")} title="İtalik" onClick={() => editor?.chain().focus().toggleItalic().run()}>
           <em>I</em>
         </ToolbarBtn>
-        <ToolbarBtn active={editor?.isActive("strike")} onClick={() => editor?.chain().focus().toggleStrike().run()}>
-          <s>S</s>
-        </ToolbarBtn>
-        <span className="mx-1 h-4 w-px bg-white/10" />
-        <ToolbarBtn
-          active={editor?.isActive("heading", { level: 2 })}
-          onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
-        >
-          H2
-        </ToolbarBtn>
-        <ToolbarBtn
-          active={editor?.isActive("heading", { level: 3 })}
-          onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}
-        >
-          H3
-        </ToolbarBtn>
-        <span className="mx-1 h-4 w-px bg-white/10" />
-        <ToolbarBtn
-          active={editor?.isActive("bulletList")}
-          onClick={() => editor?.chain().focus().toggleBulletList().run()}
-        >
-          •—
-        </ToolbarBtn>
-        <ToolbarBtn
-          active={editor?.isActive("orderedList")}
-          onClick={() => editor?.chain().focus().toggleOrderedList().run()}
-        >
-          1.
-        </ToolbarBtn>
-        <span className="mx-1 h-4 w-px bg-white/10" />
         <ToolbarBtn
           active={editor?.isActive("link")}
+          title="Link"
           onClick={() => {
             if (editor?.isActive("link")) {
               editor.chain().focus().unsetLink().run();
             } else {
               const url = prompt("URL girin:");
-              if (url) editor?.chain().focus().setLink({ href: url }).run();
+              if (url) {
+                const isExternal = /^https?:\/\//i.test(url);
+                editor?.chain().focus().setLink({ href: url, target: isExternal ? "_blank" : null }).run();
+              }
             }
           }}
         >
           🔗
         </ToolbarBtn>
+
+        <span className="mx-1 h-4 w-px bg-white/10" />
+
+        {/* Başlıklar */}
+        <ToolbarBtn active={editor?.isActive("heading", { level: 2 })} title="Başlık 2" onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>
+          H2
+        </ToolbarBtn>
+        <ToolbarBtn active={editor?.isActive("heading", { level: 3 })} title="Başlık 3" onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}>
+          H3
+        </ToolbarBtn>
+
+        <span className="mx-1 h-4 w-px bg-white/10" />
+
+        {/* Görsel hizalama */}
+        <ToolbarBtn active={activeImgAlign("left")} title="Sola hizala" onClick={() => editor?.chain().focus().updateAttributes("image", { style: IMG_ALIGN.left }).run()}>
+          ◀
+        </ToolbarBtn>
+        <ToolbarBtn active={activeImgAlign("center")} title="Ortala" onClick={() => editor?.chain().focus().updateAttributes("image", { style: IMG_ALIGN.center }).run()}>
+          ▣
+        </ToolbarBtn>
+        <ToolbarBtn active={activeImgAlign("right")} title="Sağa hizala" onClick={() => editor?.chain().focus().updateAttributes("image", { style: IMG_ALIGN.right }).run()}>
+          ▶
+        </ToolbarBtn>
+
+        <span className="mx-1 h-4 w-px bg-white/10" />
+
+        {/* İçerik görseli yükle */}
+        <ToolbarBtn title="İçerik görseli yükle" onClick={() => fileInputRef.current?.click()}>
+          {uploadingContent ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+        </ToolbarBtn>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          className="hidden"
+          disabled={uploadingContent}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) onUploadImage(f);
+            e.target.value = "";
+          }}
+        />
       </div>
       <EditorContent editor={editor} />
     </div>
@@ -437,7 +490,7 @@ export function AdminBlogPage() {
       }
       if (j.url) {
         setForm((f) => ({ ...f, content_image_url: j.url! }));
-        editorRef.current?.chain().focus().insertContent("[içerik-görseli]").run();
+        editorRef.current?.chain().focus().setImage({ src: j.url! }).run();
       }
     } catch {
       setModalErr("Yükleme ağ hatası");
@@ -577,6 +630,8 @@ export function AdminBlogPage() {
                   initialContent={form.content}
                   onChange={(html) => setForm((f) => ({ ...f, content: html }))}
                   onEditorReady={(ed) => { editorRef.current = ed; }}
+                  onUploadImage={(file) => void uploadContentImage(file)}
+                  uploadingContent={uploadingContent}
                 />
               </div>
 
@@ -620,29 +675,12 @@ export function AdminBlogPage() {
               <div className="rounded-xl border border-white/[0.08] bg-black/20 p-3">
                 <p className="text-xs font-medium text-zinc-500">İçerik görseli (R2)</p>
                 <p className="mt-0.5 text-[10px] text-zinc-600">
-                  Yükleme sonrası editördeki imleç pozisyonuna <span className="font-mono text-zinc-500">[içerik-görseli]</span> eklenir.
+                  Yükleme için editör toolbar'ındaki <Upload className="mb-0.5 inline h-3 w-3" /> butonunu kullanın. URL ile eklemek için aşağıya yapıştırın.
                 </p>
-                <div className="mt-2 flex flex-wrap items-center gap-3">
-                  <label className={SECONDARY_BTN + " cursor-pointer"}>
-                    <Upload className="h-4 w-4" />
-                    {uploadingContent ? "Yükleniyor…" : "Yükle"}
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,image/gif"
-                      className="hidden"
-                      disabled={uploadingContent}
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) void uploadContentImage(f);
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
-                </div>
                 <input
                   value={form.content_image_url}
                   onChange={(e) => setForm((f) => ({ ...f, content_image_url: e.target.value }))}
-                  placeholder="https://..."
+                  placeholder="https://... (URL ile manuel ekleme)"
                   className="mt-2 w-full rounded-lg border border-white/[0.1] bg-[#0e1015] px-3 py-2 text-xs text-zinc-300"
                 />
               </div>
