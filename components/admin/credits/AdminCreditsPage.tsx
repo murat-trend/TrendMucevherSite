@@ -256,6 +256,14 @@ export function AdminCreditsPage() {
           <FinanceScrollTable
             minWidthPx={700}
             bodyMaxHeightClass="max-h-[440px]"
+            colgroup={
+              <colgroup>
+                <col style={{ width: "25%" }} />
+                <col style={{ width: "35%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "25%" }} />
+              </colgroup>
+            }
             headerCells={
               <>
                 <th className={`${FINANCE_TH} text-left`}>Kullanıcı</th>
@@ -334,6 +342,15 @@ export function AdminCreditsPage() {
           <FinanceScrollTable
             minWidthPx={720}
             bodyMaxHeightClass="max-h-[320px]"
+            colgroup={
+              <colgroup>
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "22%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "36%" }} />
+              </colgroup>
+            }
             headerCells={
               <>
                 <th className={`${FINANCE_TH} text-left`}>Tarih</th>
@@ -445,6 +462,16 @@ export function AdminCreditsPage() {
           <FinanceScrollTable
             minWidthPx={720}
             bodyMaxHeightClass="max-h-[380px]"
+            colgroup={
+              <colgroup>
+                <col style={{ width: "25%" }} />
+                <col style={{ width: "8%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "20%" }} />
+                <col style={{ width: "17%" }} />
+              </colgroup>
+            }
             headerCells={
               <>
                 <th className={`${FINANCE_TH} text-left`}>Not</th>
