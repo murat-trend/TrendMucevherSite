@@ -9,7 +9,8 @@ export default function UyeGirisPage() {
   const { t } = useLanguage();
   const u = t.site.uyeGiris;
   const router = useRouter();
-  const [mode, setMode] = useState<"giris" | "kayit">("giris");
+  const initialMode = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mode") === "kayit" ? "kayit" : "giris";
+  const [mode, setMode] = useState<"giris" | "kayit">(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -44,6 +45,20 @@ export default function UyeGirisPage() {
       setError(u.errWrongPassword);
       setLoading(false);
       return;
+    }
+
+    // Apply pending invite token if present
+    const pendingInvite = localStorage.getItem("pending_invite");
+    if (pendingInvite) {
+      try {
+        await fetch("/api/invite/apply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: pendingInvite }),
+        });
+      } finally {
+        localStorage.removeItem("pending_invite");
+      }
     }
 
     const redirectTo = new URLSearchParams(window.location.search).get("redirect") ?? "/";

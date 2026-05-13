@@ -6,17 +6,15 @@ import { ADMIN_PRIMARY_BUTTON_CLASS } from "@/components/admin/ui/adminPrimaryBu
 import { AdminDataScroll, ADMIN_TABLE_TH_STICKY } from "@/components/admin/ui/AdminDataScroll";
 import { AdminKpiCard } from "@/components/admin/ui/AdminKpiCard";
 import type { AdminCustomerRow } from "@/app/api/admin/customers/route";
-import { Download, Loader2, RefreshCw, Search, Users } from "lucide-react";
+import { Download, Loader2, RefreshCw, Search, ShoppingCart, Trash2, Users } from "lucide-react";
 
 const tryFmt = (n: number) =>
   new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 0 }).format(n);
 
-const dateFmt = (iso: string) =>
-  new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(iso));
+const dateFmt = (iso: string | null) => {
+  if (!iso) return "—";
+  return new Intl.DateTimeFormat("tr-TR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(iso));
+};
 
 function csvEscape(s: string): string {
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
@@ -29,6 +27,7 @@ export function AdminCustomersPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,9 +52,23 @@ export function AdminCustomersPage() {
     }
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useEffect(() => { void load(); }, [load]);
+
+  async function deleteCustomer(id: string, name: string) {
+    if (!confirm(`"${name}" kullanıcısını kalıcı olarak silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz; kullanıcının tüm oturum ve profil bilgileri silinir.`)) return;
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/admin/customers?id=${id}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) {
+        const j = (await res.json()) as { error?: string };
+        alert(j.error ?? "Silinemedi");
+        return;
+      }
+      setRows((prev) => prev.filter((r) => r.buyer_id !== id));
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -73,7 +86,7 @@ export function AdminCustomersPage() {
   const totalOrders = useMemo(() => filtered.reduce((s, r) => s + r.order_count, 0), [filtered]);
 
   const exportCsv = () => {
-    const headers = ["AliciId", "Ad", "Eposta", "SiparisSayisi", "OdenenSiparis", "OdenenToplamTRY", "SonSiparis", "ProfilMagaza"];
+    const headers = ["AliciId", "Ad", "Eposta", "KayitTarihi", "SiparisSayisi", "OdenenSiparis", "OdenenToplamTRY", "SonSiparis", "ProfilMagaza"];
     const lines = [
       headers.join(","),
       ...filtered.map((r) =>
@@ -81,6 +94,7 @@ export function AdminCustomersPage() {
           csvEscape(r.buyer_id),
           csvEscape(r.display_name),
           csvEscape(r.email),
+          csvEscape(r.profile_created_at ?? ""),
           csvEscape(String(r.order_count)),
           csvEscape(String(r.paid_order_count)),
           csvEscape(String(r.paid_total_try)),
@@ -89,7 +103,7 @@ export function AdminCustomersPage() {
         ].join(","),
       ),
     ];
-    const blob = new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -104,8 +118,7 @@ export function AdminCustomersPage() {
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-[-0.02em] text-zinc-50">Müşteri listesi</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Sipariş veren alıcılar; son {scannedOrders != null ? `${scannedOrders.toLocaleString("tr-TR")} ` : ""}
-            sipariş kaydına göre gruplanır (en fazla {8000} satır taranır). Profilde mağaza adı varsa isim yanında kullanılır.
+            Sipariş veren alıcılar; son{scannedOrders != null ? ` ${scannedOrders.toLocaleString("tr-TR")}` : ""} sipariş kaydına göre gruplanır (en fazla 8000 satır taranır).
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -130,21 +143,21 @@ export function AdminCustomersPage() {
 
       <section aria-label="Özet" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <AdminKpiCard
-          label="Benzersiz alıcı"
+          label="Benzersiz müşteri"
           value={String(filtered.length)}
           sub={search.trim() ? "Filtre sonrası" : "Siparişi olan kullanıcı"}
           icon={Users}
           tone="info"
         />
         <AdminKpiCard
-          label="Sipariş (görünen)"
+          label="Toplam sipariş"
           value={String(totalOrders)}
-          sub="Satır sipariş adedi toplamı"
-          icon={Users}
+          sub="Görünen satırların sipariş toplamı"
+          icon={ShoppingCart}
           tone="neutral"
         />
         <AdminKpiCard
-          label="Ödenen ciro (görünen)"
+          label="Ödenen ciro"
           value={tryFmt(totalPaidTry)}
           sub="paid siparişlerin tutar toplamı"
           icon={Users}
@@ -157,12 +170,8 @@ export function AdminCustomersPage() {
         className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-[#12141a]/90 via-[#0c0d11] to-[#08090c] p-4 sm:p-5"
       >
         <div className="relative max-w-xl">
-          <label htmlFor="customers-search" className="sr-only">
-            Ara
-          </label>
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" strokeWidth={1.5} />
           <input
-            id="customers-search"
             type="search"
             placeholder="Ad, e-posta, kullanıcı id veya mağaza adı…"
             value={search}
@@ -177,9 +186,14 @@ export function AdminCustomersPage() {
         className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-[#12141a]/90 via-[#0c0d11] to-[#08090c] p-4 sm:p-5"
       >
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-zinc-200">Alıcılar</h2>
+          <h2 className="text-sm font-semibold text-zinc-200">
+            Müşteriler
+            {filtered.length > 0 && (
+              <span className="ml-2 font-normal text-zinc-500">{filtered.length}</span>
+            )}
+          </h2>
           <Link href="/admin/orders" className="text-xs font-medium text-[#c69575] underline-offset-2 hover:underline">
-            Siparişlere git
+            Tüm siparişler →
           </Link>
         </div>
 
@@ -193,40 +207,84 @@ export function AdminCustomersPage() {
             {rows.length === 0 ? "Henüz sipariş kaydından alıcı çıkarılamadı." : "Aramanızla eşleşen kayıt yok."}
           </p>
         ) : (
-          <AdminDataScroll maxHeightClass="max-h-[min(65vh,560px)]">
-            <table className="w-full min-w-[920px] border-collapse text-left text-sm">
+          <AdminDataScroll maxHeightClass="max-h-[min(65vh,600px)]">
+            <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
               <thead>
                 <tr className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-                  <th className={`px-3 py-3 ${ADMIN_TABLE_TH_STICKY}`}>Müşteri</th>
+                  <th className={`px-3 py-3 ${ADMIN_TABLE_TH_STICKY}`}>Ad / Kullanıcı adı</th>
                   <th className={`px-3 py-3 ${ADMIN_TABLE_TH_STICKY}`}>E-posta</th>
-                  <th className={`px-3 py-3 ${ADMIN_TABLE_TH_STICKY}`}>Profil mağaza</th>
+                  <th className={`px-3 py-3 ${ADMIN_TABLE_TH_STICKY}`}>Kayıt tarihi</th>
                   <th className={`px-3 py-3 text-right ${ADMIN_TABLE_TH_STICKY}`}>Sipariş</th>
                   <th className={`px-3 py-3 text-right ${ADMIN_TABLE_TH_STICKY}`}>Ödenen</th>
-                  <th className={`px-3 py-3 text-right ${ADMIN_TABLE_TH_STICKY}`}>Ödenen toplam</th>
+                  <th className={`px-3 py-3 text-right ${ADMIN_TABLE_TH_STICKY}`}>Toplam ciro</th>
                   <th className={`px-3 py-3 ${ADMIN_TABLE_TH_STICKY}`}>Son sipariş</th>
-                  <th className={`px-3 py-3 ${ADMIN_TABLE_TH_STICKY}`}>Kullanıcı</th>
+                  <th className={`px-3 py-3 ${ADMIN_TABLE_TH_STICKY}`} />
                 </tr>
               </thead>
               <tbody className="text-zinc-300">
                 {filtered.map((r) => (
-                  <tr key={r.buyer_id} className="border-t border-white/[0.06]">
-                    <td className="max-w-[200px] truncate px-3 py-3 font-medium" title={r.display_name}>
-                      {r.display_name}
+                  <tr key={r.buyer_id} className="border-t border-white/[0.06] hover:bg-white/[0.02]">
+                    <td className="px-3 py-3">
+                      <div>
+                        <p className="max-w-[180px] truncate font-medium text-zinc-100" title={r.display_name}>
+                          {r.display_name}
+                        </p>
+                        {r.profile_store_name && (
+                          <p className="max-w-[180px] truncate text-[11px] text-zinc-500">{r.profile_store_name}</p>
+                        )}
+                      </div>
                     </td>
-                    <td className="max-w-[220px] truncate px-3 py-3 text-xs text-zinc-400" title={r.email}>
-                      {r.email}
+                    <td className="px-3 py-3">
+                      {r.email && r.email !== "—" ? (
+                        <a
+                          href={`mailto:${r.email}`}
+                          className="block max-w-[200px] truncate text-xs text-[#c9a84c] underline-offset-2 hover:underline"
+                          title={r.email}
+                        >
+                          {r.email}
+                        </a>
+                      ) : (
+                        <span className="text-xs text-zinc-600">—</span>
+                      )}
                     </td>
-                    <td className="max-w-[160px] truncate px-3 py-3 text-zinc-400" title={r.profile_store_name ?? ""}>
-                      {r.profile_store_name?.trim() ? r.profile_store_name : "—"}
+                    <td className="whitespace-nowrap px-3 py-3 text-xs text-zinc-400">
+                      {dateFmt(r.profile_created_at)}
                     </td>
                     <td className="px-3 py-3 text-right tabular-nums text-zinc-400">{r.order_count}</td>
-                    <td className="px-3 py-3 text-right tabular-nums text-zinc-400">{r.paid_order_count}</td>
-                    <td className="px-3 py-3 text-right tabular-nums">{tryFmt(r.paid_total_try)}</td>
-                    <td className="whitespace-nowrap px-3 py-3 tabular-nums text-zinc-400">{dateFmt(r.last_order_at)}</td>
-                    <td className="px-3 py-3">
-                      <span className="font-mono text-[11px] text-zinc-500" title={r.buyer_id}>
-                        {r.buyer_id.slice(0, 8)}…
+                    <td className="px-3 py-3 text-right tabular-nums">
+                      <span className={r.paid_order_count > 0 ? "text-emerald-400" : "text-zinc-500"}>
+                        {r.paid_order_count}
                       </span>
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums font-medium">
+                      {r.paid_total_try > 0 ? tryFmt(r.paid_total_try) : <span className="text-zinc-600">—</span>}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3 tabular-nums text-xs text-zinc-400">
+                      {dateFmt(r.last_order_at)}
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-2">
+                        <Link
+                          href={`/admin/orders?buyer_id=${r.buyer_id}`}
+                          title="Siparişlerini görüntüle"
+                          className="inline-flex h-7 items-center gap-1 rounded-lg border border-white/[0.1] bg-white/[0.04] px-2 text-[11px] font-medium text-zinc-300 transition-colors hover:bg-white/[0.08] hover:text-zinc-100"
+                        >
+                          <ShoppingCart className="h-3 w-3" />
+                          Siparişler
+                        </Link>
+                        <button
+                          type="button"
+                          title="Kullanıcıyı sil"
+                          disabled={deletingId === r.buyer_id}
+                          onClick={() => void deleteCustomer(r.buyer_id, r.display_name)}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-400 transition-colors hover:bg-rose-500/20 disabled:opacity-40"
+                        >
+                          {deletingId === r.buyer_id
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <Trash2 className="h-3.5 w-3.5" />
+                          }
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

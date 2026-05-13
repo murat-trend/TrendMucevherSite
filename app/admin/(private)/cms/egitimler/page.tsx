@@ -1,13 +1,13 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { AdminNotificationsPage } from "@/components/admin/notifications/AdminNotificationsPage";
+import { AdminCoursesPage } from "@/components/admin/cms/AdminCoursesPage";
 
 export const metadata: Metadata = {
-  title: "Bildirimler | Super Admin",
+  title: "Eğitimler & Kurslar | CMS | Super Admin",
   robots: { index: false, follow: false },
 };
 
-export default function NotificationsRoutePage() {
+export default function EgitimlerRoutePage() {
   return (
     <Suspense
       fallback={
@@ -16,7 +16,7 @@ export default function NotificationsRoutePage() {
         </div>
       }
     >
-      <AdminNotificationsPage />
+      <AdminCoursesPage />
     </Suspense>
   );
 }

@@ -177,3 +177,29 @@ export async function PATCH(req: Request) {
   }
   return NextResponse.json({ success: true });
 }
+
+export async function DELETE(req: Request) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !serviceKey) {
+    return NextResponse.json({ error: "Sunucu yapılandırması eksik" }, { status: 500 });
+  }
+
+  const cookieStore = await cookies();
+  const auth = createClient(cookieStore);
+  const { data: { user } } = await auth.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Oturum gerekli" }, { status: 401 });
+
+  const { data: profile } = await auth.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  if (!isRemauraSuperAdminUserId(user.id) && profile?.role !== "admin") {
+    return NextResponse.json({ error: "Yetkisiz" }, { status: 403 });
+  }
+
+  const id = new URL(req.url).searchParams.get("id")?.trim();
+  if (!id) return NextResponse.json({ error: "id gerekli" }, { status: 400 });
+
+  const supabase = createServiceClient(url, serviceKey);
+  const { error } = await supabase.from("orders").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}

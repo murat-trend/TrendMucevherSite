@@ -37,6 +37,7 @@ export type AdminCustomerRow = {
   paid_total_try: number;
   last_order_at: string;
   profile_store_name: string | null;
+  profile_created_at: string | null;
 };
 
 function trimStr(v: string | null | undefined): string {
@@ -114,12 +115,12 @@ export async function GET() {
 
   const buyerIds = [...byBuyer.keys()];
 
-  type ProfileRow = { id: string; store_name: string | null; email: string | null; full_name: string | null };
+  type ProfileRow = { id: string; store_name: string | null; email: string | null; full_name: string | null; created_at: string | null };
   let profileById: Record<string, ProfileRow> = {};
   if (buyerIds.length > 0) {
     const { data: profs, error: pErr } = await supabase
       .from("profiles")
-      .select("id, store_name, email, full_name")
+      .select("id, store_name, email, full_name, created_at")
       .in("id", buyerIds);
     if (pErr) {
       return NextResponse.json({ error: pErr.message }, { status: 500 });
@@ -144,6 +145,7 @@ export async function GET() {
       paid_total_try: a.paid_total,
       last_order_at: a.last_at,
       profile_store_name: store || null,
+      profile_created_at: prof?.created_at ?? null,
     };
   });
 
@@ -153,4 +155,30 @@ export async function GET() {
     customers,
     scanned_orders: all.length,
   });
+}
+
+export async function DELETE(req: Request) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !serviceKey) {
+    return NextResponse.json({ error: "Sunucu yapılandırması eksik" }, { status: 500 });
+  }
+
+  const cookieStore = await cookies();
+  const auth = createClient(cookieStore);
+  const { data: { user } } = await auth.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Oturum gerekli" }, { status: 401 });
+
+  const { data: profile } = await auth.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  if (!isRemauraSuperAdminUserId(user.id) && profile?.role !== "admin") {
+    return NextResponse.json({ error: "Yetkisiz" }, { status: 403 });
+  }
+
+  const id = new URL(req.url).searchParams.get("id")?.trim();
+  if (!id) return NextResponse.json({ error: "id gerekli" }, { status: 400 });
+
+  const supabase = createServiceClient(url, serviceKey);
+  const { error } = await supabase.auth.admin.deleteUser(id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
 }

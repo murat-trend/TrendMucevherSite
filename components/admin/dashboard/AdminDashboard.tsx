@@ -23,6 +23,7 @@ import {
   Store,
   Target,
   Timer,
+  Trash2,
   Users,
   Zap,
 } from "lucide-react";
@@ -652,6 +653,8 @@ export function AdminDashboard() {
   const [liveError, setLiveError] = useState<string | null>(null);
   const [activeVisitors, setActiveVisitors] = useState<number | null>(null);
   const [activeSessions, setActiveSessions] = useState<{ page_path: string; since_seconds: number }[]>([]);
+  const [recentOrders, setRecentOrders] = useState<AdminDashboardStatsPayload["recentOrders"]>([]);
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchActive = () => {
@@ -679,6 +682,7 @@ export function AdminDashboard() {
         }
         if (!cancelled) {
           setLiveStats(json);
+          setRecentOrders(json.recentOrders ?? []);
           setLiveError(null);
         }
       } catch (e) {
@@ -694,6 +698,17 @@ export function AdminDashboard() {
       cancelled = true;
     };
   }, []);
+
+  async function deleteOrder(id: string) {
+    if (!confirm("Bu siparişi silmek istediğinize emin misiniz? Bu işlem geri alınamaz.")) return;
+    setDeletingOrderId(id);
+    try {
+      await fetch(`/api/admin/orders?id=${id}`, { method: "DELETE", credentials: "include" });
+      setRecentOrders((prev) => prev.filter((o) => o.id !== id));
+    } finally {
+      setDeletingOrderId(null);
+    }
+  }
 
   return (
     <div className="space-y-6 lg:space-y-8">
@@ -800,8 +815,16 @@ export function AdminDashboard() {
             </div>
 
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <CardShell title="Son siparişler" className="min-h-0 overflow-hidden">
-                {liveStats.recentOrders.length === 0 ? (
+              <CardShell
+                title="Son siparişler"
+                className="min-h-0 overflow-hidden"
+                action={
+                  <Link href="/admin/orders" className="shrink-0 text-xs font-medium text-[#c9a88a] transition-colors hover:text-[#e8d4c4]">
+                    Tümü →
+                  </Link>
+                }
+              >
+                {recentOrders.length === 0 ? (
                   <AdminEmptyState
                     message="Henüz sipariş yok."
                     variant="shield"
@@ -810,7 +833,7 @@ export function AdminDashboard() {
                   />
                 ) : (
                   <AdminDataScroll className="!rounded-lg" maxHeightClass="max-h-[320px]" fadeBottom={false}>
-                    <table className="w-full min-w-[480px] text-left text-sm">
+                    <table className="w-full min-w-[520px] text-left text-sm">
                       <thead>
                         <tr className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
                           <th className={`px-3 py-2 font-medium ${ADMIN_TABLE_TH_STICKY}`}>Tarih</th>
@@ -818,10 +841,11 @@ export function AdminDashboard() {
                           <th className={`px-3 py-2 font-medium ${ADMIN_TABLE_TH_STICKY}`}>Müşteri</th>
                           <th className={`px-3 py-2 font-medium tabular-nums ${ADMIN_TABLE_TH_STICKY}`}>Tutar</th>
                           <th className={`px-3 py-2 font-medium ${ADMIN_TABLE_TH_STICKY}`}>Durum</th>
+                          <th className={`px-3 py-2 font-medium ${ADMIN_TABLE_TH_STICKY}`} />
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/[0.05]">
-                        {liveStats.recentOrders.map((o) => (
+                        {recentOrders.map((o) => (
                           <tr key={o.id} className="hover:bg-white/[0.02]">
                             <td className="px-3 py-2 tabular-nums text-xs text-zinc-400">
                               {new Date(o.created_at).toLocaleString("tr-TR", {
@@ -850,6 +874,20 @@ export function AdminDashboard() {
                               >
                                 {PAYMENT_STATUS_TR[o.payment_status ?? ""] ?? o.payment_status ?? "—"}
                               </span>
+                            </td>
+                            <td className="px-3 py-2">
+                              <button
+                                type="button"
+                                title="Siparişi sil"
+                                disabled={deletingOrderId === o.id}
+                                onClick={() => void deleteOrder(o.id)}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-400 transition-colors hover:bg-rose-500/20 disabled:opacity-40"
+                              >
+                                {deletingOrderId === o.id
+                                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  : <Trash2 className="h-3.5 w-3.5" />
+                                }
+                              </button>
                             </td>
                           </tr>
                         ))}

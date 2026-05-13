@@ -6,7 +6,7 @@ import { ADMIN_PRIMARY_BUTTON_CLASS } from "@/components/admin/ui/adminPrimaryBu
 import { AdminDataScroll, ADMIN_TABLE_TH_STICKY } from "@/components/admin/ui/AdminDataScroll";
 import { AdminKpiCard } from "@/components/admin/ui/AdminKpiCard";
 import type { AdminOrderRow } from "@/app/api/admin/orders/route";
-import { Download, Loader2, Package, RefreshCw, Search, Truck } from "lucide-react";
+import { Download, Loader2, Package, RefreshCw, Search, Trash2, Truck } from "lucide-react";
 
 const tryFmt = (n: number) =>
   new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 0 }).format(n);
@@ -41,6 +41,7 @@ export function AdminShippingPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -93,6 +94,17 @@ export function AdminShippingPage() {
     () => filtered.reduce((s, r) => s + (Number.isFinite(Number(r.amount)) ? Number(r.amount) : 0), 0),
     [filtered],
   );
+
+  async function deleteOrder(id: string) {
+    if (!confirm("Bu siparişi silmek istediğinize emin misiniz? Bu işlem geri alınamaz.")) return;
+    setDeletingId(id);
+    try {
+      await fetch(`/api/admin/orders?id=${id}`, { method: "DELETE", credentials: "include" });
+      setRows((prev) => prev.filter((r) => r.id !== id));
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const exportCsv = () => {
     const headers = [
@@ -281,12 +293,26 @@ export function AdminShippingPage() {
                         </span>
                       </td>
                       <td className="px-3 py-3">
-                        <Link
-                          href={`/admin/orders/${encodeURIComponent(r.id)}`}
-                          className="text-xs font-medium text-[#c69575] underline-offset-2 hover:underline"
-                        >
-                          Detay
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/admin/orders/${encodeURIComponent(r.id)}`}
+                            className="text-xs font-medium text-[#c69575] underline-offset-2 hover:underline"
+                          >
+                            Detay
+                          </Link>
+                          <button
+                            type="button"
+                            title="Siparişi sil"
+                            disabled={deletingId === r.id}
+                            onClick={() => void deleteOrder(r.id)}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-400 transition-colors hover:bg-rose-500/20 disabled:opacity-40"
+                          >
+                            {deletingId === r.id
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <Trash2 className="h-3.5 w-3.5" />
+                            }
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

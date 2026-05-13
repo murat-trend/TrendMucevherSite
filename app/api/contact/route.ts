@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,6 +60,14 @@ export async function POST(req: Request) {
         </div>
       `,
     });
+    // Save to DB (fire-and-forget, don't fail the request if this errors)
+    const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+    const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+    if (sbUrl && sbKey) {
+      const sb = createClient(sbUrl, sbKey);
+      await sb.from("contact_messages").insert({ name, email, subject: subject || null, message });
+    }
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "E-posta gönderilemedi";
