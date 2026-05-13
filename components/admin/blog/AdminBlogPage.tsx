@@ -90,9 +90,9 @@ function toHtml(raw: string): string {
 }
 
 const IMG_ALIGN = {
-  left:   "display:block;margin-left:0;margin-right:auto",
-  center: "display:block;margin:0 auto",
-  right:  "display:block;margin-left:auto;margin-right:0",
+  left:   "float:left;margin:0 1em 0.5em 0;max-width:50%",
+  center: "display:block;float:none;margin:0.5em auto;max-width:100%",
+  right:  "float:right;margin:0 0 0.5em 1em;max-width:50%",
 } as const;
 
 function BlogEditor({ initialContent, onChange, onEditorReady, onUploadImage, uploadingContent }: BlogEditorProps) {
@@ -113,7 +113,7 @@ function BlogEditor({ initialContent, onChange, onEditorReady, onUploadImage, up
     },
     editorProps: {
       attributes: {
-        class: "min-h-[220px] px-3 py-3 text-sm leading-relaxed text-zinc-100 focus:outline-none prose prose-invert prose-sm max-w-none",
+        class: "min-h-[220px] px-3 py-3 text-sm leading-relaxed text-zinc-100 focus:outline-none prose prose-invert prose-sm max-w-none [&_img]:!mt-0 [&_img]:!mb-0 after:table after:clear-both after:content-['']",
       },
     },
   });

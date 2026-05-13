@@ -106,7 +106,7 @@ function renderContent(content: string, contentImageUrl: string | null) {
       : content;
     return (
       <div
-        className="prose prose-invert prose-sm max-w-none space-y-4 text-base [&_a]:text-[#c9a88a] [&_a]:underline [&_a:hover]:text-[#e4d0bf]"
+        className="prose prose-invert prose-sm max-w-none space-y-4 text-base [&_a]:text-[#c9a88a] [&_a]:underline [&_a:hover]:text-[#e4d0bf] [&_img]:!mt-0 [&_img]:!mb-0 after:table after:clear-both after:content-['']"
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: withImage }}
       />
