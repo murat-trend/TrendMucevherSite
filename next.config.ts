@@ -8,13 +8,13 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "200mb",
     },
-    outputFileTracingExcludes: {
-      "/api/remaura/mesh/process": [
-        "./scripts/**",
-        "./public/models/**",
-        "./public/convert-output/**",
-      ],
-    },
+  },
+  outputFileTracingExcludes: {
+    "/api/remaura/mesh/process": [
+      "./scripts/**",
+      "./public/models/**",
+      "./public/convert-output/**",
+    ],
   },
   turbopack: {},
   serverExternalPackages: ["draco3dgltf"],
