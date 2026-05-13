@@ -650,6 +650,19 @@ export function AdminDashboard() {
   const [liveStats, setLiveStats] = useState<AdminDashboardStatsPayload | null>(null);
   const [liveLoading, setLiveLoading] = useState(true);
   const [liveError, setLiveError] = useState<string | null>(null);
+  const [activeVisitors, setActiveVisitors] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetchActive = () => {
+      void fetch("/api/admin/active-visitors", { credentials: "include" })
+        .then((r) => r.json())
+        .then((j: { count?: number }) => { if (typeof j.count === "number") setActiveVisitors(j.count); })
+        .catch(() => {});
+    };
+    fetchActive();
+    const id = setInterval(fetchActive, 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -680,9 +693,21 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-6 lg:space-y-8">
-      <header className="space-y-1">
-        <h1 className="font-display text-3xl font-semibold tracking-[-0.02em] text-zinc-50">Dashboard</h1>
-        <p className="text-sm text-zinc-500">Genel sistem performansı ve özet</p>
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="font-display text-3xl font-semibold tracking-[-0.02em] text-zinc-50">Dashboard</h1>
+          <p className="text-sm text-zinc-500">Genel sistem performansı ve özet</p>
+        </div>
+        {activeVisitors !== null && (
+          <div className="flex items-center gap-2.5 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] px-4 py-2.5">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
+            </span>
+            <span className="text-sm font-semibold tabular-nums text-emerald-300">{activeVisitors}</span>
+            <span className="text-xs text-emerald-400/70">şu an sitede · son 5 dk</span>
+          </div>
+        )}
       </header>
 
       <section aria-label="Canlı platform verileri" className="space-y-4">
