@@ -1,6 +1,7 @@
 "use client";
 
 import { useLanguage } from "@/components/i18n/LanguageProvider";
+import { useCurrency } from "@/context/CurrencyContext";
 
 const CONTENT = {
   tr: {
@@ -134,6 +135,7 @@ function CheckIcon() {
 
 export function MatrixGoldClient() {
   const { locale } = useLanguage();
+  const { formatPrice } = useCurrency();
   const lang: LangKey = locale === "en" || locale === "de" || locale === "ru" ? "en" : "tr";
   const c = CONTENT[lang];
 
@@ -177,7 +179,7 @@ export function MatrixGoldClient() {
       <div className="mb-12 rounded-xl border border-[#c9a84c]/30 bg-[#c9a84c]/5 p-6 text-center sm:p-8">
         <p className="text-xs font-semibold uppercase tracking-widest text-[#c9a84c]">{c.priceBadge}</p>
         <p className="mt-2 font-display text-5xl font-semibold tracking-[-0.02em] text-foreground">
-          ₺7.500
+          {formatPrice(7500)}
         </p>
         <p className="mt-2 text-sm text-muted">{c.priceSub}</p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
