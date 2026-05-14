@@ -51,11 +51,11 @@ type RemauraWorkspaceProps = {
   initialCategory?: RemauraCategory;
   /** false: üst bileşen (ör. sayfa) zaten RemauraBillingModalProvider ile sarılı olmalı */
   embedBillingProvider?: boolean;
-  isSuperAdmin?: boolean;
+  adminNavLink?: React.ReactNode;
 };
 
-export function RemauraWorkspace({ embedBillingProvider = true, isSuperAdmin, ...props }: RemauraWorkspaceProps) {
-  const inner = <RemauraWorkspaceInner {...props} isSuperAdmin={isSuperAdmin} />;
+export function RemauraWorkspace({ embedBillingProvider = true, adminNavLink, ...props }: RemauraWorkspaceProps) {
+  const inner = <RemauraWorkspaceInner {...props} adminNavLink={adminNavLink} />;
   if (!embedBillingProvider) return inner;
   return <RemauraBillingModalProvider>{inner}</RemauraBillingModalProvider>;
 }
@@ -68,7 +68,7 @@ function mapFormatToAnalysisPlatform(format: PlatformFormat): JewelryPlatformTar
   return "instagram";
 }
 
-function RemauraWorkspaceInner({ initialCategory = "jewelry", isSuperAdmin = false }: RemauraWorkspaceProps) {
+function RemauraWorkspaceInner({ initialCategory = "jewelry", adminNavLink }: RemauraWorkspaceProps) {
   const { t, locale } = useLanguage();
   const billingUi = useRemauraBillingModal();
   const { checkCredits } = useRemauraCreditsCheck();
@@ -821,26 +821,7 @@ function RemauraWorkspaceInner({ initialCategory = "jewelry", isSuperAdmin = fal
               >
                 REMAURA 3D AI
               </button>
-              {isSuperAdmin && (
-                <Link
-                  href="/remaura/koleksiyon-edit"
-                  style={{
-                    borderRadius: "9999px",
-                    border: "1px solid rgba(183,110,121,0.5)",
-                    background: "rgba(183,110,121,0.1)",
-                    padding: "8px 16px",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.2em",
-                    color: "#b76e79",
-                    textDecoration: "none",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Koleksiyon Edit
-                </Link>
-              )}
+              {adminNavLink}
             </div>
             <div className="flex items-center gap-4">
               <span className="h-px w-8 bg-foreground/10" aria-hidden />

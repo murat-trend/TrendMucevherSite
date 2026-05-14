@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { cookies } from "next/headers";
 import { RemauraWorkspace } from "@/components/remaura/RemauraWorkspace";
 import { RemauraLocalizedLandingHeader } from "@/components/remaura/RemauraLocalizedLandingHeader";
@@ -88,11 +89,32 @@ export default async function RemauraPage() {
   const { data: { user } } = await supabase.auth.getUser();
   const isSuperAdmin = isRemauraSuperAdminUserId(user?.id);
 
+  const adminNavLink = isSuperAdmin ? (
+    <Link
+      href="/remaura/koleksiyon-edit"
+      style={{
+        borderRadius: "9999px",
+        border: "1px solid rgba(183,110,121,0.5)",
+        background: "rgba(183,110,121,0.1)",
+        padding: "8px 16px",
+        fontSize: 10,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: "0.2em",
+        color: "#b76e79",
+        textDecoration: "none",
+        whiteSpace: "nowrap",
+      }}
+    >
+      Koleksiyon Edit
+    </Link>
+  ) : null;
+
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <RemauraLocalizedLandingHeader variant="main" />
-      <RemauraWorkspace isSuperAdmin={isSuperAdmin} />
+      <RemauraWorkspace adminNavLink={adminNavLink} />
     </>
   );
 }
