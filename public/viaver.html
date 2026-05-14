@@ -155,10 +155,10 @@
             <div class="panel-card p-5">
                 <h3 class="text-[10px] font-black text-white/20 tracking-[0.25em] uppercase mb-4">ARKA PLAN</h3>
                 <div class="grid grid-cols-2 gap-2">
-                    <button class="btn-option py-2.5 rounded-lg" onclick="setBg('transparent')">Şeffaf</button>
-                    <button class="btn-option py-2.5 rounded-lg" onclick="setBg('black')">Siyah</button>
-                    <button class="btn-option py-2.5 rounded-lg" onclick="setBg('white')">Beyaz</button>
-                    <button class="btn-option active py-2.5 rounded-lg" id="btn-bg-smoke" onclick="setBg('smoke')">Koyu Gri</button>
+                    <button id="btn-bg-transparent" class="btn-option py-2.5 rounded-lg" onclick="setBg('transparent')">Şeffaf</button>
+                    <button id="btn-bg-black" class="btn-option py-2.5 rounded-lg" onclick="setBg('black')">Siyah</button>
+                    <button id="btn-bg-white" class="btn-option py-2.5 rounded-lg" onclick="setBg('white')">Beyaz</button>
+                    <button id="btn-bg-smoke" class="btn-option active py-2.5 rounded-lg" onclick="setBg('smoke')">Koyu Gri</button>
                 </div>
             </div>
 
@@ -371,6 +371,9 @@
 
         window.setBg = (type) => {
             const colors = { black: 0x000000, white: 0xffffff, smoke: 0x111111, transparent: null };
+            ['transparent', 'black', 'white', 'smoke'].forEach(k => {
+                document.getElementById(`btn-bg-${k}`).classList.toggle('active', k === type);
+            });
             if (type === 'transparent') {
                 scene.background = null;
                 document.getElementById('viewport-container').style.background = 'transparent';
