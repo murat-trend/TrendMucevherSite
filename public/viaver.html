@@ -18,523 +18,497 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
         body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; background-color: #050505; color: #fff; }
 
-        .panel-card { background: rgba(20, 20, 20, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 1.25rem; }
-        .btn-option { background: rgba(45, 45, 45, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.2s; font-size: 0.7rem; font-weight: 600; color: #a1a1aa; cursor: pointer; }
+        .panel-card { background: rgba(20, 20, 20, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 1rem; }
+        .btn-option { background: rgba(45, 45, 45, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.2s; font-size: 0.65rem; font-weight: 600; color: #a1a1aa; cursor: pointer; }
         .btn-option.active { background: rgba(197, 160, 89, 0.15); border-color: #c5a059; color: #c5a059; }
         .btn-option:hover:not(.active) { background: rgba(255, 255, 255, 0.1); color: #fff; }
 
         #viewport-container { transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); background: radial-gradient(circle at center, #111 0%, #000 100%); border-radius: 1.5rem; overflow: hidden; position: relative; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
-        .format-1-1 { aspect-ratio: 1 / 1; height: calc(100vh - 48px); max-height: calc(100vh - 48px); }
-        .format-9-16 { aspect-ratio: 9 / 16; height: calc(100vh - 48px); max-height: calc(100vh - 48px); }
-        .format-16-9 { aspect-ratio: 16 / 9; width: 100%; height: auto; }
+        .format-1-1  { aspect-ratio: 1 / 1;  height: 100%; max-height: 100%; width: auto;  }
+        .format-9-16 { aspect-ratio: 9 / 16; height: 100%; max-height: 100%; width: auto;  }
+        .format-16-9 { aspect-ratio: 16 / 9; width:  100%; height: auto; }
 
         .loading-spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
         input[type=range] { appearance: none; background: #27272a; height: 4px; border-radius: 2px; width: 100%; cursor: pointer; }
-        input[type=range]::-webkit-slider-thumb { appearance: none; height: 14px; width: 14px; border-radius: 50%; background: #c5a059; border: 2px solid #0f0f0f; transition: transform 0.1s; }
+        input[type=range]::-webkit-slider-thumb { appearance: none; height: 12px; width: 12px; border-radius: 50%; background: #c5a059; border: 2px solid #0f0f0f; transition: transform 0.1s; }
         input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
 
-        aside::-webkit-scrollbar { width: 4px; }
-        aside::-webkit-scrollbar-track { background: transparent; }
-        aside::-webkit-scrollbar-thumb { background: #27272a; border-radius: 10px; }
+        .side-panel::-webkit-scrollbar { width: 3px; }
+        .side-panel::-webkit-scrollbar-track { background: transparent; }
+        .side-panel::-webkit-scrollbar-thumb { background: #27272a; border-radius: 10px; }
     </style>
 </head>
 <body>
 
-    <div class="flex h-screen w-full p-6 gap-6 overflow-hidden bg-[#000]">
+<div class="flex h-screen w-full p-4 gap-3 overflow-hidden bg-[#000]">
 
-        <div class="flex-1 flex items-center justify-center relative">
-            <div id="viewport-container" class="format-1-1 border border-white/5">
-                <div id="canvas-container" class="w-full h-full"></div>
+    <!-- SOL PANEL -->
+    <div class="side-panel w-48 flex-shrink-0 flex flex-col gap-2 overflow-y-auto min-h-0">
 
-                <div id="hud" class="hidden absolute bottom-6 left-6 z-40 bg-black/80 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 flex items-center gap-4">
-                    <span id="model-stats" class="text-[10px] font-mono text-white/70 tracking-tight"></span>
-                </div>
+        <label class="flex items-center justify-center bg-[#c5a059] hover:bg-[#d4b57a] text-black px-3 py-3.5 rounded-2xl font-bold text-[11px] transition-all cursor-pointer active:scale-[0.98] shadow-2xl">
+            <input type="file" id="file-input" class="hidden" accept=".stl,.glb,.gltf,.obj">
+            + MODEL YÜKLE
+        </label>
 
-                <div id="record-indicator" class="hidden absolute top-6 left-6 flex items-center gap-2 bg-red-600/20 px-3 py-1.5 rounded-full border border-red-600/40 animate-pulse">
-                    <div class="w-2 h-2 bg-red-600 rounded-full"></div>
-                    <span class="text-[10px] font-bold text-red-500 uppercase tracking-[0.2em]">KAYDEDİLİYOR</span>
-                </div>
+        <button id="toggle-rotate-btn" class="flex items-center justify-center gap-2 bg-zinc-900 border border-white/10 hover:border-[#c5a059]/50 text-white px-3 py-3 rounded-2xl font-bold text-[10px] transition-all active:scale-[0.98]">
+            <div id="rotate-icon" class="w-2 h-2 bg-green-500 rounded-full animate-pulse flex-shrink-0"></div>
+            <span id="rotate-text">DÖNÜŞÜ DURDUR</span>
+        </button>
 
-                <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none transition-opacity duration-500">
-                    <div class="w-20 h-20 opacity-10 mb-4">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                    </div>
-                    <p class="text-white/20 text-xs font-bold uppercase tracking-widest italic">Model Yükleyin (.stl, .obj, .glb)</p>
-                </div>
+        <button id="toggle-grid-btn" class="flex items-center justify-center gap-2 bg-zinc-900 border border-white/10 hover:border-[#c5a059]/50 text-white px-3 py-3 rounded-2xl font-bold text-[10px] transition-all active:scale-[0.98]">
+            <div id="grid-icon" class="w-2 h-2 bg-green-500 rounded-full animate-pulse flex-shrink-0"></div>
+            <span id="grid-text">GRİD AÇIK</span>
+        </button>
+
+        <div class="grid grid-cols-2 gap-2">
+            <button id="screenshot-btn" class="flex flex-col items-center justify-center bg-zinc-900 border border-white/10 hover:border-[#c5a059]/50 text-white p-2.5 rounded-xl font-bold text-[8px] transition-all active:scale-[0.98] gap-1">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                FOTOĞRAF
+            </button>
+            <button id="record-btn" class="flex flex-col items-center justify-center bg-zinc-900 border border-white/10 hover:border-red-500/50 text-white p-2.5 rounded-xl font-bold text-[8px] transition-all active:scale-[0.98] gap-1">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                VİDEO
+            </button>
+        </div>
+
+        <div class="panel-card p-3 mt-1">
+            <h3 class="text-[9px] font-black text-white/20 tracking-[0.2em] uppercase mb-3">FORMAT</h3>
+            <div class="flex flex-col gap-1.5">
+                <button class="btn-option active py-2.5 px-3 rounded-xl flex items-center justify-between" id="fmt-1-1" onclick="setFormat('1-1')">Kare (1:1)</button>
+                <button class="btn-option py-2.5 px-3 rounded-xl flex items-center justify-between" id="fmt-9-16" onclick="setFormat('9-16')">Reels (9:16)</button>
+                <button class="btn-option py-2.5 px-3 rounded-xl flex items-center justify-between" id="fmt-16-9" onclick="setFormat('16-9')">Yatay (16:9)</button>
             </div>
         </div>
 
-        <aside class="w-80 flex flex-col gap-4 overflow-y-auto pr-1 min-h-0">
-            <div class="flex flex-col gap-2 mb-2">
-                <label class="group relative flex items-center justify-center bg-[#c5a059] hover:bg-[#d4b57a] text-black px-4 py-4 rounded-2xl font-bold text-xs transition-all cursor-pointer active:scale-[0.98] shadow-2xl">
-                    <input type="file" id="file-input" class="hidden" accept=".stl,.glb,.gltf,.obj">
-                    + MODEL YÜKLE
-                </label>
-
-                <div class="flex flex-col gap-2 mt-2">
-                    <button id="toggle-rotate-btn" class="flex items-center justify-center gap-3 bg-zinc-900 border border-white/10 hover:border-[#c5a059]/50 text-white p-4 rounded-2xl font-bold text-[10px] transition-all active:scale-[0.98]">
-                        <div id="rotate-icon" class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                        <span id="rotate-text">DÖNÜŞÜ DURDUR</span>
-                    </button>
-                    <button id="toggle-grid-btn" class="flex items-center justify-center gap-3 bg-zinc-900 border border-white/10 hover:border-[#c5a059]/50 text-white p-4 rounded-2xl font-bold text-[10px] transition-all active:scale-[0.98]">
-                        <div id="grid-icon" class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                        <span id="grid-text">GRİD AÇIK</span>
-                    </button>
-                </div>
-
-                <div class="grid grid-cols-2 gap-2">
-                    <button id="screenshot-btn" class="flex flex-col items-center justify-center bg-zinc-900 border border-white/10 hover:border-[#c5a059]/50 text-white p-3 rounded-2xl font-bold text-[9px] transition-all active:scale-[0.98]">
-                        <svg class="w-4 h-4 mb-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                        FOTOĞRAF (.WEBP)
-                    </button>
-                    <button id="record-btn" class="flex flex-col items-center justify-center bg-zinc-900 border border-white/10 hover:border-red-500/50 text-white p-3 rounded-2xl font-bold text-[9px] transition-all active:scale-[0.98]">
-                        <svg class="w-4 h-4 mb-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
-                        VİDEO (.WEBM)
-                    </button>
-                </div>
+        <div class="panel-card p-3">
+            <h3 class="text-[9px] font-black text-white/20 tracking-[0.2em] uppercase mb-3">ROTASYON</h3>
+            <div class="grid grid-cols-2 gap-1.5">
+                <button onclick="applyModelRotation(0,0,0)" class="px-1 py-2 text-[8px] font-bold bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 transition-all text-[#c5a059]">Sıfırla</button>
+                <button onclick="addModelRotation(Math.PI/2,0,0)" class="px-1 py-2 text-[8px] font-bold bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 transition-all">90° X</button>
+                <button onclick="addModelRotation(0,Math.PI/2,0)" class="px-1 py-2 text-[8px] font-bold bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 transition-all">90° Y</button>
+                <button onclick="addModelRotation(0,0,Math.PI/2)" class="px-1 py-2 text-[8px] font-bold bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 transition-all">90° Z</button>
+                <button onclick="addModelRotation(Math.PI,0,0)" class="px-1 py-2 text-[8px] font-bold bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 transition-all">180° X</button>
+                <button onclick="addModelRotation(0,Math.PI,0)" class="px-1 py-2 text-[8px] font-bold bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 transition-all">180° Y</button>
+                <button onclick="addModelRotation(0,0,Math.PI)" class="col-span-2 px-1 py-2 text-[8px] font-bold bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 transition-all">180° Z</button>
             </div>
+        </div>
 
-            <div class="panel-card p-5">
-                <h3 class="text-[10px] font-black text-white/20 tracking-[0.25em] uppercase mb-4">MATERYAL VE METAL</h3>
-                <div class="space-y-5">
-                    <div>
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-[10px] font-bold text-white/40 uppercase">Gümüş Seçenekleri</span>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2 mb-4">
-                            <button id="mat-antik" onclick="setMaterial(0x888888, 0.25, 1.0, 'mat-antik')" class="btn-option active py-2.5 rounded-lg flex items-center justify-center gap-2">
-                                <div class="w-3 h-3 rounded-full bg-[#888888]"></div> Antik Gümüş
-                            </button>
-                            <button id="mat-parlak" onclick="setMaterial(0xeeeeee, 0.05, 1.0, 'mat-parlak')" class="btn-option py-2.5 rounded-lg flex items-center justify-center gap-2">
-                                <div class="w-3 h-3 rounded-full bg-[#eeeeee]"></div> Parlak Gümüş
-                            </button>
-                        </div>
-
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-[10px] font-bold text-white/40 uppercase">Premium Metaller</span>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2 mb-4">
-                            <button id="mat-sari" onclick="setMaterial(0xe5b80b, 0.04, 1.0, 'mat-sari')" class="btn-option py-2.5 rounded-lg flex items-center justify-center gap-2">
-                                <div class="w-3 h-3 rounded-full bg-[#e5b80b]"></div> Sarı Altın
-                            </button>
-                            <button id="mat-siyah" onclick="setMaterial(0x1a1a1a, 0.12, 1.0, 'mat-siyah')" class="btn-option py-2.5 rounded-lg flex items-center justify-center gap-2">
-                                <div class="w-3 h-3 rounded-full bg-[#1a1a1a]"></div> Siyah Rodyum
-                            </button>
-                            <button id="mat-gul" onclick="setMaterial(0xb76e79, 0.1, 1.0, 'mat-gul')" class="btn-option py-2 rounded-lg flex items-center justify-center gap-2">
-                                <div class="w-3 h-3 rounded-full bg-[#b76e79]"></div> Gül Altın
-                            </button>
-                            <button id="mat-oksitli" onclick="setMaterial(0x8a6d3b, 0.45, 0.8, 'mat-oksitli')" class="btn-option py-2 rounded-lg flex items-center justify-center gap-2">
-                                <div class="w-3 h-3 rounded-full bg-[#8a6d3b]"></div> Oksitli Altın
-                            </button>
-                        </div>
-                        <button id="mat-wax" onclick="setMaterial(0x914c3e, 0.7, 0.15, 'mat-wax')" class="w-full btn-option py-2 rounded-lg flex items-center justify-center gap-2">
-                            <div class="w-3 h-3 rounded-full bg-[#914c3e]"></div> Red Wax (Kil Modu)
-                        </button>
-                    </div>
-
-                    <div>
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-[10px] font-bold text-white/40 uppercase">Yüzey Pürüzlülüğü (Roughness)</span>
-                            <span id="rough-val" class="text-[10px] font-mono text-[#c5a059]">0.25</span>
-                        </div>
-                        <input type="range" id="rough-slider" min="0" max="1" step="0.01" value="0.25">
-                    </div>
-
-                    <div>
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-[10px] font-bold text-white/40 uppercase">Yansıma Gücü (Env)</span>
-                            <span id="env-val" class="text-[10px] font-mono text-[#c5a059]">1.50</span>
-                        </div>
-                        <input type="range" id="env-slider" min="0" max="4" step="0.05" value="1.50">
-                    </div>
-                </div>
-            </div>
-
-            <div class="panel-card p-5">
-                <h3 class="text-[10px] font-black text-white/20 tracking-[0.25em] uppercase mb-4">ARKA PLAN</h3>
-                <div class="grid grid-cols-2 gap-2">
-                    <button id="btn-bg-transparent" class="btn-option py-2.5 rounded-lg" onclick="setBg('transparent')">Şeffaf</button>
-                    <button id="btn-bg-black" class="btn-option py-2.5 rounded-lg" onclick="setBg('black')">Siyah</button>
-                    <button id="btn-bg-white" class="btn-option py-2.5 rounded-lg" onclick="setBg('white')">Beyaz</button>
-                    <button id="btn-bg-smoke" class="btn-option active py-2.5 rounded-lg" onclick="setBg('smoke')">Koyu Gri</button>
-                </div>
-            </div>
-
-            <div class="panel-card p-5">
-                <h3 class="text-[10px] font-black text-white/20 tracking-[0.25em] uppercase mb-4">ROTASYON</h3>
-                <div class="grid grid-cols-4 gap-2">
-                    <button onclick="applyModelRotation(0, 0, 0)" class="px-2 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider text-[#c5a059]">Sıfırla</button>
-                    <button onclick="addModelRotation(Math.PI/2, 0, 0)" class="px-2 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider">90° X</button>
-                    <button onclick="addModelRotation(0, Math.PI/2, 0)" class="px-2 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider">90° Y</button>
-                    <button onclick="addModelRotation(0, 0, Math.PI/2)" class="px-2 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider">90° Z</button>
-                    <div></div>
-                    <button onclick="addModelRotation(Math.PI, 0, 0)" class="px-2 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider">180° X</button>
-                    <button onclick="addModelRotation(0, Math.PI, 0)" class="px-2 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider">180° Y</button>
-                    <button onclick="addModelRotation(0, 0, Math.PI)" class="px-2 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider">180° Z</button>
-                </div>
-            </div>
-
-            <div class="panel-card p-5">
-                <h3 class="text-[10px] font-black text-white/20 tracking-[0.25em] uppercase mb-4">FORMAT</h3>
-                <div class="flex flex-col gap-2">
-                    <button class="btn-option active py-3 px-4 rounded-xl flex justify-between items-center" id="fmt-1-1" onclick="setFormat('1-1')">
-                        <span>Kare (1:1)</span>
-                    </button>
-                    <button class="btn-option py-3 px-4 rounded-xl flex justify-between items-center" id="fmt-9-16" onclick="setFormat('9-16')">
-                        <span>Reels (9:16)</span>
-                    </button>
-                    <button class="btn-option py-3 px-4 rounded-xl flex justify-between items-center" id="fmt-16-9" onclick="setFormat('16-9')">
-                        <span>Yatay (16:9)</span>
-                    </button>
-                </div>
-            </div>
-        </aside>
     </div>
 
-    <div id="loading" class="hidden fixed inset-0 bg-black/95 backdrop-blur-2xl flex flex-col items-center justify-center z-[100]">
-        <div class="w-10 h-10 border-2 border-white/10 border-t-[#c5a059] rounded-full loading-spin mb-6"></div>
-        <p class="font-bold text-white/40 tracking-[0.4em] text-[9px] uppercase italic">MODEL İŞLENİYOR...</p>
+    <!-- ORTA: VIEWPORT -->
+    <div class="flex-1 flex items-center justify-center min-w-0">
+        <div id="viewport-container" class="format-1-1 border border-white/5">
+            <div id="canvas-container" class="w-full h-full"></div>
+
+            <div id="hud" class="hidden absolute bottom-4 left-4 z-40 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-3">
+                <span id="model-stats" class="text-[9px] font-mono text-white/70 tracking-tight"></span>
+            </div>
+
+            <div id="record-indicator" class="hidden absolute top-4 left-4 flex items-center gap-2 bg-red-600/20 px-3 py-1.5 rounded-full border border-red-600/40 animate-pulse">
+                <div class="w-2 h-2 bg-red-600 rounded-full"></div>
+                <span class="text-[9px] font-bold text-red-500 uppercase tracking-[0.2em]">KAYDEDİLİYOR</span>
+            </div>
+
+            <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none transition-opacity duration-500">
+                <div class="w-16 h-16 opacity-10 mb-3">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                </div>
+                <p class="text-white/20 text-[10px] font-bold uppercase tracking-widest italic">Model Yükleyin (.stl, .obj, .glb)</p>
+            </div>
+        </div>
     </div>
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { STLLoader } from 'three/addons/loaders/STLLoader.js';
-        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-        import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-        import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+    <!-- SAĞ PANEL -->
+    <div class="side-panel w-48 flex-shrink-0 flex flex-col gap-2 overflow-y-auto min-h-0">
 
-        let scene, camera, renderer, controls, modelGroup, gridHelper;
-        let activeDuration = 10;
-        let isRecording = false;
-        let envIntensity = 1.50;
+        <div class="panel-card p-3">
+            <h3 class="text-[9px] font-black text-white/20 tracking-[0.2em] uppercase mb-3">MATERYAL</h3>
+            <div class="flex flex-col gap-1.5">
+                <p class="text-[8px] font-bold text-white/30 uppercase">Gümüş</p>
+                <div class="grid grid-cols-2 gap-1.5">
+                    <button id="mat-antik" onclick="setMaterial(0x888888,0.25,1.0,'mat-antik')" class="btn-option active py-2 rounded-lg flex items-center justify-center gap-1.5">
+                        <div class="w-2.5 h-2.5 rounded-full bg-[#888888] flex-shrink-0"></div><span>Antik</span>
+                    </button>
+                    <button id="mat-parlak" onclick="setMaterial(0xeeeeee,0.05,1.0,'mat-parlak')" class="btn-option py-2 rounded-lg flex items-center justify-center gap-1.5">
+                        <div class="w-2.5 h-2.5 rounded-full bg-[#eeeeee] flex-shrink-0"></div><span>Parlak</span>
+                    </button>
+                </div>
+                <p class="text-[8px] font-bold text-white/30 uppercase mt-1">Metaller</p>
+                <div class="grid grid-cols-2 gap-1.5">
+                    <button id="mat-sari" onclick="setMaterial(0xe5b80b,0.04,1.0,'mat-sari')" class="btn-option py-2 rounded-lg flex items-center justify-center gap-1.5">
+                        <div class="w-2.5 h-2.5 rounded-full bg-[#e5b80b] flex-shrink-0"></div><span>Sarı</span>
+                    </button>
+                    <button id="mat-siyah" onclick="setMaterial(0x1a1a1a,0.12,1.0,'mat-siyah')" class="btn-option py-2 rounded-lg flex items-center justify-center gap-1.5">
+                        <div class="w-2.5 h-2.5 rounded-full bg-[#1a1a1a] flex-shrink-0"></div><span>Siyah</span>
+                    </button>
+                    <button id="mat-gul" onclick="setMaterial(0xb76e79,0.1,1.0,'mat-gul')" class="btn-option py-2 rounded-lg flex items-center justify-center gap-1.5">
+                        <div class="w-2.5 h-2.5 rounded-full bg-[#b76e79] flex-shrink-0"></div><span>Gül</span>
+                    </button>
+                    <button id="mat-oksitli" onclick="setMaterial(0x8a6d3b,0.45,0.8,'mat-oksitli')" class="btn-option py-2 rounded-lg flex items-center justify-center gap-1.5">
+                        <div class="w-2.5 h-2.5 rounded-full bg-[#8a6d3b] flex-shrink-0"></div><span>Oksitli</span>
+                    </button>
+                </div>
+                <button id="mat-wax" onclick="setMaterial(0x914c3e,0.7,0.15,'mat-wax')" class="btn-option py-2 rounded-lg flex items-center justify-center gap-1.5 mt-0.5">
+                    <div class="w-2.5 h-2.5 rounded-full bg-[#914c3e] flex-shrink-0"></div><span>Red Wax</span>
+                </button>
+            </div>
+        </div>
 
-        let currentMaterialState = {
-            color: 0x888888,
-            roughness: 0.25,
-            metalness: 1.0
-        };
+        <div class="panel-card p-3">
+            <div class="flex justify-between items-center mb-1.5">
+                <span class="text-[8px] font-bold text-white/30 uppercase">Roughness</span>
+                <span id="rough-val" class="text-[8px] font-mono text-[#c5a059]">0.25</span>
+            </div>
+            <input type="range" id="rough-slider" min="0" max="1" step="0.01" value="0.25">
+            <div class="flex justify-between items-center mb-1.5 mt-3">
+                <span class="text-[8px] font-bold text-white/30 uppercase">Env</span>
+                <span id="env-val" class="text-[8px] font-mono text-[#c5a059]">1.50</span>
+            </div>
+            <input type="range" id="env-slider" min="0" max="4" step="0.05" value="1.50">
+        </div>
 
-        const dracoLoader = new DRACOLoader();
-        dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+        <div class="panel-card p-3">
+            <h3 class="text-[9px] font-black text-white/20 tracking-[0.2em] uppercase mb-3">ARKA PLAN</h3>
+            <div class="grid grid-cols-2 gap-1.5">
+                <button id="btn-bg-transparent" class="btn-option py-2 rounded-lg" onclick="setBg('transparent')">Şeffaf</button>
+                <button id="btn-bg-black"       class="btn-option py-2 rounded-lg" onclick="setBg('black')">Siyah</button>
+                <button id="btn-bg-white"       class="btn-option py-2 rounded-lg" onclick="setBg('white')">Beyaz</button>
+                <button id="btn-bg-smoke"       class="btn-option active py-2 rounded-lg" onclick="setBg('smoke')">Koyu Gri</button>
+            </div>
+        </div>
 
-        init();
+    </div>
+</div>
 
-        function init() {
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x111111);
+<div id="loading" class="hidden fixed inset-0 bg-black/95 backdrop-blur-2xl flex flex-col items-center justify-center z-[100]">
+    <div class="w-10 h-10 border-2 border-white/10 border-t-[#c5a059] rounded-full loading-spin mb-6"></div>
+    <p class="font-bold text-white/40 tracking-[0.4em] text-[9px] uppercase italic">MODEL İŞLENİYOR...</p>
+</div>
 
-            camera = new THREE.PerspectiveCamera(35, 1, 0.1, 1000000);
-            camera.position.set(200, 200, 200);
+<script type="module">
+    import * as THREE from 'three';
+    import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+    import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-            const container = document.getElementById('canvas-container');
-            renderer = new THREE.WebGLRenderer({
-                antialias: true,
-                alpha: true,
-                preserveDrawingBuffer: true,
-                powerPreference: "high-performance"
-            });
-            renderer.setSize(container.clientWidth, container.clientHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.outputColorSpace = THREE.SRGBColorSpace;
-            renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.toneMappingExposure = 1.05;
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            container.appendChild(renderer.domElement);
+    let scene, camera, renderer, controls, modelGroup, gridHelper;
+    let activeDuration = 10;
+    let isRecording = false;
+    let envIntensity = 1.50;
 
-            const pmremGenerator = new THREE.PMREMGenerator(renderer);
-            const roomEnv = new RoomEnvironment();
-            scene.environment = pmremGenerator.fromScene(roomEnv, 0.04).texture;
+    let currentMaterialState = {
+        color: 0x888888,
+        roughness: 0.25,
+        metalness: 1.0
+    };
 
-            controls = new OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
-            controls.autoRotate = true;
-            controls.autoRotateSpeed = 2.0;
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
 
-            const keyLight = new THREE.DirectionalLight(0xffffff, 3.0);
-            keyLight.position.set(200, 300, 150);
-            keyLight.castShadow = true;
-            scene.add(keyLight);
+    init();
 
-            const fillLight = new THREE.DirectionalLight(0xeeeeff, 1.0);
-            fillLight.position.set(-150, 100, 100);
-            scene.add(fillLight);
+    function init() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111111);
 
-            const rimLight = new THREE.DirectionalLight(0xffffff, 2.0);
-            rimLight.position.set(0, 50, -300);
-            scene.add(rimLight);
+        camera = new THREE.PerspectiveCamera(35, 1, 0.1, 1000000);
+        camera.position.set(200, 200, 200);
 
-            gridHelper = new THREE.GridHelper(2000, 100, 0x333333, 0x222222);
-            gridHelper.position.y = -0.01;
-            scene.add(gridHelper);
+        const container = document.getElementById('canvas-container');
+        renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            alpha: true,
+            preserveDrawingBuffer: true,
+            powerPreference: "high-performance"
+        });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.05;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
 
-            modelGroup = new THREE.Group();
-            scene.add(modelGroup);
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        const roomEnv = new RoomEnvironment();
+        scene.environment = pmremGenerator.fromScene(roomEnv, 0.04).texture;
 
-            document.getElementById('env-slider').addEventListener('input', (e) => {
-                envIntensity = parseFloat(e.target.value);
-                document.getElementById('env-val').innerText = envIntensity.toFixed(2);
-                updateEnv();
-            });
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 2.0;
 
-            document.getElementById('rough-slider').addEventListener('input', (e) => {
-                const val = parseFloat(e.target.value);
-                currentMaterialState.roughness = val;
-                document.getElementById('rough-val').innerText = val.toFixed(2);
-                updateMaterialProperties();
-            });
+        const keyLight = new THREE.DirectionalLight(0xffffff, 3.0);
+        keyLight.position.set(200, 300, 150);
+        keyLight.castShadow = true;
+        scene.add(keyLight);
 
-            // GRID TOGGLE
-            document.getElementById('toggle-grid-btn').addEventListener('click', () => {
-                gridHelper.visible = !gridHelper.visible;
-                const icon = document.getElementById('grid-icon');
-                const text = document.getElementById('grid-text');
-                if (gridHelper.visible) {
-                    text.innerText = "GRİD AÇIK";
-                    icon.className = "w-2 h-2 bg-green-500 rounded-full animate-pulse";
-                } else {
-                    text.innerText = "GRİD KAPALI";
-                    icon.className = "w-2 h-2 bg-red-500 rounded-full";
-                }
-            });
+        const fillLight = new THREE.DirectionalLight(0xeeeeff, 1.0);
+        fillLight.position.set(-150, 100, 100);
+        scene.add(fillLight);
 
-            // ROTASYON TOGGLE
-            document.getElementById('toggle-rotate-btn').addEventListener('click', () => {
-                controls.autoRotate = !controls.autoRotate;
-                const btnText = document.getElementById('rotate-text');
-                const btnIcon = document.getElementById('rotate-icon');
+        const rimLight = new THREE.DirectionalLight(0xffffff, 2.0);
+        rimLight.position.set(0, 50, -300);
+        scene.add(rimLight);
 
-                if (controls.autoRotate) {
-                    btnText.innerText = "DÖNÜŞÜ DURDUR";
-                    btnIcon.className = "w-2 h-2 bg-green-500 rounded-full animate-pulse";
-                } else {
-                    btnText.innerText = "DÖNÜŞÜ BAŞLAT";
-                    btnIcon.className = "w-2 h-2 bg-red-500 rounded-full";
-                }
-            });
+        gridHelper = new THREE.GridHelper(2000, 100, 0x333333, 0x222222);
+        gridHelper.position.y = -0.01;
+        scene.add(gridHelper);
 
-            window.addEventListener('resize', onWindowResize);
-            animate();
-        }
+        modelGroup = new THREE.Group();
+        scene.add(modelGroup);
 
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update();
-            renderer.render(scene, camera);
-        }
+        document.getElementById('env-slider').addEventListener('input', (e) => {
+            envIntensity = parseFloat(e.target.value);
+            document.getElementById('env-val').innerText = envIntensity.toFixed(2);
+            updateEnv();
+        });
 
-        function onWindowResize() {
-            const container = document.getElementById('canvas-container');
-            if (!container) return;
-            camera.aspect = container.clientWidth / container.clientHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(container.clientWidth, container.clientHeight);
-        }
-
-        function updateEnv() {
-            modelGroup.traverse(c => {
-                if (c.isMesh && c.material) {
-                    const materials = Array.isArray(c.material) ? c.material : [c.material];
-                    materials.forEach(m => {
-                        m.envMapIntensity = envIntensity;
-                        m.needsUpdate = true;
-                    });
-                }
-            });
-        }
-
-        function updateMaterialProperties() {
-            modelGroup.traverse(c => {
-                if (c.isMesh && c.material) {
-                    const materials = Array.isArray(c.material) ? c.material : [c.material];
-                    materials.forEach(m => {
-                        m.color.setHex(currentMaterialState.color);
-                        m.roughness = currentMaterialState.roughness;
-                        m.metalness = currentMaterialState.metalness;
-                        m.envMapIntensity = envIntensity;
-                        m.needsUpdate = true;
-                    });
-                }
-            });
-        }
-
-        window.setMaterial = (color, roughness, metalness, matId) => {
-            currentMaterialState = { color, roughness, metalness };
-            document.getElementById('rough-slider').value = roughness;
-            document.getElementById('rough-val').innerText = roughness.toFixed(2);
-            ['mat-antik','mat-parlak','mat-sari','mat-siyah','mat-gul','mat-oksitli','mat-wax'].forEach(id => {
-                document.getElementById(id).classList.toggle('active', id === matId);
-            });
+        document.getElementById('rough-slider').addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            currentMaterialState.roughness = val;
+            document.getElementById('rough-val').innerText = val.toFixed(2);
             updateMaterialProperties();
-        };
+        });
 
-        window.setBg = (type) => {
-            const colors = { black: 0x000000, white: 0xffffff, smoke: 0x111111, transparent: null };
-            ['transparent', 'black', 'white', 'smoke'].forEach(k => {
-                document.getElementById(`btn-bg-${k}`).classList.toggle('active', k === type);
-            });
-            if (type === 'transparent') {
-                scene.background = null;
-                document.getElementById('viewport-container').style.background = 'transparent';
+        // GRID TOGGLE
+        document.getElementById('toggle-grid-btn').addEventListener('click', () => {
+            gridHelper.visible = !gridHelper.visible;
+            const icon = document.getElementById('grid-icon');
+            const text = document.getElementById('grid-text');
+            if (gridHelper.visible) {
+                text.innerText = "GRİD AÇIK";
+                icon.className = "w-2 h-2 bg-green-500 rounded-full animate-pulse flex-shrink-0";
             } else {
-                scene.background = new THREE.Color(colors[type]);
-                document.getElementById('viewport-container').style.background = `#${colors[type].toString(16).padStart(6, '0')}`;
+                text.innerText = "GRİD KAPALI";
+                icon.className = "w-2 h-2 bg-red-500 rounded-full flex-shrink-0";
             }
-        };
-
-        window.setFormat = (fmt) => {
-            document.getElementById('viewport-container').className = `border border-white/5 format-${fmt}`;
-            ['1-1', '9-16', '16-9'].forEach(f => {
-                document.getElementById(`fmt-${f}`).classList.toggle('active', f === fmt);
-            });
-            setTimeout(() => { onWindowResize(); zoomToFit(); }, 400);
-        };
-
-        window.applyModelRotation = (x, y, z) => {
-            if (modelGroup.children[0]) {
-                modelGroup.children[0].rotation.set(x, y, z);
-                zoomToFit();
-            }
-        };
-
-        window.addModelRotation = (x, y, z) => {
-            if (modelGroup.children[0]) {
-                modelGroup.children[0].rotation.x += x;
-                modelGroup.children[0].rotation.y += y;
-                modelGroup.children[0].rotation.z += z;
-                zoomToFit();
-            }
-        };
-
-        document.getElementById('file-input').addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) loadModel(file);
         });
 
-        function loadModel(file) {
-            const name = file.name.toLowerCase();
-            const reader = new FileReader();
-            document.getElementById('loading').classList.remove('hidden');
-            document.getElementById('empty-state').classList.add('opacity-0');
+        // ROTASYON TOGGLE
+        document.getElementById('toggle-rotate-btn').addEventListener('click', () => {
+            controls.autoRotate = !controls.autoRotate;
+            const btnText = document.getElementById('rotate-text');
+            const btnIcon = document.getElementById('rotate-icon');
+            if (controls.autoRotate) {
+                btnText.innerText = "DÖNÜŞÜ DURDUR";
+                btnIcon.className = "w-2 h-2 bg-green-500 rounded-full animate-pulse flex-shrink-0";
+            } else {
+                btnText.innerText = "DÖNÜŞÜ BAŞLAT";
+                btnIcon.className = "w-2 h-2 bg-red-500 rounded-full flex-shrink-0";
+            }
+        });
 
-            reader.onload = (e) => {
-                const buffer = e.target.result;
-                const activeMat = new THREE.MeshStandardMaterial({
-                    color: currentMaterialState.color,
-                    roughness: currentMaterialState.roughness,
-                    metalness: currentMaterialState.metalness,
-                    envMapIntensity: envIntensity
+        window.addEventListener('resize', onWindowResize);
+        animate();
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    function onWindowResize() {
+        const container = document.getElementById('canvas-container');
+        if (!container) return;
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+
+    function updateEnv() {
+        modelGroup.traverse(c => {
+            if (c.isMesh && c.material) {
+                const materials = Array.isArray(c.material) ? c.material : [c.material];
+                materials.forEach(m => { m.envMapIntensity = envIntensity; m.needsUpdate = true; });
+            }
+        });
+    }
+
+    function updateMaterialProperties() {
+        modelGroup.traverse(c => {
+            if (c.isMesh && c.material) {
+                const materials = Array.isArray(c.material) ? c.material : [c.material];
+                materials.forEach(m => {
+                    m.color.setHex(currentMaterialState.color);
+                    m.roughness = currentMaterialState.roughness;
+                    m.metalness = currentMaterialState.metalness;
+                    m.envMapIntensity = envIntensity;
+                    m.needsUpdate = true;
                 });
+            }
+        });
+    }
 
-                try {
-                    if (name.endsWith('.stl')) {
-                        const loader = new STLLoader();
-                        const geo = loader.parse(buffer);
-                        geo.center();
-                        geo.computeVertexNormals();
-                        const mesh = new THREE.Mesh(geo, activeMat);
-                        finalizeModel(mesh, file.name);
-                    } else if (name.endsWith('.obj')) {
-                        const loader = new OBJLoader();
-                        const obj = loader.parse(new TextDecoder().decode(buffer));
-                        obj.traverse(c => { if(c.isMesh) { c.material = activeMat; c.castShadow = true; } });
-                        finalizeModel(obj, file.name);
-                    } else if (name.endsWith('.glb') || name.endsWith('.gltf')) {
-                        const loader = new GLTFLoader();
-                        loader.setDRACOLoader(dracoLoader);
-                        loader.parse(buffer, '', (gltf) => {
-                            gltf.scene.traverse(c => { if(c.isMesh) { c.material = activeMat; c.castShadow = true; } });
-                            finalizeModel(gltf.scene, file.name);
-                        });
-                    }
-                } catch (err) {
-                    console.error(err);
-                    document.getElementById('loading').classList.add('hidden');
-                }
-            };
-            reader.readAsArrayBuffer(file);
+    window.setMaterial = (color, roughness, metalness, matId) => {
+        currentMaterialState = { color, roughness, metalness };
+        document.getElementById('rough-slider').value = roughness;
+        document.getElementById('rough-val').innerText = roughness.toFixed(2);
+        ['mat-antik','mat-parlak','mat-sari','mat-siyah','mat-gul','mat-oksitli','mat-wax'].forEach(id => {
+            document.getElementById(id).classList.toggle('active', id === matId);
+        });
+        updateMaterialProperties();
+    };
+
+    window.setBg = (type) => {
+        const colors = { black: 0x000000, white: 0xffffff, smoke: 0x111111, transparent: null };
+        ['transparent','black','white','smoke'].forEach(k => {
+            document.getElementById(`btn-bg-${k}`).classList.toggle('active', k === type);
+        });
+        if (type === 'transparent') {
+            scene.background = null;
+            document.getElementById('viewport-container').style.background = 'transparent';
+        } else {
+            scene.background = new THREE.Color(colors[type]);
+            document.getElementById('viewport-container').style.background = `#${colors[type].toString(16).padStart(6,'0')}`;
         }
+    };
 
-        function finalizeModel(object, name) {
-            modelGroup.clear();
-            const box = new THREE.Box3().setFromObject(object);
-            const center = new THREE.Vector3();
-            box.getCenter(center);
-            object.position.sub(center);
+    window.setFormat = (fmt) => {
+        document.getElementById('viewport-container').className = `border border-white/5 format-${fmt}`;
+        ['1-1','9-16','16-9'].forEach(f => {
+            document.getElementById(`fmt-${f}`).classList.toggle('active', f === fmt);
+        });
+        setTimeout(() => { onWindowResize(); zoomToFit(); }, 400);
+    };
 
-            const size = new THREE.Vector3();
-            box.getSize(size);
-            const maxDim = Math.max(size.x, size.y, size.z);
-            const targetSize = 100;
-            const scale = targetSize / maxDim;
-            object.scale.set(scale, scale, scale);
+    window.applyModelRotation = (x, y, z) => {
+        if (modelGroup.children[0]) { modelGroup.children[0].rotation.set(x, y, z); zoomToFit(); }
+    };
 
-            modelGroup.add(object);
-            const newBox = new THREE.Box3().setFromObject(modelGroup);
-            modelGroup.position.y = -newBox.min.y;
-
+    window.addModelRotation = (x, y, z) => {
+        if (modelGroup.children[0]) {
+            modelGroup.children[0].rotation.x += x;
+            modelGroup.children[0].rotation.y += y;
+            modelGroup.children[0].rotation.z += z;
             zoomToFit();
-
-            document.getElementById('hud').classList.remove('hidden');
-            document.getElementById('model-stats').innerText = `${name.toUpperCase()} | HAZIR`;
-            document.getElementById('loading').classList.add('hidden');
-            updateMaterialProperties();
         }
+    };
 
-        function zoomToFit() {
-            const box = new THREE.Box3().setFromObject(modelGroup);
-            const center = new THREE.Vector3();
-            box.getCenter(center);
-            const size = new THREE.Vector3();
-            box.getSize(size);
-            const maxDim = Math.max(size.x, size.y, size.z);
-            const fov = camera.fov * (Math.PI / 180);
-            let cameraDist = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-            cameraDist *= 2.5;
-            camera.position.set(cameraDist, cameraDist * 0.8, cameraDist);
-            camera.lookAt(center);
-            controls.target.copy(center);
-            controls.update();
-        }
+    document.getElementById('file-input').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) loadModel(file);
+    });
 
-        document.getElementById('screenshot-btn').addEventListener('click', () => {
-            renderer.render(scene, camera);
-            const link = document.createElement('a');
-            link.download = `viaver_render_${Date.now()}.webp`;
-            link.href = renderer.domElement.toDataURL('image/webp', 1.0);
-            link.click();
-        });
+    function loadModel(file) {
+        const name = file.name.toLowerCase();
+        const reader = new FileReader();
+        document.getElementById('loading').classList.remove('hidden');
+        document.getElementById('empty-state').classList.add('opacity-0');
 
-        document.getElementById('record-btn').addEventListener('click', async () => {
-            if (isRecording || !modelGroup.children[0]) return;
-            isRecording = true;
-            const btn = document.getElementById('record-btn');
-            const indicator = document.getElementById('record-indicator');
-            const originalText = btn.innerHTML;
-            btn.innerText = "KAYDEDİLİYOR...";
-            indicator.classList.remove('hidden');
-            const stream = renderer.domElement.captureStream(60);
-            const recorder = new MediaRecorder(stream, { mimeType: 'video/webm', videoBitsPerSecond: 50000000 });
-            const chunks = [];
-            recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-            recorder.onstop = () => {
-                const blob = new Blob(chunks, { type: 'video/webm' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `viaver_studio_render_${Date.now()}.webm`;
-                a.click();
-                btn.innerHTML = originalText;
-                indicator.classList.add('hidden');
-                isRecording = false;
-            };
-            recorder.start();
-            setTimeout(() => { if (recorder.state === "recording") recorder.stop(); }, activeDuration * 1000);
-        });
-    </script>
+        reader.onload = (e) => {
+            const buffer = e.target.result;
+            const activeMat = new THREE.MeshStandardMaterial({
+                color: currentMaterialState.color,
+                roughness: currentMaterialState.roughness,
+                metalness: currentMaterialState.metalness,
+                envMapIntensity: envIntensity
+            });
+            try {
+                if (name.endsWith('.stl')) {
+                    const loader = new STLLoader();
+                    const geo = loader.parse(buffer);
+                    geo.center();
+                    geo.computeVertexNormals();
+                    finalizeModel(new THREE.Mesh(geo, activeMat), file.name);
+                } else if (name.endsWith('.obj')) {
+                    const loader = new OBJLoader();
+                    const obj = loader.parse(new TextDecoder().decode(buffer));
+                    obj.traverse(c => { if(c.isMesh) { c.material = activeMat; c.castShadow = true; } });
+                    finalizeModel(obj, file.name);
+                } else if (name.endsWith('.glb') || name.endsWith('.gltf')) {
+                    const loader = new GLTFLoader();
+                    loader.setDRACOLoader(dracoLoader);
+                    loader.parse(buffer, '', (gltf) => {
+                        gltf.scene.traverse(c => { if(c.isMesh) { c.material = activeMat; c.castShadow = true; } });
+                        finalizeModel(gltf.scene, file.name);
+                    });
+                }
+            } catch (err) {
+                console.error(err);
+                document.getElementById('loading').classList.add('hidden');
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function finalizeModel(object, name) {
+        modelGroup.clear();
+        const box = new THREE.Box3().setFromObject(object);
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        object.position.sub(center);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const scale = 100 / Math.max(size.x, size.y, size.z);
+        object.scale.set(scale, scale, scale);
+        modelGroup.add(object);
+        const newBox = new THREE.Box3().setFromObject(modelGroup);
+        modelGroup.position.y = -newBox.min.y;
+        zoomToFit();
+        document.getElementById('hud').classList.remove('hidden');
+        document.getElementById('model-stats').innerText = `${name.toUpperCase()} | HAZIR`;
+        document.getElementById('loading').classList.add('hidden');
+        updateMaterialProperties();
+    }
+
+    function zoomToFit() {
+        const box = new THREE.Box3().setFromObject(modelGroup);
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fov = camera.fov * (Math.PI / 180);
+        let cameraDist = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+        cameraDist *= 2.5;
+        camera.position.set(cameraDist, cameraDist * 0.8, cameraDist);
+        camera.lookAt(center);
+        controls.target.copy(center);
+        controls.update();
+    }
+
+    document.getElementById('screenshot-btn').addEventListener('click', () => {
+        renderer.render(scene, camera);
+        const link = document.createElement('a');
+        link.download = `viaver_render_${Date.now()}.webp`;
+        link.href = renderer.domElement.toDataURL('image/webp', 1.0);
+        link.click();
+    });
+
+    document.getElementById('record-btn').addEventListener('click', async () => {
+        if (isRecording || !modelGroup.children[0]) return;
+        isRecording = true;
+        const btn = document.getElementById('record-btn');
+        const indicator = document.getElementById('record-indicator');
+        const originalText = btn.innerHTML;
+        btn.innerText = "KAYDEDİLİYOR...";
+        indicator.classList.remove('hidden');
+        const stream = renderer.domElement.captureStream(60);
+        const recorder = new MediaRecorder(stream, { mimeType: 'video/webm', videoBitsPerSecond: 50000000 });
+        const chunks = [];
+        recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+        recorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `viaver_studio_render_${Date.now()}.webm`;
+            a.click();
+            btn.innerHTML = originalText;
+            indicator.classList.add('hidden');
+            isRecording = false;
+        };
+        recorder.start();
+        setTimeout(() => { if (recorder.state === "recording") recorder.stop(); }, activeDuration * 1000);
+    });
+</script>
 </body>
 </html>
