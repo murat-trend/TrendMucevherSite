@@ -88,10 +88,16 @@
                     + MODEL YÜKLE
                 </label>
 
-                <button id="toggle-rotate-btn" class="flex items-center justify-center gap-3 bg-zinc-900 border border-white/10 hover:border-[#c5a059]/50 text-white p-4 rounded-2xl font-bold text-[10px] transition-all active:scale-[0.98] mt-2">
-                    <div id="rotate-icon" class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span id="rotate-text">DÖNÜŞÜ DURDUR</span>
-                </button>
+                <div class="grid grid-cols-2 gap-2 mt-2">
+                    <button id="toggle-rotate-btn" class="flex items-center justify-center gap-3 bg-zinc-900 border border-white/10 hover:border-[#c5a059]/50 text-white p-4 rounded-2xl font-bold text-[10px] transition-all active:scale-[0.98]">
+                        <div id="rotate-icon" class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <span id="rotate-text">DÖNÜŞÜ DURDUR</span>
+                    </button>
+                    <button id="toggle-grid-btn" class="flex items-center justify-center gap-3 bg-zinc-900 border border-white/10 hover:border-[#c5a059]/50 text-white p-4 rounded-2xl font-bold text-[10px] transition-all active:scale-[0.98]">
+                        <div id="grid-icon" class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <span id="grid-text">GRİD AÇIK</span>
+                    </button>
+                </div>
 
                 <div class="grid grid-cols-2 gap-2">
                     <button id="screenshot-btn" class="flex flex-col items-center justify-center bg-zinc-900 border border-white/10 hover:border-[#c5a059]/50 text-white p-3 rounded-2xl font-bold text-[9px] transition-all active:scale-[0.98]">
@@ -281,6 +287,20 @@
                 currentMaterialState.roughness = val;
                 document.getElementById('rough-val').innerText = val.toFixed(2);
                 updateMaterialProperties();
+            });
+
+            // GRID TOGGLE
+            document.getElementById('toggle-grid-btn').addEventListener('click', () => {
+                gridHelper.visible = !gridHelper.visible;
+                const icon = document.getElementById('grid-icon');
+                const text = document.getElementById('grid-text');
+                if (gridHelper.visible) {
+                    text.innerText = "GRİD AÇIK";
+                    icon.className = "w-2 h-2 bg-green-500 rounded-full animate-pulse";
+                } else {
+                    text.innerText = "GRİD KAPALI";
+                    icon.className = "w-2 h-2 bg-red-500 rounded-full";
+                }
             });
 
             // ROTASYON TOGGLE
