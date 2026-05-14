@@ -473,7 +473,7 @@ export function KoleksiyonEditClient() {
                 rows={4}
                 value={tema}
                 onChange={(e) => setTema(e.target.value)}
-                placeholder={"Türkçe yaz.\n\nÖrn: lotus çiçeği, ince kol, boş yuva, kadın yüzüğü"}
+                placeholder="Örnek: lotus çiçeği, ince kol, boş yuva"
               />
             </div>
 

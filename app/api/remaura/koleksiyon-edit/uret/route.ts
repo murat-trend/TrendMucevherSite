@@ -106,19 +106,23 @@ export async function POST(req: Request) {
     ? formKarakterleri.join(", ").toLowerCase()
     : "";
 
-  const prompt = [
+  const promptBody = [
     `${(takiTipi ?? "jewelry").toLowerCase()} jewelry`,
     temaEn,
     formStr,
     `${(metalRengi ?? "gold").toLowerCase()} metal`,
     "women's collection",
-    "no gemstones, empty settings only",
     "professional product photography, pure white background",
     "centered single object, sharp edges, studio lighting",
     "ultra detailed metal surface texture",
   ]
     .filter(Boolean)
     .join(", ");
+
+  const prompt = `EMPTY SETTINGS ONLY, NO STONES, NO GEMSTONES, ${promptBody}`;
+
+  const negativePrompt =
+    "diamonds, gemstones, stones, crystals, pearls, rubies, sapphires, emeralds, jewelry with stones, set stones, pavé, prong set stones";
 
   try {
     const { fal } = await import("@fal-ai/client");
@@ -127,6 +131,7 @@ export async function POST(req: Request) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const input: any = {
       prompt,
+      negative_prompt: negativePrompt,
       num_images: 4,
       image_size: "square_hd",
       guidance_scale: 3.5,
@@ -134,7 +139,10 @@ export async function POST(req: Request) {
       safety_tolerance: "5",
       output_format: "jpeg",
     };
-    if (refUrl) input.image_url = refUrl;
+    if (refUrl) {
+      input.image_url = refUrl;
+      input.image_prompt_strength = 0.3;
+    }
 
     const result = await fal.subscribe("fal-ai/flux-pro/v1.1", { input, logs: false });
 
