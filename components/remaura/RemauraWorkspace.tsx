@@ -51,10 +51,11 @@ type RemauraWorkspaceProps = {
   initialCategory?: RemauraCategory;
   /** false: üst bileşen (ör. sayfa) zaten RemauraBillingModalProvider ile sarılı olmalı */
   embedBillingProvider?: boolean;
+  isSuperAdmin?: boolean;
 };
 
-export function RemauraWorkspace({ embedBillingProvider = true, ...props }: RemauraWorkspaceProps) {
-  const inner = <RemauraWorkspaceInner {...props} />;
+export function RemauraWorkspace({ embedBillingProvider = true, isSuperAdmin, ...props }: RemauraWorkspaceProps) {
+  const inner = <RemauraWorkspaceInner {...props} isSuperAdmin={isSuperAdmin} />;
   if (!embedBillingProvider) return inner;
   return <RemauraBillingModalProvider>{inner}</RemauraBillingModalProvider>;
 }
@@ -67,7 +68,7 @@ function mapFormatToAnalysisPlatform(format: PlatformFormat): JewelryPlatformTar
   return "instagram";
 }
 
-function RemauraWorkspaceInner({ initialCategory = "jewelry" }: RemauraWorkspaceProps) {
+function RemauraWorkspaceInner({ initialCategory = "jewelry", isSuperAdmin = false }: RemauraWorkspaceProps) {
   const { t, locale } = useLanguage();
   const billingUi = useRemauraBillingModal();
   const { checkCredits } = useRemauraCreditsCheck();
@@ -820,7 +821,7 @@ function RemauraWorkspaceInner({ initialCategory = "jewelry" }: RemauraWorkspace
               >
                 REMAURA 3D AI
               </button>
-              {billingUserId === "949fd2b4-fc33-48b4-a5c0-a6c9744167a3" && (
+              {isSuperAdmin && (
                 <Link
                   href="/remaura/koleksiyon-edit"
                   className="rounded-full border border-[#b76e79]/40 bg-[#b76e79]/08 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[#b76e79]/70 transition-colors hover:border-[#b76e79] hover:text-[#b76e79]"

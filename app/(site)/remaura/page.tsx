@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { RemauraWorkspace } from "@/components/remaura/RemauraWorkspace";
 import { RemauraLocalizedLandingHeader } from "@/components/remaura/RemauraLocalizedLandingHeader";
+import { createClient } from "@/utils/supabase/server";
+import { isRemauraSuperAdminUserId } from "@/lib/billing/super-admin";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://trendmucevher.com";
 const pageUrl = `${siteUrl}/remaura`;
@@ -77,12 +80,17 @@ const jsonLd = {
   ],
 };
 
-export default function RemauraPage() {
+export default async function RemauraPage() {
+  const cookieStore = await cookies();
+  const supabase = createClient(cookieStore);
+  const { data: { user } } = await supabase.auth.getUser();
+  const isSuperAdmin = isRemauraSuperAdminUserId(user?.id);
+
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <RemauraLocalizedLandingHeader variant="main" />
-      <RemauraWorkspace />
+      <RemauraWorkspace isSuperAdmin={isSuperAdmin} />
     </>
   );
 }
