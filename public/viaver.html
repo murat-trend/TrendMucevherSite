@@ -24,9 +24,9 @@
         .btn-option:hover:not(.active) { background: rgba(255, 255, 255, 0.1); color: #fff; }
 
         #viewport-container { transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); background: radial-gradient(circle at center, #111 0%, #000 100%); border-radius: 1.5rem; overflow: hidden; position: relative; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
-        .format-1-1 { aspect-ratio: 1 / 1; height: 80vh; }
-        .format-9-16 { aspect-ratio: 9 / 16; height: 80vh; }
-        .format-16-9 { aspect-ratio: 16 / 9; width: 75vw; height: auto; }
+        .format-1-1 { aspect-ratio: 1 / 1; height: calc(100vh - 48px); max-height: calc(100vh - 48px); }
+        .format-9-16 { aspect-ratio: 9 / 16; height: calc(100vh - 48px); max-height: calc(100vh - 48px); }
+        .format-16-9 { aspect-ratio: 16 / 9; width: 100%; height: auto; }
 
         .loading-spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -44,7 +44,7 @@
 
     <div class="flex h-screen w-full p-6 gap-6 overflow-hidden bg-[#000]">
 
-        <div class="flex-1 flex flex-col items-center justify-center relative">
+        <div class="flex-1 flex items-center justify-center relative">
             <div id="viewport-container" class="format-1-1 border border-white/5">
                 <div id="canvas-container" class="w-full h-full"></div>
 
@@ -63,17 +63,6 @@
                     </div>
                     <p class="text-white/20 text-xs font-bold uppercase tracking-widest italic">Model Yükleyin (.stl, .obj, .glb)</p>
                 </div>
-            </div>
-
-            <div class="grid grid-cols-4 gap-2 mt-6 w-full max-w-md">
-                <button onclick="applyModelRotation(0, 0, 0)" class="px-4 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider text-[#c5a059]">Sıfırla</button>
-                <button onclick="addModelRotation(Math.PI/2, 0, 0)" class="px-4 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider">90° X</button>
-                <button onclick="addModelRotation(0, Math.PI/2, 0)" class="px-4 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider">90° Y</button>
-                <button onclick="addModelRotation(0, 0, Math.PI/2)" class="px-4 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider">90° Z</button>
-                <div></div>
-                <button onclick="addModelRotation(Math.PI, 0, 0)" class="px-4 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider">180° X</button>
-                <button onclick="addModelRotation(0, Math.PI, 0)" class="px-4 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider">180° Y</button>
-                <button onclick="addModelRotation(0, 0, Math.PI)" class="px-4 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider">180° Z</button>
             </div>
         </div>
 
@@ -170,6 +159,20 @@
                     <button class="btn-option py-2.5 rounded-lg" onclick="setBg('black')">Siyah</button>
                     <button class="btn-option py-2.5 rounded-lg" onclick="setBg('white')">Beyaz</button>
                     <button class="btn-option active py-2.5 rounded-lg" id="btn-bg-smoke" onclick="setBg('smoke')">Koyu Gri</button>
+                </div>
+            </div>
+
+            <div class="panel-card p-5">
+                <h3 class="text-[10px] font-black text-white/20 tracking-[0.25em] uppercase mb-4">ROTASYON</h3>
+                <div class="grid grid-cols-4 gap-2">
+                    <button onclick="applyModelRotation(0, 0, 0)" class="px-2 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider text-[#c5a059]">Sıfırla</button>
+                    <button onclick="addModelRotation(Math.PI/2, 0, 0)" class="px-2 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider">90° X</button>
+                    <button onclick="addModelRotation(0, Math.PI/2, 0)" class="px-2 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider">90° Y</button>
+                    <button onclick="addModelRotation(0, 0, Math.PI/2)" class="px-2 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider">90° Z</button>
+                    <div></div>
+                    <button onclick="addModelRotation(Math.PI, 0, 0)" class="px-2 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider">180° X</button>
+                    <button onclick="addModelRotation(0, Math.PI, 0)" class="px-2 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider">180° Y</button>
+                    <button onclick="addModelRotation(0, 0, Math.PI)" class="px-2 py-2.5 text-[9px] font-bold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all uppercase tracking-wider">180° Z</button>
                 </div>
             </div>
 
