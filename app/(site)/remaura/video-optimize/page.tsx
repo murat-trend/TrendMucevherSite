@@ -5,7 +5,7 @@ export default function VideoOptimizePage() {
     <iframe
       src="/viaver.html"
       className="w-full border-0"
-      style={{ height: "100vh" }}
+      style={{ height: "calc(100vh - 5rem)" }}
     />
   );
 }
