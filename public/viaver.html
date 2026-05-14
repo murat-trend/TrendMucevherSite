@@ -104,10 +104,10 @@
                             <span class="text-[10px] font-bold text-white/40 uppercase">Gümüş Seçenekleri</span>
                         </div>
                         <div class="grid grid-cols-2 gap-2 mb-4">
-                            <button onclick="setMaterial(0x888888, 0.25, 1.0)" class="btn-option active py-2.5 rounded-lg flex items-center justify-center gap-2 border-2 border-[#888888]/20">
+                            <button id="mat-antik" onclick="setMaterial(0x888888, 0.25, 1.0, 'mat-antik')" class="btn-option active py-2.5 rounded-lg flex items-center justify-center gap-2">
                                 <div class="w-3 h-3 rounded-full bg-[#888888]"></div> Antik Gümüş
                             </button>
-                            <button onclick="setMaterial(0xeeeeee, 0.05, 1.0)" class="btn-option py-2.5 rounded-lg flex items-center justify-center gap-2">
+                            <button id="mat-parlak" onclick="setMaterial(0xeeeeee, 0.05, 1.0, 'mat-parlak')" class="btn-option py-2.5 rounded-lg flex items-center justify-center gap-2">
                                 <div class="w-3 h-3 rounded-full bg-[#eeeeee]"></div> Parlak Gümüş
                             </button>
                         </div>
@@ -116,20 +116,20 @@
                             <span class="text-[10px] font-bold text-white/40 uppercase">Premium Metaller</span>
                         </div>
                         <div class="grid grid-cols-2 gap-2 mb-4">
-                            <button onclick="setMaterial(0xe5b80b, 0.04, 1.0)" class="btn-option py-2.5 rounded-lg flex items-center justify-center gap-2">
+                            <button id="mat-sari" onclick="setMaterial(0xe5b80b, 0.04, 1.0, 'mat-sari')" class="btn-option py-2.5 rounded-lg flex items-center justify-center gap-2">
                                 <div class="w-3 h-3 rounded-full bg-[#e5b80b]"></div> Sarı Altın
                             </button>
-                            <button onclick="setMaterial(0x1a1a1a, 0.12, 1.0)" class="btn-option py-2.5 rounded-lg flex items-center justify-center gap-2">
+                            <button id="mat-siyah" onclick="setMaterial(0x1a1a1a, 0.12, 1.0, 'mat-siyah')" class="btn-option py-2.5 rounded-lg flex items-center justify-center gap-2">
                                 <div class="w-3 h-3 rounded-full bg-[#1a1a1a]"></div> Siyah Rodyum
                             </button>
-                            <button onclick="setMaterial(0xb76e79, 0.1, 1.0)" class="btn-option py-2 rounded-lg flex items-center justify-center gap-2">
+                            <button id="mat-gul" onclick="setMaterial(0xb76e79, 0.1, 1.0, 'mat-gul')" class="btn-option py-2 rounded-lg flex items-center justify-center gap-2">
                                 <div class="w-3 h-3 rounded-full bg-[#b76e79]"></div> Gül Altın
                             </button>
-                            <button onclick="setMaterial(0x8a6d3b, 0.45, 0.8)" class="btn-option py-2 rounded-lg flex items-center justify-center gap-2">
+                            <button id="mat-oksitli" onclick="setMaterial(0x8a6d3b, 0.45, 0.8, 'mat-oksitli')" class="btn-option py-2 rounded-lg flex items-center justify-center gap-2">
                                 <div class="w-3 h-3 rounded-full bg-[#8a6d3b]"></div> Oksitli Altın
                             </button>
                         </div>
-                        <button onclick="setMaterial(0x914c3e, 0.7, 0.15)" class="w-full btn-option py-2 rounded-lg flex items-center justify-center gap-2">
+                        <button id="mat-wax" onclick="setMaterial(0x914c3e, 0.7, 0.15, 'mat-wax')" class="w-full btn-option py-2 rounded-lg flex items-center justify-center gap-2">
                             <div class="w-3 h-3 rounded-full bg-[#914c3e]"></div> Red Wax (Kil Modu)
                         </button>
                     </div>
@@ -362,10 +362,13 @@
             });
         }
 
-        window.setMaterial = (color, roughness, metalness) => {
+        window.setMaterial = (color, roughness, metalness, matId) => {
             currentMaterialState = { color, roughness, metalness };
             document.getElementById('rough-slider').value = roughness;
             document.getElementById('rough-val').innerText = roughness.toFixed(2);
+            ['mat-antik','mat-parlak','mat-sari','mat-siyah','mat-gul','mat-oksitli','mat-wax'].forEach(id => {
+                document.getElementById(id).classList.toggle('active', id === matId);
+            });
             updateMaterialProperties();
         };
 
