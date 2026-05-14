@@ -363,6 +363,9 @@
 
         window.setFormat = (fmt) => {
             document.getElementById('viewport-container').className = `border border-white/5 format-${fmt}`;
+            ['1-1', '9-16', '16-9'].forEach(f => {
+                document.getElementById(`fmt-${f}`).classList.toggle('active', f === fmt);
+            });
             setTimeout(() => { onWindowResize(); zoomToFit(); }, 400);
         };
 
