@@ -183,6 +183,14 @@ export function Header() {
                         <Link href="/studio" className="block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
                           Studio
                         </Link>
+                        {session?.isSuperAdmin && (
+                          <>
+                            <div className="my-1.5 border-t border-border/60" />
+                            <Link href="/remaura/koleksiyon-edit" className="block rounded-lg px-3 py-2 text-xs font-medium text-[#b76e79]/80 transition-colors hover:bg-foreground/5 hover:text-[#b76e79]">
+                              Koleksiyon Edit
+                            </Link>
+                          </>
+                        )}
                       </div>
                     </div>
                   );
@@ -537,6 +545,7 @@ export function Header() {
                           { href: "/remaura/video-optimize", label: "Video Optimizasyonu" },
                           { href: "/remaura/webm-to-mp4", label: "WebM → MP4" },
                           { href: "/studio", label: "Studio" },
+                          ...(session?.isSuperAdmin ? [{ href: "/remaura/koleksiyon-edit", label: "Koleksiyon Edit" }] : []),
                         ].map((link) => (
                           <Link key={link.href} href={link.href} onClick={() => setMobileMenuOpen(false)} className="rounded-lg px-2 py-2 text-[13px] text-foreground/85 hover:bg-foreground/[0.02]">
                             {link.label}
