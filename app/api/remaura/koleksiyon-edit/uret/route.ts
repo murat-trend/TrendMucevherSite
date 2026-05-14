@@ -119,10 +119,12 @@ export async function POST(req: Request) {
     .filter(Boolean)
     .join(", ");
 
-  const prompt = `EMPTY SETTINGS ONLY, NO STONES, NO GEMSTONES, ${promptBody}`;
+  const prompt = `NO GEMSTONES, NO DIAMONDS, NO STONES, EMPTY SETTINGS ONLY, ${promptBody}`;
 
   const negativePrompt =
     "diamonds, gemstones, stones, crystals, pearls, rubies, sapphires, emeralds, jewelry with stones, set stones, pavé, prong set stones";
+
+  const seed = Math.floor(Math.random() * 1_000_000);
 
   try {
     const { fal } = await import("@fal-ai/client");
@@ -133,6 +135,7 @@ export async function POST(req: Request) {
       prompt,
       negative_prompt: negativePrompt,
       num_images: 4,
+      seed,
       image_size: "square_hd",
       guidance_scale: 3.5,
       num_inference_steps: 28,
@@ -141,7 +144,7 @@ export async function POST(req: Request) {
     };
     if (refUrl) {
       input.image_url = refUrl;
-      input.image_prompt_strength = 0.3;
+      input.image_prompt_strength = 0.25;
     }
 
     const result = await fal.subscribe("fal-ai/flux-pro/v1.1", { input, logs: false });

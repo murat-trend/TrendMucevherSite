@@ -35,7 +35,7 @@ type LoadState =
   | { kind: "idle" }
   | { kind: "generating" }
   | { kind: "op"; index: number; label: string }
-  | { kind: "saving"; index: number };
+  | { kind: "downloading"; index: number };
 
 type Modal =
   | { type: "replace"; index: number; searchPrompt: string; replacePrompt: string }
@@ -246,7 +246,6 @@ export function KoleksiyonEditClient() {
   // Results
   const [images, setImages] = useState<string[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "idle" });
-  const [saved, setSaved] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   // Modal
@@ -257,7 +256,7 @@ export function KoleksiyonEditClient() {
 
   const isOpBusy = (index: number) =>
     (load.kind === "op" && load.index === index) ||
-    (load.kind === "saving" && load.index === index);
+    (load.kind === "downloading" && load.index === index);
 
   const toggleForm = (k: FormKarakteri) =>
     setFormKarakterleri((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]));
@@ -278,7 +277,6 @@ export function KoleksiyonEditClient() {
     setError(null);
     setLoad({ kind: "generating" });
     setImages([]);
-    setSaved(new Set());
     try {
       const res = await fetch("/api/remaura/koleksiyon-edit/uret", {
         method: "POST",
@@ -352,18 +350,44 @@ export function KoleksiyonEditClient() {
     } finally { setModalLoading(false); }
   }
 
-  async function handleSave(index: number) {
-    setLoad({ kind: "saving", index });
+  async function handleDownload(index: number) {
+    setLoad({ kind: "downloading", index });
     try {
-      const res = await fetch("/api/remaura/koleksiyon-edit/kaydet", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gorselUrl: images[index], koleksiyonAdi, tip: takiTipi, tema, metal: metalRengi }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Kayıt başarısız."); return; }
-      setSaved((p) => new Set([...p, index]));
-    } catch { setError("Bağlantı hatası."); }
+      const src = images[index];
+      const slug = (koleksiyonAdi.trim() || "koleksiyon")
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-]/g, "")
+        || "koleksiyon";
+      const filename = `${slug}_${index + 1}.png`;
+
+      const res = await fetch(src);
+      const blob = await res.blob();
+
+      // Chrome / Edge: klasör seçtir
+      if (typeof window !== "undefined" && "showDirectoryPicker" in window) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const dirHandle = await (window as any).showDirectoryPicker();
+          const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          return;
+        } catch (e) {
+          // Kullanıcı iptal ettiyse dur, başka hata ise fallback'e düş
+          if ((e as { name?: string })?.name === "AbortError") return;
+        }
+      }
+
+      // Firefox / Safari: native download dialog
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { setError("İndirme başarısız."); }
     finally { setLoad({ kind: "idle" }); }
   }
 
@@ -579,9 +603,9 @@ export function KoleksiyonEditClient() {
                     <div style={{ position: "absolute", top: 8, left: 8, fontSize: 8, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "rgba(0,0,0,0.55)", color: "rgba(255,255,255,0.4)" }}>
                       {i + 1} / 4
                     </div>
-                    {saved.has(i) && (
+                    {load.kind === "downloading" && load.index === i && (
                       <div style={{ position: "absolute", top: 8, right: 8, fontSize: 8, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: "rgba(183,110,121,0.85)", color: "white", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                        Kaydedildi
+                        İndiriliyor…
                       </div>
                     )}
                   </div>
@@ -602,8 +626,8 @@ export function KoleksiyonEditClient() {
                     >
                       Değiştir
                     </ActionBtn>
-                    <ActionBtn onClick={() => handleSave(i)} disabled={isOpBusy(i)} accent>
-                      {saved.has(i) ? "Tekrar Kaydet" : "Kaydet"}
+                    <ActionBtn onClick={() => handleDownload(i)} disabled={isOpBusy(i)} accent>
+                      İndir
                     </ActionBtn>
                   </div>
 
