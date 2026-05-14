@@ -11,5 +11,13 @@ export default async function SaticiLayout({ children }: { children: React.React
   if (!user) {
     redirect("/giris");
   }
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profile?.role !== "seller") {
+    redirect("/");
+  }
   return <>{children}</>;
 }
