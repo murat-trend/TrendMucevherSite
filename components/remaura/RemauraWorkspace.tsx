@@ -824,7 +824,19 @@ function RemauraWorkspaceInner({ initialCategory = "jewelry", isSuperAdmin = fal
               {isSuperAdmin && (
                 <Link
                   href="/remaura/koleksiyon-edit"
-                  className="rounded-full border border-[#b76e79]/40 bg-[#b76e79]/08 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[#b76e79]/70 transition-colors hover:border-[#b76e79] hover:text-[#b76e79]"
+                  style={{
+                    borderRadius: "9999px",
+                    border: "1px solid rgba(183,110,121,0.5)",
+                    background: "rgba(183,110,121,0.1)",
+                    padding: "8px 16px",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.2em",
+                    color: "#b76e79",
+                    textDecoration: "none",
+                    whiteSpace: "nowrap",
+                  }}
                 >
                   Koleksiyon Edit
                 </Link>

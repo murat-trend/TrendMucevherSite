@@ -8,6 +8,8 @@ import { isRemauraSuperAdminUserId } from "@/lib/billing/super-admin";
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://trendmucevher.com";
 const pageUrl = `${siteUrl}/remaura`;
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
   title: "Remaura AI | Takı Gorsel Duzenleme ve Arka Plan Kaldirma",
