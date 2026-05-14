@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -252,6 +252,16 @@ export function KoleksiyonEditClient() {
   const [modal, setModal] = useState<Modal | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
 
+  // Lightbox + masking
+  const [lightbox, setLightbox] = useState<number | null>(null);
+  const [maskMode, setMaskMode] = useState(false);
+  const [brushSize, setBrushSize] = useState(30);
+  const [maskResult, setMaskResult] = useState<string | null>(null);
+  const [maskLoading, setMaskLoading] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const maskImgRef = useRef<HTMLImageElement>(null);
+  const isDrawingRef = useRef(false);
+
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
   const isOpBusy = (index: number) =>
@@ -260,6 +270,132 @@ export function KoleksiyonEditClient() {
 
   const toggleForm = (k: FormKarakteri) =>
     setFormKarakterleri((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]));
+
+  // ─── Lightbox ────────────────────────────────────────────────────────────────
+
+  function closeLightbox() {
+    setLightbox(null);
+    setMaskMode(false);
+    setMaskResult(null);
+    setMaskLoading(false);
+    isDrawingRef.current = false;
+  }
+
+  // ESC closes lightbox
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") closeLightbox(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  });
+
+  // Sync canvas resolution to rendered image size when entering mask mode
+  useEffect(() => {
+    if (!maskMode || !canvasRef.current || !maskImgRef.current) return;
+    const img = maskImgRef.current;
+    const sync = () => {
+      if (!canvasRef.current || img.offsetWidth === 0) return;
+      canvasRef.current.width = img.offsetWidth;
+      canvasRef.current.height = img.offsetHeight;
+    };
+    sync();
+    img.addEventListener("load", sync);
+    return () => img.removeEventListener("load", sync);
+  }, [maskMode]);
+
+  function clearMask() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  async function applyMask(maskAction: "erase" | "inpaint") {
+    if (!canvasRef.current || lightbox === null) return;
+    const canvas = canvasRef.current;
+    const src = images[lightbox];
+
+    // Scale drawn mask up to original image dimensions
+    let naturalW = canvas.width;
+    let naturalH = canvas.height;
+    try {
+      const probe = new Image();
+      probe.crossOrigin = "anonymous";
+      await new Promise<void>((res, rej) => {
+        probe.onload = () => { naturalW = probe.naturalWidth; naturalH = probe.naturalHeight; res(); };
+        probe.onerror = rej;
+        probe.src = src;
+      });
+    } catch { /* fall back to canvas dims */ }
+
+    const off = document.createElement("canvas");
+    off.width = naturalW;
+    off.height = naturalH;
+    const offCtx = off.getContext("2d")!;
+    offCtx.drawImage(canvas, 0, 0, naturalW, naturalH);
+    const raw = offCtx.getImageData(0, 0, naturalW, naturalH);
+    const d = raw.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const isRed = d[i] > 150 && d[i + 1] < 100 && d[i + 2] < 100 && d[i + 3] > 50;
+      d[i] = isRed ? 255 : 0;
+      d[i + 1] = isRed ? 255 : 0;
+      d[i + 2] = isRed ? 255 : 0;
+      d[i + 3] = 255;
+    }
+    offCtx.putImageData(raw, 0, 0);
+    const maskBase64 = off.toDataURL("image/png");
+
+    setMaskLoading(true);
+    try {
+      const res = await fetch("/api/remaura/koleksiyon-edit/stability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: maskAction, image: src, mask: maskBase64 }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setError(json.error ?? "Maske işlemi başarısız."); return; }
+      setMaskResult(json.image ?? null);
+      setMaskMode(false);
+    } catch { setError("Bağlantı hatası."); }
+    finally { setMaskLoading(false); }
+  }
+
+  // ─── Canvas drawing ──────────────────────────────────────────────────────────
+
+  function paintAt(clientX: number, clientY: number) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "rgba(220, 40, 40, 0.55)";
+    ctx.beginPath();
+    ctx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function onCanvasMouseDown(e: React.MouseEvent<HTMLCanvasElement>) {
+    isDrawingRef.current = true;
+    paintAt(e.clientX, e.clientY);
+  }
+  function onCanvasMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
+    if (isDrawingRef.current) paintAt(e.clientX, e.clientY);
+  }
+  function onCanvasMouseUp() { isDrawingRef.current = false; }
+
+  function onCanvasTouchStart(e: React.TouchEvent<HTMLCanvasElement>) {
+    e.preventDefault();
+    isDrawingRef.current = true;
+    const t = e.touches[0];
+    paintAt(t.clientX, t.clientY);
+  }
+  function onCanvasTouchMove(e: React.TouchEvent<HTMLCanvasElement>) {
+    e.preventDefault();
+    if (isDrawingRef.current) { const t = e.touches[0]; paintAt(t.clientX, t.clientY); }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const handleFileChange = useCallback(async (file: File) => {
     const reader = new FileReader();
@@ -587,7 +723,12 @@ export function KoleksiyonEditClient() {
                   {/* Image */}
                   <div style={{ position: "relative", aspectRatio: "1", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,0.06)", background: "#000" }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={src} alt={`Konsept ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <img
+                      src={src}
+                      alt={`Konsept ${i + 1}`}
+                      onClick={() => { setLightbox(i); setMaskMode(false); setMaskResult(null); }}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
+                    />
 
                     {/* Op loading overlay */}
                     {isOpBusy(i) && (
@@ -629,6 +770,12 @@ export function KoleksiyonEditClient() {
                     <ActionBtn onClick={() => handleDownload(i)} disabled={isOpBusy(i)} accent>
                       İndir
                     </ActionBtn>
+                    <ActionBtn
+                      onClick={() => { setLightbox(i); setMaskMode(true); setMaskResult(null); }}
+                      disabled={isOpBusy(i)}
+                    >
+                      Maskele
+                    </ActionBtn>
                   </div>
 
                 </div>
@@ -637,6 +784,115 @@ export function KoleksiyonEditClient() {
           )}
         </div>
       </div>
+
+      {/* ── Lightbox ─────────────────────────────────────────────────────── */}
+      {lightbox !== null && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.93)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}
+          onClick={(e) => { if (e.target === e.currentTarget) closeLightbox(); }}
+        >
+          {/* Close */}
+          <button
+            onClick={closeLightbox}
+            style={{ position: "absolute", top: 16, right: 16, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "rgba(255,255,255,0.55)", fontSize: 14, padding: "6px 12px", cursor: "pointer", lineHeight: 1 }}
+          >
+            ✕
+          </button>
+
+          {/* Image area */}
+          {maskResult ? (
+            <div style={{ display: "flex", gap: 20, maxWidth: "90vw" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
+                <span style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.3)" }}>Orijinal</span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={images[lightbox]} alt="Orijinal" style={{ maxWidth: "42vw", maxHeight: "68vh", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", display: "block" }} />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
+                <span style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.3)" }}>Sonuç</span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={maskResult} alt="Sonuç" style={{ maxWidth: "42vw", maxHeight: "68vh", borderRadius: 10, border: "1px solid rgba(183,110,121,0.3)", display: "block" }} />
+              </div>
+            </div>
+          ) : (
+            <div style={{ position: "relative", display: "inline-block" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                ref={maskImgRef}
+                src={images[lightbox]}
+                alt={`Konsept ${lightbox + 1}`}
+                style={{ display: "block", maxWidth: "85vw", maxHeight: "75vh", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", userSelect: "none" }}
+              />
+              {maskMode && (
+                <canvas
+                  ref={canvasRef}
+                  style={{ position: "absolute", top: 0, left: 0, borderRadius: 10, cursor: "crosshair", touchAction: "none", width: "100%", height: "100%" }}
+                  onMouseDown={onCanvasMouseDown}
+                  onMouseMove={onCanvasMouseMove}
+                  onMouseUp={onCanvasMouseUp}
+                  onMouseLeave={onCanvasMouseUp}
+                  onTouchStart={onCanvasTouchStart}
+                  onTouchMove={onCanvasTouchMove}
+                  onTouchEnd={() => { isDrawingRef.current = false; }}
+                />
+              )}
+            </div>
+          )}
+
+          {/* Bottom controls */}
+          <div style={{ marginTop: 18, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
+            {maskResult ? (
+              <>
+                <ActionBtn accent onClick={async () => {
+                  try {
+                    const blob = await (await fetch(maskResult)).blob();
+                    const slug = (koleksiyonAdi.trim() || "koleksiyon").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") || "koleksiyon";
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href = url; a.download = `${slug}_mask.png`; a.click();
+                    URL.revokeObjectURL(url);
+                  } catch { setError("İndirme başarısız."); }
+                }}>
+                  İndir
+                </ActionBtn>
+                <ActionBtn onClick={() => { replaceImg(lightbox, maskResult); closeLightbox(); }}>
+                  Görseli Güncelle
+                </ActionBtn>
+                <ActionBtn onClick={() => setMaskResult(null)}>Geri</ActionBtn>
+              </>
+            ) : maskMode ? (
+              <>
+                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.2em" }}>Fırça</span>
+                <input
+                  type="range" min={10} max={80} value={brushSize}
+                  onChange={(e) => setBrushSize(Number(e.target.value))}
+                  style={{ width: 90, accentColor: ACCENT }}
+                />
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", minWidth: 22, textAlign: "center" }}>{brushSize}</span>
+                <ActionBtn onClick={clearMask}>Temizle</ActionBtn>
+                <ActionBtn onClick={() => applyMask("erase")} disabled={maskLoading}>
+                  {maskLoading ? "…" : "Sil"}
+                </ActionBtn>
+                <ActionBtn onClick={() => applyMask("inpaint")} disabled={maskLoading}>
+                  {maskLoading ? "…" : "Doldur"}
+                </ActionBtn>
+                <ActionBtn onClick={() => setMaskMode(false)}>İptal</ActionBtn>
+              </>
+            ) : (
+              <>
+                <ActionBtn onClick={() => setMaskMode(true)}>Maskele &amp; Sil</ActionBtn>
+                <ActionBtn accent onClick={() => handleDownload(lightbox)}>İndir</ActionBtn>
+              </>
+            )}
+          </div>
+
+          {/* Mask processing overlay */}
+          {maskLoading && (
+            <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
+              <Spinner size={32} />
+              <span style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.4)" }}>İşleniyor…</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Modal ────────────────────────────────────────────────────────── */}
       {modal && (

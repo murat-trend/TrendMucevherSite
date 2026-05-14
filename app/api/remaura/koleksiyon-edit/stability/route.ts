@@ -125,6 +125,23 @@ async function searchRecolor(
   return stabilityPost("/v2beta/stable-image/edit/search-and-recolor", form, apiKey);
 }
 
+async function opErase(imgBuf: Buffer, maskBuf: Buffer, apiKey: string): Promise<NextResponse> {
+  const form = new FormData();
+  form.append("image", bufferToBlob(imgBuf), "image.png");
+  form.append("mask", bufferToBlob(maskBuf), "mask.png");
+  form.append("output_format", "png");
+  return stabilityPost("/v2beta/stable-image/edit/erase", form, apiKey);
+}
+
+async function opInpaint(imgBuf: Buffer, maskBuf: Buffer, apiKey: string): Promise<NextResponse> {
+  const form = new FormData();
+  form.append("image", bufferToBlob(imgBuf), "image.png");
+  form.append("mask", bufferToBlob(maskBuf), "mask.png");
+  form.append("prompt", "smooth metal surface, empty setting, no stones, clean polished metal");
+  form.append("output_format", "png");
+  return stabilityPost("/v2beta/stable-image/edit/inpaint", form, apiKey);
+}
+
 // ─── Route ────────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
@@ -139,13 +156,14 @@ export async function POST(req: Request) {
   const body = await req.json() as {
     action: string;
     image: string;          // URL or data: base64
+    mask?: string;          // data: base64 PNG binary mask
     searchPrompt?: string;
     replacePrompt?: string;
     selectPrompt?: string;
     colorPrompt?: string;
   };
 
-  const { action, image, searchPrompt, replacePrompt, selectPrompt, colorPrompt } = body;
+  const { action, image, mask, searchPrompt, replacePrompt, selectPrompt, colorPrompt } = body;
 
   if (!image) {
     return NextResponse.json({ error: "Görsel gerekli." }, { status: 400 });
@@ -178,6 +196,18 @@ export async function POST(req: Request) {
           );
         }
         return searchRecolor(imgBuf, selectPrompt, colorPrompt, apiKey);
+
+      case "erase": {
+        if (!mask) return NextResponse.json({ error: "Maske gerekli." }, { status: 400 });
+        const maskBuf = await resolveImageBuffer(mask);
+        return opErase(imgBuf, maskBuf, apiKey);
+      }
+
+      case "inpaint": {
+        if (!mask) return NextResponse.json({ error: "Maske gerekli." }, { status: 400 });
+        const maskBuf = await resolveImageBuffer(mask);
+        return opInpaint(imgBuf, maskBuf, apiKey);
+      }
 
       default:
         return NextResponse.json({ error: "Geçersiz action." }, { status: 400 });
