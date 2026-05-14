@@ -153,20 +153,35 @@
                 <button id="mat-wax" onclick="setMaterial(0xc01e14,0.45,0.0,'mat-wax')" class="btn-option py-2 rounded-lg flex items-center justify-center gap-1.5 mt-0.5">
                     <div class="w-2.5 h-2.5 rounded-full bg-[#c01e14] flex-shrink-0"></div><span>Red Wax</span>
                 </button>
+                <div class="flex justify-between items-center mb-1 mt-2">
+                    <span class="text-[8px] font-bold text-white/30 uppercase">Kontrast</span>
+                    <span id="contrast-val" class="text-[8px] font-mono text-[#c5a059]">1.0</span>
+                </div>
+                <input type="range" id="contrast-slider" min="0.5" max="3.0" step="0.05" value="1.0">
             </div>
         </div>
 
         <div class="panel-card p-3">
             <div class="flex justify-between items-center mb-1.5">
                 <span class="text-[8px] font-bold text-white/30 uppercase">Roughness</span>
-                <span id="rough-val" class="text-[8px] font-mono text-[#c5a059]">0.25</span>
+                <span id="rough-val" class="text-[8px] font-mono text-[#c5a059]">0.05</span>
             </div>
-            <input type="range" id="rough-slider" min="0" max="1" step="0.01" value="0.25">
+            <input type="range" id="rough-slider" min="0" max="1" step="0.01" value="0.05">
+            <div class="flex justify-between items-center mb-1.5 mt-3">
+                <span class="text-[8px] font-bold text-white/30 uppercase">Metalness</span>
+                <span id="metal-val" class="text-[8px] font-mono text-[#c5a059]">1.00</span>
+            </div>
+            <input type="range" id="metal-slider" min="0" max="2" step="0.01" value="1.00">
             <div class="flex justify-between items-center mb-1.5 mt-3">
                 <span class="text-[8px] font-bold text-white/30 uppercase">Env</span>
-                <span id="env-val" class="text-[8px] font-mono text-[#c5a059]">1.50</span>
+                <span id="env-val" class="text-[8px] font-mono text-[#c5a059]">2.50</span>
             </div>
-            <input type="range" id="env-slider" min="0" max="4" step="0.05" value="1.50">
+            <input type="range" id="env-slider" min="0" max="6" step="0.05" value="2.50">
+            <div class="flex justify-between items-center mb-1.5 mt-3">
+                <span class="text-[8px] font-bold text-white/30 uppercase">Exposure</span>
+                <span id="exposure-val" class="text-[8px] font-mono text-[#c5a059]">1.80</span>
+            </div>
+            <input type="range" id="exposure-slider" min="0.5" max="4.0" step="0.05" value="1.80">
         </div>
 
         <div class="panel-card p-3">
@@ -195,15 +210,17 @@
     import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+    import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 
     let scene, camera, renderer, controls, modelGroup, gridHelper;
     let activeDuration = 10;
     let isRecording = false;
-    let envIntensity = 1.50;
+    let envIntensity = 2.50;
+    let contrastValue = 1.0;
 
     let currentMaterialState = {
-        color: 0x888888,
-        roughness: 0.25,
+        color: 0xb8b8b8,
+        roughness: 0.05,
         metalness: 1.0
     };
 
@@ -230,10 +247,12 @@
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.05;
+        renderer.toneMappingExposure = 1.80;
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         container.appendChild(renderer.domElement);
+
+        RectAreaLightUniformsLib.init();
 
         const pmremGenerator = new THREE.PMREMGenerator(renderer);
         const roomEnv = new RoomEnvironment();
@@ -244,18 +263,35 @@
         controls.autoRotate = true;
         controls.autoRotateSpeed = 2.0;
 
-        const keyLight = new THREE.DirectionalLight(0xffffff, 3.0);
-        keyLight.position.set(200, 300, 150);
-        keyLight.castShadow = true;
-        scene.add(keyLight);
+        // Top softbox — ana yumuşak ışık
+        const topBox = new THREE.RectAreaLight(0xffffff, 12, 300, 150);
+        topBox.position.set(0, 350, 50);
+        topBox.lookAt(0, 0, 0);
+        scene.add(topBox);
 
-        const fillLight = new THREE.DirectionalLight(0xeeeeff, 1.0);
-        fillLight.position.set(-150, 100, 100);
-        scene.add(fillLight);
+        // Sol panel — dikey şerit yansıması
+        const leftPanel = new THREE.RectAreaLight(0xfff8f0, 8, 40, 300);
+        leftPanel.position.set(-250, 100, 0);
+        leftPanel.lookAt(0, 0, 0);
+        scene.add(leftPanel);
 
-        const rimLight = new THREE.DirectionalLight(0xffffff, 2.0);
-        rimLight.position.set(0, 50, -300);
-        scene.add(rimLight);
+        // Sağ panel — dikey şerit yansıması
+        const rightPanel = new THREE.RectAreaLight(0xfff8f0, 8, 40, 300);
+        rightPanel.position.set(250, 100, 0);
+        rightPanel.lookAt(0, 0, 0);
+        scene.add(rightPanel);
+
+        // Arka ışık — ürünü zeminden ayırır
+        const backLight = new THREE.RectAreaLight(0xeef0ff, 5, 400, 200);
+        backLight.position.set(0, 80, -300);
+        backLight.lookAt(0, 0, 0);
+        scene.add(backLight);
+
+        // Hot spot — tek keskin parlaklık noktası
+        const hotSpot = new THREE.SpotLight(0xffffff, 15.0, 1500, Math.PI / 10, 0.25);
+        hotSpot.position.set(80, 500, 120);
+        hotSpot.castShadow = true;
+        scene.add(hotSpot);
 
         gridHelper = new THREE.GridHelper(2000, 100, 0x333333, 0x222222);
         gridHelper.position.y = -0.01;
@@ -274,6 +310,25 @@
             const val = parseFloat(e.target.value);
             currentMaterialState.roughness = val;
             document.getElementById('rough-val').innerText = val.toFixed(2);
+            updateMaterialProperties();
+        });
+
+        document.getElementById('metal-slider').addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            currentMaterialState.metalness = val;
+            document.getElementById('metal-val').innerText = val.toFixed(2);
+            updateMaterialProperties();
+        });
+
+        document.getElementById('exposure-slider').addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            renderer.toneMappingExposure = val;
+            document.getElementById('exposure-val').innerText = val.toFixed(2);
+        });
+
+        document.getElementById('contrast-slider').addEventListener('input', (e) => {
+            contrastValue = parseFloat(e.target.value);
+            document.getElementById('contrast-val').innerText = contrastValue.toFixed(1);
             updateMaterialProperties();
         });
 
@@ -333,11 +388,19 @@
     }
 
     function updateMaterialProperties() {
+        const base = new THREE.Color(currentMaterialState.color);
+        const hsl = {};
+        base.getHSL(hsl);
+        const displayColor = new THREE.Color().setHSL(
+            hsl.h,
+            Math.min(1.0, hsl.s * contrastValue),
+            Math.min(0.95, Math.pow(hsl.l, 1.0 / contrastValue))
+        );
         modelGroup.traverse(c => {
             if (c.isMesh && c.material) {
                 const materials = Array.isArray(c.material) ? c.material : [c.material];
                 materials.forEach(m => {
-                    m.color.setHex(currentMaterialState.color);
+                    m.color.copy(displayColor);
                     m.roughness = currentMaterialState.roughness;
                     m.metalness = currentMaterialState.metalness;
                     m.envMapIntensity = envIntensity;
@@ -351,6 +414,8 @@
         currentMaterialState = { color, roughness, metalness };
         document.getElementById('rough-slider').value = roughness;
         document.getElementById('rough-val').innerText = roughness.toFixed(2);
+        document.getElementById('metal-slider').value = metalness;
+        document.getElementById('metal-val').innerText = metalness.toFixed(2);
         ['mat-antik','mat-parlak','mat-sari','mat-siyah','mat-gul','mat-oksitli','mat-wax'].forEach(id => {
             document.getElementById(id).classList.toggle('active', id === matId);
         });
