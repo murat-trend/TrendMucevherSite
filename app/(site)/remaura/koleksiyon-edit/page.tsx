@@ -16,7 +16,7 @@ export default async function KoleksiyonEditPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/login");
+  if (!user) redirect("/giris");
 
   const { data: profile } = await supabase
     .from("profiles")
