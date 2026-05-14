@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import type { ResponsiveLayouts } from "react-grid-layout";
 import { getChannelContentForPlatform } from "@/lib/remaura/channel-content";
@@ -819,6 +820,14 @@ function RemauraWorkspaceInner({ initialCategory = "jewelry" }: RemauraWorkspace
               >
                 REMAURA 3D AI
               </button>
+              {billingUserId === "949fd2b4-fc33-48b4-a5c0-a6c9744167a3" && (
+                <Link
+                  href="/remaura/koleksiyon-edit"
+                  className="rounded-full border border-[#b76e79]/40 bg-[#b76e79]/08 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[#b76e79]/70 transition-colors hover:border-[#b76e79] hover:text-[#b76e79]"
+                >
+                  Koleksiyon Edit
+                </Link>
+              )}
             </div>
             <div className="flex items-center gap-4">
               <span className="h-px w-8 bg-foreground/10" aria-hidden />
