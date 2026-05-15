@@ -45,6 +45,31 @@ async function translateToEnglish(text: string): Promise<string> {
   }
 }
 
+const TAKI_TIPI_EN: Record<string, string> = {
+  "Yüzük": "ring",
+  "Kolye": "necklace",
+  "Küpe": "earring",
+  "Bilezik": "bracelet",
+  "Broş": "brooch",
+};
+
+const METAL_RENGI_EN: Record<string, string> = {
+  "Sarı Altın": "yellow gold",
+  "Rose Gold": "rose gold",
+  "Beyaz Altın": "white gold",
+  "Gümüş": "silver",
+  "Oksitlenmiş Gümüş": "oxidized silver",
+};
+
+const FORM_EN: Record<string, string> = {
+  "İnce & Zarif": "thin and delicate",
+  "Geometrik": "geometric",
+  "Organik": "organic",
+  "Filigran": "filigree",
+  "Kabartmalı": "embossed",
+  "Asimetrik": "asymmetric",
+};
+
 async function uploadRefToFal(base64: string, falKey: string): Promise<string | null> {
   try {
     const { fal } = await import("@fal-ai/client");
@@ -99,7 +124,7 @@ export async function POST(req: Request) {
   ]);
 
   const formStr = Array.isArray(formKarakterleri) && formKarakterleri.length > 0
-    ? formKarakterleri.join(", ").toLowerCase() : "";
+    ? formKarakterleri.map((f) => FORM_EN[f] ?? f.toLowerCase()).join(", ") : "";
 
   const noStoneClause = [
     "absolutely no gemstones", "no diamonds", "no rubies", "no sapphires",
@@ -109,10 +134,10 @@ export async function POST(req: Request) {
   ].join(", ");
 
   const promptBody = [
-    `${(takiTipi ?? "jewelry").toLowerCase()} jewelry`,
+    `${TAKI_TIPI_EN[takiTipi ?? ""] ?? "jewelry"} jewelry`,
     temaEn,
     formStr,
-    `${(metalRengi ?? "gold").toLowerCase()} metal`,
+    `${METAL_RENGI_EN[metalRengi ?? ""] ?? "gold"} metal`,
     "women's collection",
     "professional product photography",
     "pure white background",
