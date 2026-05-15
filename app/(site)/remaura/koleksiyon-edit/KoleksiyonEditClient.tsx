@@ -243,6 +243,18 @@ export function KoleksiyonEditClient() {
   const [refName, setRefName] = useState("");
   const [referansGucu, setReferansGucu] = useState(0.85);
   const [harfGirdisi, setHarfGirdisi] = useState("");
+
+  // GPT-4o analiz sonucu
+  type AnalizSonucu = {
+    takiTipi: string;
+    konu: string;
+    mevcutSahne: string;
+    stilAciklamasi: string;
+    stilPrompt: string;
+    oneriler: string[];
+  };
+  const [analiz, setAnaliz] = useState<AnalizSonucu | null>(null);
+  const [analizYukleniyor, setAnalizYukleniyor] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Results
@@ -403,9 +415,24 @@ export function KoleksiyonEditClient() {
 
   const handleFileChange = useCallback(async (file: File) => {
     const reader = new FileReader();
-    reader.onload = () => {
-      setRefBase64(reader.result as string);
+    reader.onload = async () => {
+      const base64 = reader.result as string;
+      setRefBase64(base64);
       setRefName(file.name);
+      setAnaliz(null);
+
+      // GPT-4o ile otomatik analiz
+      setAnalizYukleniyor(true);
+      try {
+        const res = await fetch("/api/remaura/koleksiyon-edit/analiz", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: base64 }),
+        });
+        const data = await res.json();
+        if (res.ok) setAnaliz(data);
+      } catch { /* analiz sessizce başarısız olabilir */ }
+      finally { setAnalizYukleniyor(false); }
     };
     reader.readAsDataURL(file);
   }, []);
@@ -472,7 +499,7 @@ export function KoleksiyonEditClient() {
       const res = await fetch("/api/remaura/koleksiyon-edit/uret", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ takiTipi, tema, formKarakterleri, metalRengi, referansGorsel: refBase64, numImages: 1, referansGucu }),
+        body: JSON.stringify({ takiTipi, tema, formKarakterleri, metalRengi, referansGorsel: refBase64, numImages: 1, referansGucu, stilPrompt: analiz?.stilPrompt }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Üretim başarısız."); return; }
@@ -719,7 +746,7 @@ export function KoleksiyonEditClient() {
                       <p style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{refName}</p>
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); setRefBase64(null); setRefName(""); if (fileRef.current) fileRef.current.value = ""; }}
+                        onClick={(e) => { e.stopPropagation(); setRefBase64(null); setRefName(""); setAnaliz(null); if (fileRef.current) fileRef.current.value = ""; }}
                         style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", background: "none", border: "none", cursor: "pointer", marginTop: 4, padding: 0 }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.6)")}
                         onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.3)")}
@@ -758,6 +785,59 @@ export function KoleksiyonEditClient() {
                 </div>
               )}
               <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileChange(f); }} />
+
+              {/* Analiz yükleniyor */}
+              {analizYukleniyor && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0" }}>
+                  <Spinner size={12} />
+                  <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.2em" }}>
+                    Görsel analiz ediliyor…
+                  </span>
+                </div>
+              )}
+
+              {/* Analiz sonucu */}
+              {analiz && !analizYukleniyor && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                    <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", color: ACCENT }}>
+                      {analiz.takiTipi}
+                    </span>
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", fontWeight: 600 }}>
+                      {analiz.konu}
+                    </span>
+                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", lineHeight: 1.5 }}>
+                      {analiz.mevcutSahne}
+                    </span>
+                  </div>
+                  <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
+                  <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                    <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: "rgba(255,255,255,0.25)" }}>
+                      Aynı stilden kompozisyon önerileri
+                    </span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {analiz.oneriler.map((oneri, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setTema(oneri)}
+                          style={{
+                            textAlign: "left", padding: "6px 10px", borderRadius: 7,
+                            fontSize: 10, color: "rgba(255,255,255,0.55)",
+                            background: tema === oneri ? "rgba(183,110,121,0.12)" : "rgba(255,255,255,0.02)",
+                            border: `1px solid ${tema === oneri ? "rgba(183,110,121,0.35)" : "rgba(255,255,255,0.06)"}`,
+                            cursor: "pointer", transition: "all 0.12s",
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(183,110,121,0.3)"; e.currentTarget.style.color = "rgba(255,255,255,0.75)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = tema === oneri ? "rgba(183,110,121,0.35)" : "rgba(255,255,255,0.06)"; e.currentTarget.style.color = tema === oneri ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.55)"; }}
+                        >
+                          {oneri}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Koleksiyon adı */}

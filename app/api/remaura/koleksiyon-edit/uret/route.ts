@@ -124,6 +124,7 @@ export async function POST(req: Request) {
     referansGorsel?: string;
     numImages?: number;
     referansGucu?: number;
+    stilPrompt?: string;   // GPT-4o analizinden gelen hazır stil promptu
   };
 
   const {
@@ -133,16 +134,21 @@ export async function POST(req: Request) {
     metalRengi,
     referansGorsel,
     numImages = 1,
+    stilPrompt,
   } = body;
 
-  if (!tema?.trim() && !referansGorsel) {
+  if (!tema?.trim() && !referansGorsel && !stilPrompt) {
     return NextResponse.json({ error: "Tema veya referans görsel gerekli." }, { status: 400 });
   }
 
-  // Tema çevirisi ve referans görsel stil analizi paralel çalışır
+  // stilPrompt varsa (GPT-4o analiz yapıldı) doğrudan kullan, yoksa Vision analizi yap
   const [temaEn, styleDescription] = await Promise.all([
     tema?.trim() ? translateToEnglish(tema) : Promise.resolve(""),
-    referansGorsel ? analyzeStyleWithVision(referansGorsel) : Promise.resolve(""),
+    stilPrompt
+      ? Promise.resolve(stilPrompt)
+      : referansGorsel
+        ? analyzeStyleWithVision(referansGorsel)
+        : Promise.resolve(""),
   ]);
 
   const formStr = Array.isArray(formKarakterleri) && formKarakterleri.length > 0

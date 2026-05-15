@@ -1,0 +1,118 @@
+import { loadEnvConfig } from "@next/env";
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import { createClient } from "@/utils/supabase/server";
+import { isRemauraSuperAdminUserId } from "@/lib/billing/super-admin";
+import { getOpenAIApiKey } from "@/lib/api/openai";
+
+loadEnvConfig(process.cwd());
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+async function requireSuperAdmin(): Promise<
+  { ok: true } | { ok: false; response: NextResponse }
+> {
+  const cookieStore = await cookies();
+  const supabase = createClient(cookieStore);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, response: NextResponse.json({ error: "Oturum gerekli" }, { status: 401 }) };
+  }
+  const { data: profile } = await supabase
+    .from("profiles").select("role").eq("id", user.id).maybeSingle();
+  if (!isRemauraSuperAdminUserId(user.id) && profile?.role !== "admin") {
+    return { ok: false, response: NextResponse.json({ error: "Yetkisiz" }, { status: 403 }) };
+  }
+  return { ok: true };
+}
+
+export type AnalizSonucu = {
+  takiTipi: string;          // "kolye ucu / madalyon"
+  konu: string;              // "Medusa — Yunan mitolojisi Gorgon"
+  mevcutSahne: string;       // "Medusa yılanla savaşıyor, çığlık atan yüz"
+  stilAciklamasi: string;    // Türkçe özet (kullanıcıya gösterilir)
+  stilPrompt: string;        // İngilizce generation prompt (flux için)
+  oneriler: string[];        // 4 Türkçe kompozisyon önerisi
+};
+
+export async function POST(req: Request) {
+  const auth = await requireSuperAdmin();
+  if (!auth.ok) return auth.response;
+
+  const apiKey = getOpenAIApiKey();
+  if (!apiKey) {
+    return NextResponse.json({ error: "OpenAI API anahtarı yapılandırılmamış." }, { status: 500 });
+  }
+
+  const { image } = await req.json() as { image: string };
+  if (!image) {
+    return NextResponse.json({ error: "Görsel gerekli." }, { status: 400 });
+  }
+
+  // base64 data URL'den saf base64 ve mime çıkar
+  const mime = (image.match(/data:([^;]+);/)?.[1] ?? "image/jpeg");
+  const base64Data = image.includes(",") ? image.split(",")[1] : image;
+
+  try {
+    const { default: OpenAI } = await import("openai");
+    const openai = new OpenAI({ apiKey });
+
+    const systemPrompt = `Sen bir lüks mücevher tasarımı uzmanısın. Sana bir mücevher görseli verilecek.
+Bu görseli aşağıdaki formatta JSON olarak analiz et. Başka hiçbir şey yazma, sadece JSON döndür.
+
+{
+  "takiTipi": "kolye ucu / yüzük / bilezik / küpe vb.",
+  "konu": "Görseldeki ana konu veya figür (Türkçe, 1-2 cümle)",
+  "mevcutSahne": "Mevcut kompozisyonun kısa açıklaması (Türkçe)",
+  "stilAciklamasi": "Malzeme, teknik ve estetik dilin Türkçe özeti (2-3 cümle)",
+  "stilPrompt": "ONLY IN ENGLISH: detailed artistic style prompt for AI image generation. Include: material (bronze/gold/silver), finish (oxidized/polished/antique), technique (bas-relief/filigree/casting), form (circular medallion/pendant/ring), decorative elements (baroque border/rope frame/acanthus), mood (dramatic/elegant/dark). This will be used directly in image generation.",
+  "oneriler": [
+    "Aynı karakterin/konunun farklı bir sahne veya kompozisyon önerisi (Türkçe)",
+    "İkinci öneri",
+    "Üçüncü öneri",
+    "Dördüncü öneri"
+  ]
+}
+
+Öneriler aynı karakteri/konuyu farklı anlar veya kompozisyonlarda göstermeli. Bambaşka karakterler önerme.`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      max_tokens: 800,
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            {
+              type: "image_url",
+              image_url: { url: `data:${mime};base64,${base64Data}`, detail: "high" },
+            },
+            { type: "text", text: "Bu mücevher görselini analiz et ve JSON döndür." },
+          ],
+        },
+      ],
+    });
+
+    const raw = response.choices[0]?.message?.content ?? "";
+
+    // JSON blok varsa çıkar
+    const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/) ?? raw.match(/(\{[\s\S]*\})/);
+    const jsonStr = jsonMatch ? jsonMatch[1] : raw;
+
+    let sonuc: AnalizSonucu;
+    try {
+      sonuc = JSON.parse(jsonStr.trim());
+    } catch {
+      console.error("[analiz] JSON parse failed:", raw);
+      return NextResponse.json({ error: "Analiz sonucu işlenemedi." }, { status: 500 });
+    }
+
+    return NextResponse.json(sonuc);
+  } catch (err: unknown) {
+    console.error("[analiz] error:", err);
+    const e = err as { message?: string };
+    return NextResponse.json({ error: e?.message ?? "Analiz başarısız." }, { status: 500 });
+  }
+}
