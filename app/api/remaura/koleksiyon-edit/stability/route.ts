@@ -33,6 +33,27 @@ async function requireSuperAdmin(): Promise<
   return { ok: true };
 }
 
+// ─── Translation ─────────────────────────────────────────────────────────────
+
+async function translateToEnglish(text: string): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || !text.trim()) return text;
+  try {
+    const Anthropic = (await import("@anthropic-ai/sdk")).default;
+    const client = new Anthropic({ apiKey });
+    const msg = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 100,
+      system: "Translate this jewelry image editing prompt to English. Return only the translation, nothing else.",
+      messages: [{ role: "user", content: text }],
+    });
+    const block = msg.content[0];
+    return block?.type === "text" ? block.text.trim() : text;
+  } catch {
+    return text;
+  }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
@@ -181,23 +202,33 @@ export async function POST(req: Request) {
       case "upscale":
         return upscale(imgBuf, apiKey);
 
-      case "search-replace":
+      case "search-replace": {
         if (!searchPrompt || !replacePrompt) {
           return NextResponse.json(
             { error: "searchPrompt ve replacePrompt gerekli." },
             { status: 400 }
           );
         }
-        return searchReplace(imgBuf, searchPrompt, replacePrompt, apiKey);
+        const [spEn, rpEn] = await Promise.all([
+          translateToEnglish(searchPrompt),
+          translateToEnglish(replacePrompt),
+        ]);
+        return searchReplace(imgBuf, spEn, rpEn, apiKey);
+      }
 
-      case "recolor":
+      case "recolor": {
         if (!selectPrompt || !colorPrompt) {
           return NextResponse.json(
             { error: "selectPrompt ve colorPrompt gerekli." },
             { status: 400 }
           );
         }
-        return searchRecolor(imgBuf, selectPrompt, colorPrompt, apiKey);
+        const [selEn, colEn] = await Promise.all([
+          translateToEnglish(selectPrompt),
+          translateToEnglish(colorPrompt),
+        ]);
+        return searchRecolor(imgBuf, selEn, colEn, apiKey);
+      }
 
       case "erase": {
         if (!mask) return NextResponse.json({ error: "Maske gerekli." }, { status: 400 });

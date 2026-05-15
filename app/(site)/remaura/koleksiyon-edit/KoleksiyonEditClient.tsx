@@ -246,6 +246,7 @@ export function KoleksiyonEditClient() {
 
   // Results
   const [images, setImages] = useState<string[]>([]);
+  const [filenames, setFilenames] = useState<string[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "idle" });
   const [error, setError] = useState<string | null>(null);
 
@@ -414,6 +415,7 @@ export function KoleksiyonEditClient() {
     setError(null);
     setLoad({ kind: "generating" });
     setImages([]);
+    setFilenames([]);
     try {
       const res = await fetch("/api/remaura/koleksiyon-edit/uret", {
         method: "POST",
@@ -422,7 +424,12 @@ export function KoleksiyonEditClient() {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Üretim başarısız."); return; }
-      setImages(data.images ?? []);
+      const imgs: string[] = data.images ?? [];
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      setImages(imgs);
+      setFilenames(imgs.map((_, i) => `remaura-${ts}-${i + 1}.png`));
     } catch { setError("Bağlantı hatası."); }
     finally { setLoad({ kind: "idle" }); }
   }
@@ -492,11 +499,7 @@ export function KoleksiyonEditClient() {
     try {
       const src = images[index];
 
-      const now = new Date();
-      const pad = (n: number) => String(n).padStart(2, "0");
-      const datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
-      const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-      const filename = `remaura-${datePart}-${timePart}-${index + 1}.png`;
+      const filename = filenames[index] ?? `remaura-${index + 1}.png`;
 
       // showDirectoryPicker kullanıcı tıklamasından hemen sonra çağrılmalı (browser güvenlik kuralı)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

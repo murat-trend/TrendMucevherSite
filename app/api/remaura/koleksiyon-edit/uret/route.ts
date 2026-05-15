@@ -45,6 +45,42 @@ async function translateToEnglish(text: string): Promise<string> {
   }
 }
 
+// Referans görselin tarzını Claude Vision ile analiz et
+async function analyzeStyleWithVision(base64: string): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return "";
+  try {
+    const Anthropic = (await import("@anthropic-ai/sdk")).default;
+    const client = new Anthropic({ apiKey });
+    const raw = base64.includes(",") ? base64.split(",")[1] : base64;
+    const mime = (base64.match(/data:([^;]+);/)?.[1] ?? "image/jpeg") as
+      | "image/jpeg"
+      | "image/png"
+      | "image/gif"
+      | "image/webp";
+    const msg = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 150,
+      system:
+        "You are a jewelry style analyst. Look at this jewelry image and describe its visual style in 10-15 English keywords for AI image generation. Focus on: design style, metal finish, surface texture, form language, pattern, decorative technique. Do NOT mention stones, gems, people or colors. Return only comma-separated keywords, nothing else.",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: mime, data: raw } },
+            { type: "text", text: "Describe the jewelry style in keywords." },
+          ],
+        },
+      ],
+    });
+    const block = msg.content[0];
+    return block?.type === "text" ? block.text.trim() : "";
+  } catch (e) {
+    console.error("[uret] vision analysis failed:", e);
+    return "";
+  }
+}
+
 const TAKI_TIPI_EN: Record<string, string> = {
   "Yüzük": "ring",
   "Kolye": "necklace",
@@ -69,21 +105,6 @@ const FORM_EN: Record<string, string> = {
   "Kabartmalı": "embossed",
   "Asimetrik": "asymmetric",
 };
-
-async function uploadRefToFal(base64: string, falKey: string): Promise<string | null> {
-  try {
-    const { fal } = await import("@fal-ai/client");
-    fal.config({ credentials: falKey });
-    const raw = base64.includes(",") ? base64.split(",")[1] : base64;
-    const mime = base64.match(/data:([^;]+);/)?.[1] ?? "image/jpeg";
-    const blob = new Blob([Buffer.from(raw, "base64")], { type: mime });
-    const file = new File([blob], "reference.jpg", { type: mime });
-    return await fal.storage.upload(file);
-  } catch (e) {
-    console.error("[uret] fal storage upload failed:", e);
-    return null;
-  }
-}
 
 export async function POST(req: Request) {
   const auth = await requireSuperAdmin();
@@ -111,16 +132,16 @@ export async function POST(req: Request) {
     metalRengi,
     referansGorsel,
     numImages = 1,
-    referansGucu = 0.85,
   } = body;
 
   if (!tema?.trim() && !referansGorsel) {
     return NextResponse.json({ error: "Tema veya referans görsel gerekli." }, { status: 400 });
   }
 
-  const [temaEn, refUrl] = await Promise.all([
+  // Tema çevirisi ve referans görsel stil analizi paralel çalışır
+  const [temaEn, styleDescription] = await Promise.all([
     tema?.trim() ? translateToEnglish(tema) : Promise.resolve(""),
-    referansGorsel ? uploadRefToFal(referansGorsel, falKey) : Promise.resolve(null),
+    referansGorsel ? analyzeStyleWithVision(referansGorsel) : Promise.resolve(""),
   ]);
 
   const formStr = Array.isArray(formKarakterleri) && formKarakterleri.length > 0
@@ -137,6 +158,7 @@ export async function POST(req: Request) {
     `${TAKI_TIPI_EN[takiTipi ?? ""] ?? "jewelry"} jewelry`,
     temaEn,
     formStr,
+    styleDescription,                                   // Vision'dan gelen stil
     `${METAL_RENGI_EN[metalRengi ?? ""] ?? "gold"} metal`,
     "women's collection",
     "professional product photography",
@@ -155,50 +177,30 @@ export async function POST(req: Request) {
     const { fal } = await import("@fal-ai/client");
     fal.config({ credentials: falKey });
 
-    let result;
-
-    if (refUrl) {
-      // Referans görsel VAR → flux-pro/v1.1-redux (image-to-image)
-      result = await fal.subscribe("fal-ai/flux-pro/v1.1-redux", {
-        input: {
-          prompt,
-          image_url: refUrl,
-          image_prompt_strength: referansGucu,
-          num_images: Math.min(numImages, 4),
-          seed,
-          image_size: "square_hd",
-          enhance_prompt: false,
-          num_inference_steps: 28,
-          safety_tolerance: "5",
-          output_format: "jpeg",
-        },
-        logs: false,
-      });
-    } else {
-      // Referans görsel YOK → flux-pro/v1.1 (text-to-image)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      result = await fal.subscribe("fal-ai/flux-pro/v1.1", {
-        input: {
-          prompt,
-          num_images: Math.min(numImages, 4),
-          seed,
-          image_size: "square_hd",
-          enhance_prompt: false,
-          guidance_scale: 7,
-          num_inference_steps: 28,
-          safety_tolerance: "5",
-          output_format: "jpeg",
-        } as any,
-        logs: false,
-      });
-    }
+    // Her durumda flux-pro/v1.1 (text-to-image) kullanılır
+    // Referans görsel varsa stil analizi prompt'a eklenmiş olur
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await fal.subscribe("fal-ai/flux-pro/v1.1", {
+      input: {
+        prompt,
+        num_images: Math.min(numImages, 4),
+        seed,
+        image_size: "square_hd",
+        enhance_prompt: false,
+        guidance_scale: 7,
+        num_inference_steps: 28,
+        safety_tolerance: "5",
+        output_format: "jpeg",
+      } as any,
+      logs: false,
+    });
 
     type FalImage = { url: string };
     const images = ((result.data as { images?: FalImage[] })?.images ?? []).map(
       (img) => img.url
     );
 
-    return NextResponse.json({ images, seed, usedRedux: !!refUrl });
+    return NextResponse.json({ images, seed, styleDescription });
   } catch (err: unknown) {
     console.error("[uret] fal error:", err);
     const e = err as { message?: string };
