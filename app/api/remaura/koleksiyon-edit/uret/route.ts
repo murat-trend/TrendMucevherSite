@@ -45,15 +45,41 @@ async function translateToEnglish(text: string): Promise<string> {
   }
 }
 
-// base64 data URL veya https:// → fal CDN URL
-async function toFalUrl(image: string, falKey: string): Promise<string> {
-  if (image.startsWith("http://") || image.startsWith("https://")) return image;
-  const { fal } = await import("@fal-ai/client");
-  fal.config({ credentials: falKey });
-  const raw = image.includes(",") ? image.split(",")[1] : image;
-  const buf = Buffer.from(raw, "base64");
-  const file = new File([new Uint8Array(buf)], "reference.jpg", { type: "image/jpeg" });
-  return await fal.storage.upload(file);
+// Referans görselin SADECE stilini analiz et — şekil/harf/konu içermemeli
+async function analyzeStyleWithVision(base64: string): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return "";
+  try {
+    const Anthropic = (await import("@anthropic-ai/sdk")).default;
+    const client = new Anthropic({ apiKey });
+    const raw = base64.includes(",") ? base64.split(",")[1] : base64;
+    const mime = (base64.match(/data:([^;]+);/)?.[1] ?? "image/jpeg") as
+      | "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+    const msg = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 200,
+      system:
+        "You are a jewelry style analyst. Describe ONLY the visual craftsmanship style of this jewelry in 12-18 English keywords for AI image generation. " +
+        "Focus exclusively on: metal surface finish (polished/matte/brushed), decorative technique (pavé/filigree/engraving/embossing), " +
+        "ornamental motifs (floral/botanical/geometric patterns), surface texture detail, edge style, and overall design language. " +
+        "NEVER mention: the specific letter or shape, stones or gems, people, colors, brand names. " +
+        "Return only comma-separated keywords, nothing else.",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: mime, data: raw } },
+            { type: "text", text: "Extract the jewelry craftsmanship style keywords." },
+          ],
+        },
+      ],
+    });
+    const block = msg.content[0];
+    return block?.type === "text" ? block.text.trim() : "";
+  } catch (e) {
+    console.error("[uret] vision analysis failed:", e);
+    return "";
+  }
 }
 
 const TAKI_TIPI_EN: Record<string, string> = {
@@ -107,14 +133,17 @@ export async function POST(req: Request) {
     metalRengi,
     referansGorsel,
     numImages = 1,
-    referansGucu = 0.5,
   } = body;
 
   if (!tema?.trim() && !referansGorsel) {
     return NextResponse.json({ error: "Tema veya referans görsel gerekli." }, { status: 400 });
   }
 
-  const temaEn = tema?.trim() ? await translateToEnglish(tema) : "";
+  // Tema çevirisi ve referans görsel stil analizi paralel çalışır
+  const [temaEn, styleDescription] = await Promise.all([
+    tema?.trim() ? translateToEnglish(tema) : Promise.resolve(""),
+    referansGorsel ? analyzeStyleWithVision(referansGorsel) : Promise.resolve(""),
+  ]);
 
   const formStr = Array.isArray(formKarakterleri) && formKarakterleri.length > 0
     ? formKarakterleri.map((f) => FORM_EN[f] ?? f.toLowerCase()).join(", ") : "";
@@ -130,6 +159,7 @@ export async function POST(req: Request) {
     `${TAKI_TIPI_EN[takiTipi ?? ""] ?? "jewelry"} jewelry`,
     temaEn,
     formStr,
+    styleDescription,
     `${METAL_RENGI_EN[metalRengi ?? ""] ?? "gold"} metal`,
     "women's collection",
     "professional product photography",
@@ -148,53 +178,28 @@ export async function POST(req: Request) {
     const { fal } = await import("@fal-ai/client");
     fal.config({ credentials: falKey });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await fal.subscribe("fal-ai/flux-pro/v1.1", {
+      input: {
+        prompt,
+        num_images: Math.min(numImages, 4),
+        seed,
+        image_size: "square_hd",
+        enhance_prompt: false,
+        guidance_scale: 7,
+        num_inference_steps: 28,
+        safety_tolerance: "5",
+        output_format: "jpeg",
+      } as any,
+      logs: false,
+    });
+
     type FalImage = { url: string };
-    let images: string[] = [];
+    const images = ((result.data as { images?: FalImage[] })?.images ?? []).map(
+      (img) => img.url
+    );
 
-    if (referansGorsel) {
-      // Referans görsel varsa: flux-pro/v1.1-ultra ile doğrudan image prompting
-      // referansGucu (0.1-1.0) → image_prompt_strength (0.04-0.4)
-      const imagePromptStrength = Math.round(referansGucu * 40) / 100;
-      const refUrl = await toFalUrl(referansGorsel, falKey);
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await fal.subscribe("fal-ai/flux-pro/v1.1-ultra", {
-        input: {
-          prompt,
-          image_url: refUrl,
-          image_prompt_strength: imagePromptStrength,
-          num_images: Math.min(numImages, 4),
-          seed,
-          aspect_ratio: "1:1",
-          safety_tolerance: "5",
-          output_format: "jpeg",
-        } as any,
-        logs: false,
-      });
-
-      images = ((result.data as { images?: FalImage[] })?.images ?? []).map((img) => img.url);
-    } else {
-      // Referans görsel yok: standart flux-pro/v1.1 (text-to-image)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await fal.subscribe("fal-ai/flux-pro/v1.1", {
-        input: {
-          prompt,
-          num_images: Math.min(numImages, 4),
-          seed,
-          image_size: "square_hd",
-          enhance_prompt: false,
-          guidance_scale: 7,
-          num_inference_steps: 28,
-          safety_tolerance: "5",
-          output_format: "jpeg",
-        } as any,
-        logs: false,
-      });
-
-      images = ((result.data as { images?: FalImage[] })?.images ?? []).map((img) => img.url);
-    }
-
-    return NextResponse.json({ images, seed });
+    return NextResponse.json({ images, seed, styleDescription });
   } catch (err: unknown) {
     console.error("[uret] fal error:", err);
     const e = err as { message?: string };
