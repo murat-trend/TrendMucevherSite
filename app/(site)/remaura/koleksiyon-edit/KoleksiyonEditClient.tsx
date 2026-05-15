@@ -498,12 +498,17 @@ export function KoleksiyonEditClient() {
       const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
       const filename = `remaura-${datePart}-${timePart}-${index + 1}.png`;
 
+      // fetch → blob → objectURL: canvas taint sorununu önler
+      const fetchRes = await fetch(src);
+      if (!fetchRes.ok) throw new Error(`fetch ${fetchRes.status}`);
+      const fetchBlob = await fetchRes.blob();
+      const objectUrl = URL.createObjectURL(fetchBlob);
+
       const img = new Image();
-      img.crossOrigin = "anonymous";
       await new Promise<void>((res, rej) => {
         img.onload = () => res();
         img.onerror = rej;
-        img.src = src;
+        img.src = objectUrl;
       });
 
       const canvas = document.createElement("canvas");
@@ -541,7 +546,11 @@ export function KoleksiyonEditClient() {
       ctx.fillStyle = "rgba(255,255,255,0.6)";
       ctx.fillText("trendmucevher.com", x, y3);
 
-      const blob = await new Promise<Blob>((res) => canvas.toBlob((b) => res(b!), "image/png"));
+      URL.revokeObjectURL(objectUrl);
+
+      const blob = await new Promise<Blob>((res, rej) =>
+        canvas.toBlob((b) => b ? res(b) : rej(new Error("toBlob failed")), "image/png")
+      );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
