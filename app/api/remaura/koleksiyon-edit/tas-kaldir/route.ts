@@ -58,11 +58,12 @@ export async function POST(req: Request) {
     const imageUrl = await toFalUrl(image, falKey);
 
     // 2. EVF-SAM2 ile taş/değerli taş maskesi üret
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const samResult = await fal.subscribe("fal-ai/evf-sam", {
       input: {
         image_url: imageUrl,
         text_prompt: "gemstone, diamond, crystal, prong-set stone, faceted gem, ruby, sapphire, emerald",
-      },
+      } as any,
       logs: false,
     });
 
