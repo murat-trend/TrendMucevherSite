@@ -491,39 +491,64 @@ export function KoleksiyonEditClient() {
     setLoad({ kind: "downloading", index });
     try {
       const src = images[index];
-      const slug = (koleksiyonAdi.trim() || "koleksiyon")
-        .toLowerCase()
-        .replace(/\s+/g, "-")
-        .replace(/[^a-z0-9-]/g, "")
-        || "koleksiyon";
-      const filename = `${slug}_${index + 1}.png`;
 
-      const res = await fetch(src);
-      const blob = await res.blob();
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+      const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      const filename = `remaura-${datePart}-${timePart}-${index + 1}.png`;
 
-      // Chrome / Edge: klasör seçtir
-      if (typeof window !== "undefined" && "showDirectoryPicker" in window) {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const dirHandle = await (window as any).showDirectoryPicker();
-          const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
-          const writable = await fileHandle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-          return;
-        } catch (e) {
-          // Kullanıcı iptal ettiyse dur, başka hata ise fallback'e düş
-          if ((e as { name?: string })?.name === "AbortError") return;
-        }
-      }
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      await new Promise<void>((res, rej) => {
+        img.onload = () => res();
+        img.onerror = rej;
+        img.src = src;
+      });
 
-      // Firefox / Safari: native download dialog
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+
+      const paddingX = Math.round(canvas.width * 0.025);
+      const paddingY = Math.round(canvas.height * 0.025);
+      const size1 = Math.max(18, Math.round(canvas.width * 0.026));
+      const size2 = Math.max(12, Math.round(canvas.width * 0.016));
+      const size3 = Math.max(11, Math.round(canvas.width * 0.014));
+      const x = canvas.width - paddingX;
+      const y3 = canvas.height - paddingY;
+      const y2 = y3 - size3 * 1.5;
+      const y1 = y2 - size2 * 1.5;
+
+      ctx.textAlign = "right";
+      ctx.textBaseline = "bottom";
+      ctx.shadowColor = "rgba(0,0,0,0.55)";
+      ctx.shadowBlur = 8;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 1;
+
+      ctx.font = `700 ${size1}px Georgia, serif`;
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.fillText("Trend Mücevher", x, y1);
+
+      ctx.font = `400 ${size2}px Georgia, serif`;
+      ctx.fillStyle = "rgba(255,255,255,0.75)";
+      ctx.fillText("by Murat Kaynaroğlu", x, y2);
+
+      ctx.font = `400 ${size3}px sans-serif`;
+      ctx.fillStyle = "rgba(255,255,255,0.6)";
+      ctx.fillText("trendmucevher.com", x, y3);
+
+      const blob = await new Promise<Blob>((res) => canvas.toBlob((b) => res(b!), "image/png"));
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
+
     } catch { setError("İndirme başarısız."); }
     finally { setLoad({ kind: "idle" }); }
   }
