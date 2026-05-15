@@ -204,8 +204,8 @@ function Spinner({ size = 16 }: { size?: number }) {
 
 function GridSkeleton() {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, maxWidth: 768 }}>
-      {[0, 1, 2, 3].map((i) => (
+    <div style={{ maxWidth: 480 }}>
+      {[0].map((i) => (
         <div key={i} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div
             style={{
@@ -241,6 +241,7 @@ export function KoleksiyonEditClient() {
   const [metalRengi, setMetalRengi] = useState<MetalRengi>("Sarı Altın");
   const [refBase64, setRefBase64] = useState<string | null>(null);
   const [refName, setRefName] = useState("");
+  const [referansGucu, setReferansGucu] = useState(0.85);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Results
@@ -409,7 +410,7 @@ export function KoleksiyonEditClient() {
   // ─── Generate ───────────────────────────────────────────────────────────────
 
   async function handleUret() {
-    if (!tema.trim()) { setError("Tema / açıklama boş bırakılamaz."); return; }
+    if (!tema.trim() && !refBase64) { setError("Tema veya referans görsel gerekli."); return; }
     setError(null);
     setLoad({ kind: "generating" });
     setImages([]);
@@ -417,7 +418,7 @@ export function KoleksiyonEditClient() {
       const res = await fetch("/api/remaura/koleksiyon-edit/uret", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ takiTipi, tema, formKarakterleri, metalRengi, referansGorsel: refBase64 }),
+        body: JSON.stringify({ takiTipi, tema, formKarakterleri, metalRengi, referansGorsel: refBase64, numImages: 1, referansGucu }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Üretim başarısız."); return; }
@@ -603,6 +604,26 @@ export function KoleksiyonEditClient() {
                   </div>
                 )}
               </div>
+              {refBase64 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Label>Referans Gücü</Label>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.35)" }}>
+                      {referansGucu < 0.4 ? "Prompt ağır" : referansGucu > 0.7 ? "Referans ağır" : "Dengeli"}
+                    </span>
+                  </div>
+                  <input
+                    type="range" min={0.1} max={1.0} step={0.05}
+                    value={referansGucu}
+                    onChange={(e) => setReferansGucu(Number(e.target.value))}
+                    style={{ width: "100%", accentColor: ACCENT }}
+                  />
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 8, color: "rgba(255,255,255,0.2)" }}>Yaratıcı</span>
+                    <span style={{ fontSize: 8, color: "rgba(255,255,255,0.2)" }}>Birebir</span>
+                  </div>
+                </div>
+              )}
               <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileChange(f); }} />
             </div>
 
@@ -716,7 +737,7 @@ export function KoleksiyonEditClient() {
           )}
 
           {images.length > 0 && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, maxWidth: 768 }}>
+            <div style={{ maxWidth: 480 }}>
               {images.map((src, i) => (
                 <div key={i} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
 
@@ -742,7 +763,7 @@ export function KoleksiyonEditClient() {
 
                     {/* Badges */}
                     <div style={{ position: "absolute", top: 8, left: 8, fontSize: 8, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "rgba(0,0,0,0.55)", color: "rgba(255,255,255,0.4)" }}>
-                      {i + 1} / 4
+                      {i + 1} / {images.length}
                     </div>
                     {load.kind === "downloading" && load.index === i && (
                       <div style={{ position: "absolute", top: 8, right: 8, fontSize: 8, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: "rgba(183,110,121,0.85)", color: "white", textTransform: "uppercase", letterSpacing: "0.1em" }}>

@@ -36,12 +36,13 @@ async function requireSuperAdmin(): Promise<
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Accepts either a https:// URL or a data: base64 string.
- * Returns the image as a Buffer.
+ * URL veya data: base64 → Buffer
+ * R2, fal CDN veya herhangi bir https:// URL çalışır.
  */
 async function resolveImageBuffer(input: string): Promise<Buffer> {
   if (input.startsWith("http://") || input.startsWith("https://")) {
-    const res = await fetch(input);
+    const res = await fetch(input, { cache: "no-store" });
+    if (!res.ok) throw new Error(`Görsel fetch başarısız: ${res.status} — ${input}`);
     return Buffer.from(await res.arrayBuffer());
   }
   const raw = input.includes(",") ? input.split(",")[1] : input;
@@ -122,6 +123,7 @@ async function searchRecolor(
   form.append("prompt", colorPrompt);
   form.append("select_prompt", selectPrompt);
   form.append("output_format", "png");
+  // ✅ Doğru endpoint: "search-and-recolor" (Stability v2beta resmi adı)
   return stabilityPost("/v2beta/stable-image/edit/search-and-recolor", form, apiKey);
 }
 
@@ -155,8 +157,8 @@ export async function POST(req: Request) {
 
   const body = await req.json() as {
     action: string;
-    image: string;          // URL or data: base64
-    mask?: string;          // data: base64 PNG binary mask
+    image: string;        // https:// URL veya data: base64
+    mask?: string;        // data: base64 PNG binary mask
     searchPrompt?: string;
     replacePrompt?: string;
     selectPrompt?: string;
@@ -182,7 +184,7 @@ export async function POST(req: Request) {
       case "search-replace":
         if (!searchPrompt || !replacePrompt) {
           return NextResponse.json(
-            { error: "search_prompt ve replace_prompt gerekli." },
+            { error: "searchPrompt ve replacePrompt gerekli." },
             { status: 400 }
           );
         }
@@ -191,7 +193,7 @@ export async function POST(req: Request) {
       case "recolor":
         if (!selectPrompt || !colorPrompt) {
           return NextResponse.json(
-            { error: "select_prompt ve color_prompt gerekli." },
+            { error: "selectPrompt ve colorPrompt gerekli." },
             { status: 400 }
           );
         }
@@ -210,7 +212,7 @@ export async function POST(req: Request) {
       }
 
       default:
-        return NextResponse.json({ error: "Geçersiz action." }, { status: 400 });
+        return NextResponse.json({ error: `Geçersiz action: ${action}` }, { status: 400 });
     }
   } catch (err: unknown) {
     console.error("[stability] unhandled error:", err);

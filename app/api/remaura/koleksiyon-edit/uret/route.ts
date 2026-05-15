@@ -9,31 +9,22 @@ loadEnvConfig(process.cwd());
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
-
 async function requireSuperAdmin(): Promise<
   { ok: true } | { ok: false; response: NextResponse }
 > {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return { ok: false, response: NextResponse.json({ error: "Oturum gerekli" }, { status: 401 }) };
   }
   const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
+    .from("profiles").select("role").eq("id", user.id).maybeSingle();
   if (!isRemauraSuperAdminUserId(user.id) && profile?.role !== "admin") {
     return { ok: false, response: NextResponse.json({ error: "Yetkisiz" }, { status: 403 }) };
   }
   return { ok: true };
 }
-
-// ─── Claude translation ───────────────────────────────────────────────────────
 
 async function translateToEnglish(text: string): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -44,8 +35,7 @@ async function translateToEnglish(text: string): Promise<string> {
     const msg = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 200,
-      system:
-        "Translate this jewelry description to English for AI image generation. Return only the translation.",
+      system: "Translate this jewelry description to English for AI image generation. Return only the translation.",
       messages: [{ role: "user", content: text }],
     });
     const block = msg.content[0];
@@ -54,8 +44,6 @@ async function translateToEnglish(text: string): Promise<string> {
     return text;
   }
 }
-
-// ─── fal.ai reference upload ──────────────────────────────────────────────────
 
 async function uploadRefToFal(base64: string, falKey: string): Promise<string | null> {
   try {
@@ -72,8 +60,6 @@ async function uploadRefToFal(base64: string, falKey: string): Promise<string | 
   }
 }
 
-// ─── Route ────────────────────────────────────────────────────────────────────
-
 export async function POST(req: Request) {
   const auth = await requireSuperAdmin();
   if (!auth.ok) return auth.response;
@@ -89,22 +75,38 @@ export async function POST(req: Request) {
     formKarakterleri?: string[];
     metalRengi?: string;
     referansGorsel?: string;
+    numImages?: number;
+    referansGucu?: number;
   };
 
-  const { takiTipi, tema, formKarakterleri, metalRengi, referansGorsel } = body;
+  const {
+    takiTipi,
+    tema,
+    formKarakterleri,
+    metalRengi,
+    referansGorsel,
+    numImages = 1,
+    referansGucu = 0.85,
+  } = body;
 
-  if (!tema?.trim()) {
-    return NextResponse.json({ error: "Tema / açıklama gerekli." }, { status: 400 });
+  if (!tema?.trim() && !referansGorsel) {
+    return NextResponse.json({ error: "Tema veya referans görsel gerekli." }, { status: 400 });
   }
 
   const [temaEn, refUrl] = await Promise.all([
-    translateToEnglish(tema),
+    tema?.trim() ? translateToEnglish(tema) : Promise.resolve(""),
     referansGorsel ? uploadRefToFal(referansGorsel, falKey) : Promise.resolve(null),
   ]);
 
   const formStr = Array.isArray(formKarakterleri) && formKarakterleri.length > 0
-    ? formKarakterleri.join(", ").toLowerCase()
-    : "";
+    ? formKarakterleri.join(", ").toLowerCase() : "";
+
+  const noStoneClause = [
+    "absolutely no gemstones", "no diamonds", "no rubies", "no sapphires",
+    "no emeralds", "no crystals", "no pearls", "no rhinestones", "no pavé",
+    "no prong set stones", "bare empty settings", "bare metal only",
+    "no hands", "no fingers", "no human body parts", "no model",
+  ].join(", ");
 
   const promptBody = [
     `${(takiTipi ?? "jewelry").toLowerCase()} jewelry`,
@@ -112,49 +114,65 @@ export async function POST(req: Request) {
     formStr,
     `${(metalRengi ?? "gold").toLowerCase()} metal`,
     "women's collection",
-    "professional product photography, pure white background",
-    "centered single object, sharp edges, studio lighting",
+    "professional product photography",
+    "pure white background",
+    "seamless white studio backdrop",
+    "centered single object",
+    "sharp edges",
+    "studio lighting",
     "ultra detailed metal surface texture",
-  ]
-    .filter(Boolean)
-    .join(", ");
+  ].filter(Boolean).join(", ");
 
-  const prompt = `NO GEMSTONES, NO DIAMONDS, NO STONES, EMPTY SETTINGS ONLY, ${promptBody}`;
-
-  const negativePrompt =
-    "diamonds, gemstones, stones, crystals, pearls, rubies, sapphires, emeralds, jewelry with stones, set stones, pavé, prong set stones";
-
+  const prompt = `${noStoneClause}, ${promptBody}`;
   const seed = Math.floor(Math.random() * 1_000_000);
 
   try {
     const { fal } = await import("@fal-ai/client");
     fal.config({ credentials: falKey });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const input: any = {
-      prompt,
-      negative_prompt: negativePrompt,
-      num_images: 4,
-      seed,
-      image_size: "square_hd",
-      guidance_scale: 3.5,
-      num_inference_steps: 28,
-      safety_tolerance: "5",
-      output_format: "jpeg",
-    };
-    if (refUrl) {
-      input.image_url = refUrl;
-      input.image_prompt_strength = 0.25;
-    }
+    let result;
 
-    const result = await fal.subscribe("fal-ai/flux-pro/v1.1", { input, logs: false });
+    if (refUrl) {
+      // Referans görsel VAR → flux-pro/v1.1-redux (image-to-image)
+      result = await fal.subscribe("fal-ai/flux-pro/v1.1-redux", {
+        input: {
+          prompt,
+          image_url: refUrl,
+          image_prompt_strength: referansGucu,
+          num_images: Math.min(numImages, 4),
+          seed,
+          image_size: "square_hd",
+          enhance_prompt: false,
+          num_inference_steps: 28,
+          safety_tolerance: "5",
+          output_format: "jpeg",
+        },
+        logs: false,
+      });
+    } else {
+      // Referans görsel YOK → flux-pro/v1.1 (text-to-image)
+      result = await fal.subscribe("fal-ai/flux-pro/v1.1", {
+        input: {
+          prompt,
+          num_images: Math.min(numImages, 4),
+          seed,
+          image_size: "square_hd",
+          enhance_prompt: false,
+          guidance_scale: 7,
+          num_inference_steps: 28,
+          safety_tolerance: "5",
+          output_format: "jpeg",
+        },
+        logs: false,
+      });
+    }
 
     type FalImage = { url: string };
     const images = ((result.data as { images?: FalImage[] })?.images ?? []).map(
       (img) => img.url
     );
 
-    return NextResponse.json({ images });
+    return NextResponse.json({ images, seed, usedRedux: !!refUrl });
   } catch (err: unknown) {
     console.error("[uret] fal error:", err);
     const e = err as { message?: string };
