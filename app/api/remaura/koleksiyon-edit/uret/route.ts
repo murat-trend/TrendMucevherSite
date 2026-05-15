@@ -151,6 +151,7 @@ export async function POST(req: Request) {
       });
     } else {
       // Referans görsel YOK → flux-pro/v1.1 (text-to-image)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       result = await fal.subscribe("fal-ai/flux-pro/v1.1", {
         input: {
           prompt,
@@ -162,7 +163,7 @@ export async function POST(req: Request) {
           num_inference_steps: 28,
           safety_tolerance: "5",
           output_format: "jpeg",
-        },
+        } as any,
         logs: false,
       });
     }
