@@ -247,6 +247,7 @@ export function KoleksiyonEditClient() {
   // Results
   const [images, setImages] = useState<string[]>([]);
   const [filenames, setFilenames] = useState<string[]>([]);
+  const [originals, setOriginals] = useState<string[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "idle" });
   const [error, setError] = useState<string | null>(null);
 
@@ -429,6 +430,7 @@ export function KoleksiyonEditClient() {
       const pad = (n: number) => String(n).padStart(2, "0");
       const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
       setImages(imgs);
+      setOriginals(imgs);
       setFilenames(imgs.map((_, i) => `remaura-${ts}-${i + 1}.png`));
     } catch { setError("Bağlantı hatası."); }
     finally { setLoad({ kind: "idle" }); }
@@ -492,6 +494,27 @@ export function KoleksiyonEditClient() {
       if (result) replaceImg(modal.index, result);
       setModal(null);
     } finally { setModalLoading(false); }
+  }
+
+  function handleRevert(index: number) {
+    if (!originals[index]) return;
+    setImages((prev) => { const n = [...prev]; n[index] = originals[index]; return n; });
+  }
+
+  async function handleTasKaldir(index: number) {
+    setLoad({ kind: "op", index, label: "Taş kaldırılıyor" });
+    setError(null);
+    try {
+      const res = await fetch("/api/remaura/koleksiyon-edit/tas-kaldir", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: images[index] }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Taş kaldırma başarısız."); return; }
+      if (data.image) replaceImg(index, data.image);
+    } catch { setError("Bağlantı hatası."); }
+    finally { setLoad({ kind: "idle" }); }
   }
 
   async function handleDownload(index: number) {
@@ -846,14 +869,22 @@ export function KoleksiyonEditClient() {
                     >
                       Değiştir
                     </ActionBtn>
-                    <ActionBtn onClick={() => handleDownload(i)} disabled={isOpBusy(i)} accent>
-                      İndir
+                    <ActionBtn onClick={() => handleTasKaldir(i)} disabled={isOpBusy(i)}>
+                      Taş Kaldır
                     </ActionBtn>
                     <ActionBtn
                       onClick={() => { setLightbox(i); setMaskMode(true); setMaskResult(null); }}
                       disabled={isOpBusy(i)}
                     >
                       Maskele
+                    </ActionBtn>
+                    {originals[i] && images[i] !== originals[i] && (
+                      <ActionBtn onClick={() => handleRevert(i)} disabled={isOpBusy(i)}>
+                        Orijinal
+                      </ActionBtn>
+                    )}
+                    <ActionBtn onClick={() => handleDownload(i)} disabled={isOpBusy(i)} accent>
+                      İndir
                     </ActionBtn>
                   </div>
 
