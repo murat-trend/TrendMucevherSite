@@ -86,7 +86,7 @@ export async function POST(req: Request) {
     const response = await openai.images.generate({
       model: "gpt-image-1",
       prompt: fullPrompt,
-      n: 4,
+      n: 1,
       size: "1024x1024",
       // @ts-expect-error — gpt-image-1 quality param
       quality,
