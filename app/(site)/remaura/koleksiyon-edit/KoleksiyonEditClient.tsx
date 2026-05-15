@@ -498,7 +498,19 @@ export function KoleksiyonEditClient() {
       const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
       const filename = `remaura-${datePart}-${timePart}-${index + 1}.png`;
 
-      // fetch → blob → objectURL: canvas taint sorununu önler
+      // showDirectoryPicker kullanıcı tıklamasından hemen sonra çağrılmalı (browser güvenlik kuralı)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let dirHandle: any = null;
+      if (typeof window !== "undefined" && "showDirectoryPicker" in window) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          dirHandle = await (window as any).showDirectoryPicker();
+        } catch (e) {
+          if ((e as { name?: string })?.name === "AbortError") return;
+        }
+      }
+
+      // Klasör seçildikten sonra fetch + canvas + watermark
       const fetchRes = await fetch(src);
       if (!fetchRes.ok) throw new Error(`fetch ${fetchRes.status}`);
       const fetchBlob = await fetchRes.blob();
@@ -510,6 +522,7 @@ export function KoleksiyonEditClient() {
         img.onerror = rej;
         img.src = objectUrl;
       });
+      URL.revokeObjectURL(objectUrl);
 
       const canvas = document.createElement("canvas");
       canvas.width = img.naturalWidth;
@@ -546,25 +559,16 @@ export function KoleksiyonEditClient() {
       ctx.fillStyle = "rgba(183,110,121,0.65)";
       ctx.fillText("trendmucevher.com", x, y3);
 
-      URL.revokeObjectURL(objectUrl);
-
       const blob = await new Promise<Blob>((res, rej) =>
         canvas.toBlob((b) => b ? res(b) : rej(new Error("toBlob failed")), "image/png")
       );
 
-      // Chrome / Edge: klasör seçtir
-      if (typeof window !== "undefined" && "showDirectoryPicker" in window) {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const dirHandle = await (window as any).showDirectoryPicker();
-          const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
-          const writable = await fileHandle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-          return;
-        } catch (e) {
-          if ((e as { name?: string })?.name === "AbortError") return;
-        }
+      if (dirHandle) {
+        const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return;
       }
 
       // Firefox / Safari fallback
