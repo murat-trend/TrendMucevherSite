@@ -510,10 +510,11 @@ export function KoleksiyonEditClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: images[index] }),
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Taş kaldırma başarısız."); return; }
-      if (data.image) replaceImg(index, data.image);
-    } catch { setError("Bağlantı hatası."); }
+      let data: Record<string, unknown> = {};
+      try { data = await res.json(); } catch { data = { error: `HTTP ${res.status}` }; }
+      if (!res.ok) { setError((data.error as string) ?? "Taş kaldırma başarısız."); return; }
+      if (data.image) replaceImg(index, data.image as string);
+    } catch (e) { setError((e as Error)?.message ?? "Bağlantı hatası."); }
     finally { setLoad({ kind: "idle" }); }
   }
 

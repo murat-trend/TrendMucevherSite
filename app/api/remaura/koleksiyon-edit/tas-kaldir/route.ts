@@ -82,15 +82,7 @@ export async function POST(req: Request) {
     if (!maskRes.ok) throw new Error(`Maske fetch başarısız: ${maskRes.status}`);
 
     const imgBuf = Buffer.from(await imgRes.arrayBuffer());
-    const rawMaskBuf = Buffer.from(await maskRes.arrayBuffer());
-
-    // EVF-SAM maskesini binary siyah/beyaz PNG'e dönüştür (Stability için zorunlu)
-    const sharp = (await import("sharp")).default;
-    const maskBuf = await sharp(rawMaskBuf)
-      .greyscale()
-      .threshold(128)
-      .png()
-      .toBuffer();
+    const maskBuf = Buffer.from(await maskRes.arrayBuffer());
 
     // 4. Stability inpaint: maskelenen taş alanlarını metal yüzeyle doldur
     const form = new FormData();
