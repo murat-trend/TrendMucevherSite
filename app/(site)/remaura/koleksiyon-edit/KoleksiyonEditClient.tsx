@@ -242,6 +242,7 @@ export function KoleksiyonEditClient() {
   const [refBase64, setRefBase64] = useState<string | null>(null);
   const [refName, setRefName] = useState("");
   const [referansGucu, setReferansGucu] = useState(0.85);
+  const [harfGirdisi, setHarfGirdisi] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Results
@@ -410,6 +411,56 @@ export function KoleksiyonEditClient() {
   }, []);
 
   // ─── Generate ───────────────────────────────────────────────────────────────
+
+  // Serif fontta harf şablonu üret (ControlNet için)
+  function generateLetterTemplate(letter: string): string {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024;
+    canvas.height = 1024;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, 1024, 1024);
+    ctx.fillStyle = "black";
+    ctx.font = "bold 720px Georgia, serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(letter.toUpperCase().charAt(0), 512, 512);
+    return canvas.toDataURL("image/png");
+  }
+
+  async function handleControlnetUret() {
+    if (!harfGirdisi.trim()) { setError("Hedef harf gerekli."); return; }
+    setError(null);
+    setLoad({ kind: "generating" });
+    setImages([]);
+    setFilenames([]);
+    try {
+      const letterTemplate = generateLetterTemplate(harfGirdisi);
+      const res = await fetch("/api/remaura/koleksiyon-edit/controlnet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          letterTemplate,
+          referansGorsel: refBase64,
+          takiTipi,
+          tema,
+          formKarakterleri,
+          metalRengi,
+          targetLetter: harfGirdisi.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "ControlNet üretimi başarısız."); return; }
+      const imgs: string[] = data.images ?? [];
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      setImages(imgs);
+      setOriginals(imgs);
+      setFilenames(imgs.map((_, i) => `remaura-cn-${ts}-${i + 1}.png`));
+    } catch (e) { setError((e as Error)?.message ?? "Bağlantı hatası."); }
+    finally { setLoad({ kind: "idle" }); }
+  }
 
   async function handleUret() {
     if (!tema.trim() && !refBase64) { setError("Tema veya referans görsel gerekli."); return; }
@@ -740,6 +791,23 @@ export function KoleksiyonEditClient() {
               />
             </div>
 
+            {/* Harf (ControlNet) */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <Label>Hedef Harf <span style={{ textTransform: "none", letterSpacing: "normal", fontWeight: 400, color: "rgba(255,255,255,0.2)" }}>(ControlNet)</span></Label>
+              <FieldInput
+                value={harfGirdisi}
+                onChange={(e) => setHarfGirdisi(e.target.value.toUpperCase().charAt(0) || "")}
+                placeholder="Örn: B"
+                maxLength={1}
+                style={{ textAlign: "center", fontSize: 20, fontWeight: 700, letterSpacing: "0.2em" }}
+              />
+              {harfGirdisi && (
+                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.25)", letterSpacing: "0.1em" }}>
+                  Referans görsel ile birlikte kullanın → stil transfer + form kontrolü
+                </span>
+              )}
+            </div>
+
             {/* Form karakteri */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <Label>Form Karakteri <span style={{ textTransform: "none", letterSpacing: "normal", fontWeight: 400, color: "rgba(255,255,255,0.2)" }}>(çoklu)</span></Label>
@@ -801,6 +869,28 @@ export function KoleksiyonEditClient() {
               {load.kind === "generating" && <Spinner />}
               {load.kind === "generating" ? "Üretiliyor…" : "Görsel Üret"}
             </button>
+
+            {/* ControlNet Üret — sadece harf girildiğinde görünür */}
+            {harfGirdisi && (
+              <button
+                type="button"
+                onClick={handleControlnetUret}
+                disabled={load.kind === "generating"}
+                style={{
+                  width: "100%", padding: "12px 0", borderRadius: 12,
+                  fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em",
+                  border: "1px solid rgba(100,160,255,0.4)",
+                  cursor: load.kind === "generating" ? "not-allowed" : "pointer",
+                  opacity: load.kind === "generating" ? 0.6 : 1,
+                  transition: "all 0.15s",
+                  background: "rgba(100,160,255,0.08)", color: "rgba(140,190,255,0.8)",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                }}
+              >
+                {load.kind === "generating" && <Spinner />}
+                {load.kind === "generating" ? "Üretiliyor…" : `ControlNet Üret  ·  ${harfGirdisi}`}
+              </button>
+            )}
 
           </div>
         </div>
