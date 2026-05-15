@@ -529,21 +529,21 @@ export function KoleksiyonEditClient() {
 
       ctx.textAlign = "right";
       ctx.textBaseline = "bottom";
-      ctx.shadowColor = "rgba(0,0,0,0.55)";
-      ctx.shadowBlur = 8;
-      ctx.shadowOffsetX = 1;
+      ctx.shadowColor = "rgba(183,110,121,0.25)";
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = 1;
 
       ctx.font = `700 ${size1}px Georgia, serif`;
-      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.fillStyle = "#b76e79";
       ctx.fillText("Trend Mücevher", x, y1);
 
       ctx.font = `400 ${size2}px Georgia, serif`;
-      ctx.fillStyle = "rgba(255,255,255,0.75)";
+      ctx.fillStyle = "rgba(183,110,121,0.8)";
       ctx.fillText("by Murat Kaynaroğlu", x, y2);
 
       ctx.font = `400 ${size3}px sans-serif`;
-      ctx.fillStyle = "rgba(255,255,255,0.6)";
+      ctx.fillStyle = "rgba(183,110,121,0.65)";
       ctx.fillText("trendmucevher.com", x, y3);
 
       URL.revokeObjectURL(objectUrl);
