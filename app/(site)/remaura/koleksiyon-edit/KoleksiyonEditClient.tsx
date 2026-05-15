@@ -551,6 +551,23 @@ export function KoleksiyonEditClient() {
       const blob = await new Promise<Blob>((res, rej) =>
         canvas.toBlob((b) => b ? res(b) : rej(new Error("toBlob failed")), "image/png")
       );
+
+      // Chrome / Edge: klasör seçtir
+      if (typeof window !== "undefined" && "showDirectoryPicker" in window) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const dirHandle = await (window as any).showDirectoryPicker();
+          const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          return;
+        } catch (e) {
+          if ((e as { name?: string })?.name === "AbortError") return;
+        }
+      }
+
+      // Firefox / Safari fallback
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
