@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TAKI_TIPI = ["Yüzük", "Kolye", "Küpe", "Bileklik", "Broş"] as const;
+const TAKI_TIPI = ["Yüzük", "Kolye", "Küpe", "Bilezik", "Broş"] as const;
 type TakiTipi = (typeof TAKI_TIPI)[number];
 
 const FORM_KARAKTERLERI = [
