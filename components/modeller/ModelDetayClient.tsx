@@ -495,14 +495,17 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
               ))}
             </div>
 
-            {/* Watermark */}
-            <div style={{ position: 'absolute', bottom: 44, right: 10, pointerEvents: 'none', textAlign: 'right', userSelect: 'none' }}>
-              <div style={{ fontSize: 11, fontFamily: 'Georgia, serif', fontWeight: 700, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.05em', lineHeight: 1.4, textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>
-                trendmucevher.com
-              </div>
-              <div style={{ fontSize: 9, fontFamily: 'Georgia, serif', fontWeight: 400, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.05em', textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>
-                by Murat Kaynaroğlu
-              </div>
+            {/* Watermark — tekrar eden desen */}
+            <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', userSelect: 'none', overflow: 'hidden' }}>
+              <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <pattern id="wm" x="0" y="0" width="220" height="100" patternUnits="userSpaceOnUse" patternTransform="rotate(-30)">
+                    <text x="0" y="20" fontFamily="Georgia, serif" fontWeight="700" fontSize="11" fill="rgba(255,255,255,0.12)" letterSpacing="1">trendmucevher.com</text>
+                    <text x="0" y="36" fontFamily="Georgia, serif" fontWeight="400" fontSize="9" fill="rgba(255,255,255,0.09)" letterSpacing="0.5">by Murat Kaynaroğlu</text>
+                  </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#wm)" />
+              </svg>
             </div>
           </div>
 
