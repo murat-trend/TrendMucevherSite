@@ -214,7 +214,13 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
 
     const fetchSigned = async (rawUrl: string): Promise<string | null> => {
       try {
-        const key = new URL(rawUrl).pathname.slice(1) // "models/xxx.glb"
+        // Hem tam URL (https://...) hem relative path (models/xxx.glb) destekle
+        let key: string
+        if (/^https?:\/\//i.test(rawUrl)) {
+          key = new URL(rawUrl).pathname.slice(1)
+        } else {
+          key = rawUrl.startsWith('/') ? rawUrl.slice(1) : rawUrl
+        }
         const res = await fetch(`/api/r2-signed-url?key=${encodeURIComponent(key)}&bucket=private`)
         if (!res.ok) return null
         const json = await res.json() as { url?: string }
