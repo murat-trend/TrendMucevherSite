@@ -16,11 +16,15 @@ const s3 = new S3Client({
 });
 
 export async function GET(req: NextRequest) {
-  const cookieStore = await cookies();
-  const supabase = createClient(cookieStore);
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Oturum gerekli" }, { status: 401 });
+  const requireAuth = req.nextUrl.searchParams.get("auth") === "true";
+
+  if (requireAuth) {
+    const cookieStore = await cookies();
+    const supabase = createClient(cookieStore);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Oturum gerekli" }, { status: 401 });
+    }
   }
 
   const key = req.nextUrl.searchParams.get("key");

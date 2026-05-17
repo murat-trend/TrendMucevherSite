@@ -115,7 +115,7 @@ export default function IndirPage({ params }: { params: Promise<{ token: string 
     let signedUrl: string = rawUrl;
     try {
       const key = new URL(rawUrl).pathname.slice(1); // "models/xxx.glb"
-      const res = await fetch(`/api/r2-signed-url?key=${encodeURIComponent(key)}&bucket=private`);
+      const res = await fetch(`/api/r2-signed-url?key=${encodeURIComponent(key)}&bucket=private&auth=true`);
       if (res.ok) {
         const json = await res.json() as { url?: string };
         if (json.url) signedUrl = json.url;
