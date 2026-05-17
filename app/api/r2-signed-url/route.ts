@@ -49,7 +49,10 @@ export async function GET(req: NextRequest) {
       Key: key,
     });
 
-    const url = await getSignedUrl(s3, command, { expiresIn: 3600 });
+    const url = await getSignedUrl(s3, command, {
+      expiresIn: 3600,
+      unhoistableHeaders: new Set(["x-amz-checksum-mode"]),
+    });
     return NextResponse.json({ url });
   } catch (err: unknown) {
     console.error("[r2-signed-url] hata:", err);
