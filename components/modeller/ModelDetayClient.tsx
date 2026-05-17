@@ -205,22 +205,45 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
   const rawStlHref = product.stlUrl && String(product.stlUrl).trim() !== '' ? String(product.stlUrl).trim() : null
   const stlUrl = rawStlHref ? resolvePublicModelAssetUrl(rawStlHref) : null
 
+  const [signedGlbUrl, setSignedGlbUrl] = useState<string | null>(null)
+  const [signedStlUrl, setSignedStlUrl] = useState<string | null>(null)
   const [glbReachable, setGlbReachable] = useState<boolean | null>(null)
+
   useEffect(() => {
-    if (!glbUrl) { setGlbReachable(false); return }
-    if (typeof window !== 'undefined') {
-      try {
-        const u = new URL(glbUrl, window.location.origin)
-        if (u.origin !== window.location.origin) { setGlbReachable(true); return }
-      } catch { setGlbReachable(true); return }
-    }
     let alive = true
-    setGlbReachable(null)
-    fetch(glbUrl, { method: 'HEAD', cache: 'no-store' })
-      .then((r) => { if (alive) setGlbReachable(r.ok) })
-      .catch(() => { if (alive) setGlbReachable(false) })
+
+    const fetchSigned = async (rawUrl: string): Promise<string | null> => {
+      try {
+        const key = new URL(rawUrl).pathname.slice(1) // "models/xxx.glb"
+        const res = await fetch(`/api/r2-signed-url?key=${encodeURIComponent(key)}&bucket=private`)
+        if (!res.ok) return null
+        const json = await res.json() as { url?: string }
+        return json.url ?? null
+      } catch {
+        return null
+      }
+    }
+
+    const load = async () => {
+      if (glbUrl) {
+        setGlbReachable(null)
+        const signed = await fetchSigned(glbUrl)
+        if (!alive) return
+        setSignedGlbUrl(signed)
+        setGlbReachable(signed !== null)
+      } else {
+        setGlbReachable(false)
+      }
+      if (stlUrl) {
+        const signed = await fetchSigned(stlUrl)
+        if (!alive) return
+        setSignedStlUrl(signed)
+      }
+    }
+
+    void load()
     return () => { alive = false }
-  }, [glbUrl])
+  }, [glbUrl, stlUrl])
 
   const viewImageList = (product.images && product.images.length > 0)
     ? product.images
@@ -413,11 +436,11 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
             style={{ background: '#111', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '2px', aspectRatio: '1', overflow: 'hidden', position: 'relative' }}
           >
             <div suppressHydrationWarning style={{ width: '100%', height: '100%' }}>
-              {glbUrl && glbReachable === true && viewerReady ? (
+              {signedGlbUrl && glbReachable === true && viewerReady ? (
                 /* @ts-expect-error model-viewer is a custom element */
                 <model-viewer
-                  key={glbUrl}
-                  src={glbUrl}
+                  key={signedGlbUrl}
+                  src={signedGlbUrl}
                   alt={productName}
                   suppressHydrationWarning
                   auto-rotate
@@ -432,7 +455,7 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
                   environment-image="https://modelviewer.dev/shared-assets/environments/moon_1k.hdr"
                   style={{ width: '100%', height: '100%', display: 'block', background: '#111111', '--poster-color': '#111111' } as React.CSSProperties}
                 />
-              ) : glbUrl && glbReachable === true && !viewerReady ? (
+              ) : signedGlbUrl && glbReachable === true && !viewerReady ? (
                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6f6a63', fontSize: '12px', letterSpacing: '0.08em' }}>
                   3D viewer yukleniyor...
                 </div>
@@ -440,8 +463,8 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6f6a63', fontSize: '12px', letterSpacing: '0.08em' }}>
                   {copy.viewerGlbChecking}
                 </div>
-              ) : stlUrl && (!glbUrl || glbReachable === false) ? (
-                <ModellerStlPreview stlUrl={stlUrl} />
+              ) : signedStlUrl && (!glbUrl || glbReachable === false) ? (
+                <ModellerStlPreview stlUrl={signedStlUrl} />
               ) : glbUrl && glbReachable === false && !stlUrl ? (
                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', textAlign: 'center', color: '#8a7060', fontSize: '12px', letterSpacing: '0.05em', lineHeight: 1.6 }}>
                   {copy.viewerGlbMissing}

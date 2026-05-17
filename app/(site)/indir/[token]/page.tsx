@@ -89,41 +89,59 @@ export default function IndirPage({ params }: { params: Promise<{ token: string 
     setDownloading(true);
     const supabase = createClient();
 
-    let url: string | null | undefined;
+    let rawUrl: string | null | undefined;
     let fileLabel = order.product_name ?? "model";
 
     const snapGlb = order.download_glb_url?.trim() || null;
     const snapStl = order.download_stl_url?.trim() || null;
-    if (format === "glb") {
-      url = snapGlb ?? undefined;
-    } else {
-      url = snapStl ?? undefined;
-    }
+    rawUrl = format === "glb" ? (snapGlb ?? undefined) : (snapStl ?? undefined);
 
-    if (!url && order.product_id) {
+    if (!rawUrl && order.product_id) {
       const { data: product } = await supabase
         .from("products_3d")
         .select("glb_url, stl_url, name")
         .eq("id", order.product_id)
         .maybeSingle();
-      url = format === "glb" ? product?.glb_url : product?.stl_url;
+      rawUrl = format === "glb" ? product?.glb_url : product?.stl_url;
       if (product?.name) fileLabel = product.name;
     }
 
-    if (!url) {
+    if (!rawUrl) {
       setDownloading(false);
       return;
     }
+
+    // R2 key'ini çıkar ve signed URL al
+    let signedUrl: string = rawUrl;
+    try {
+      const key = new URL(rawUrl).pathname.slice(1); // "models/xxx.glb"
+      const res = await fetch(`/api/r2-signed-url?key=${encodeURIComponent(key)}&bucket=private`);
+      if (res.ok) {
+        const json = await res.json() as { url?: string };
+        if (json.url) signedUrl = json.url;
+      }
+    } catch { /* signed URL alınamazsa rawUrl ile devam */ }
 
     await supabase
       .from("orders")
       .update({ download_count: (order.download_count ?? 0) + 1 })
       .eq("download_token", token);
 
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${fileLabel}.${format}`;
-    a.click();
+    // Blob olarak indir — cross-origin URL'lerde a.download çalışmaz
+    try {
+      const fileRes = await fetch(signedUrl);
+      const blob = await fileRes.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `${fileLabel}.${format}`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch {
+      // Son çare: direkt aç
+      window.open(signedUrl, "_blank");
+    }
+
     setDownloading(false);
   };
 
