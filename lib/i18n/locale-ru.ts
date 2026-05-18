@@ -316,6 +316,18 @@ export const ruMessages = {
     discover: "Узнать Remaura AI",
     pricing: "Цены",
   },
+  remauraNav: {
+    jewelryDesign: "Дизайн украшений",
+    backgroundRemoval: "Удаление фона",
+    photoEdit: "Редактор фото",
+    removeObject: "Удалить объект",
+    ai3d: "Remaura AI 3D",
+    convert3d: "3D Конвертер",
+    videoOptimize: "Оптимизация видео",
+    webmToMp4: "WebM → MP4",
+    studio: "Студия",
+    kolleksiyonEdit: "Редактор коллекций",
+  },
   remauraWorkspace: {
     title: "Trend Mücevher",
     heroTitle: "REMAURA",

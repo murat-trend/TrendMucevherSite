@@ -9,6 +9,7 @@ import { UtilityCluster } from "@/components/layout/UtilityCluster";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { createClient } from "@/utils/supabase/client";
+import { REMAURA_CATEGORIES } from "@/lib/remaura-nav";
 
 type NavKey = "home" | "modeller" | "customOrder" | "remaura" | "daily" | "contact" | "superAdmin";
 type NavItem =
@@ -155,42 +156,17 @@ export function Header() {
                       </Link>
                       {/* Dropdown */}
                       <div className="invisible absolute left-0 top-full z-20 mt-2 min-w-[220px] rounded-xl border border-border bg-card/95 p-2 opacity-0 shadow-2xl backdrop-blur transition-all duration-200 group-hover:visible group-hover:opacity-100">
-                        <Link href="/remaura?category=jewelry" className="block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                          {t.remauraWorkspace.categoryJewelryDesign}
-                        </Link>
-                        <Link href="/remaura/arka-plan-kaldir" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                          {t.remauraWorkspace.categoryBackgroundRemoval}
-                        </Link>
-                        <Link href="/remaura/foto-edit" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                          {t.remauraWorkspace.categoryPhotoEdit}
-                        </Link>
-                        <Link href="/remaura/nesne-kaldir" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                          {t.nav.nesneKaldir ?? "Nesne Kaldır"}
-                        </Link>
-                        <Link href="/remaura?category=mesh3d" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                          Remaura AI 3D <span className="text-[10px] font-normal text-muted">(görüntüden 3D)</span>
-                        </Link>
-                        <Link href="/convert" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                          3D Dönüştürücü
-                        </Link>
-                        <Link href="/remaura/video-optimize" className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                          Video Optimizasyonu
-                        </Link>
-                        <Link href="/remaura/webm-to-mp4" onClick={() => setMobileMenuOpen(false)} className="mt-1 block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                          WebM → MP4
-                        </Link>
-                        <div className="my-1.5 border-t border-border/60" />
-                        <Link href="/studio" className="block rounded-lg px-3 py-2 text-xs font-medium text-foreground/85 transition-colors hover:bg-foreground/5 hover:text-foreground">
-                          Studio
-                        </Link>
-                        {session?.isSuperAdmin && (
-                          <>
-                            <div className="my-1.5 border-t border-border/60" />
-                            <Link href="/remaura/koleksiyon-edit" className="block rounded-lg px-3 py-2 text-xs font-medium text-[#b76e79]/80 transition-colors hover:bg-foreground/5 hover:text-[#b76e79]">
-                              Koleksiyon Edit
-                            </Link>
-                          </>
-                        )}
+                        {REMAURA_CATEGORIES.filter(cat => !cat.isSuperAdminOnly || session?.isSuperAdmin).map((cat, i) => (
+                          <Link
+                            key={cat.id}
+                            href={cat.path}
+                            className={`${i > 0 ? 'mt-1' : ''} block rounded-lg px-3 py-2 text-xs font-medium transition-colors hover:bg-foreground/5 ${
+                              cat.isSuperAdminOnly ? 'text-[#b76e79]/80 hover:text-[#b76e79]' : 'text-foreground/85 hover:text-foreground'
+                            }`}
+                          >
+                            {t.remauraNav[cat.labelKey]}
+                          </Link>
+                        ))}
                       </div>
                     </div>
                   );
@@ -535,20 +511,14 @@ export function Header() {
                         {t.nav[item.key]}
                       </Link>
                       <div className="mt-2 flex flex-col">
-                        {[
-                          { href: "/remaura?category=jewelry", label: t.remauraWorkspace.categoryJewelryDesign },
-                          { href: "/remaura/arka-plan-kaldir", label: t.remauraWorkspace.categoryBackgroundRemoval },
-                          { href: "/remaura/foto-edit", label: t.remauraWorkspace.categoryPhotoEdit },
-                          { href: "/remaura/nesne-kaldir", label: t.nav.nesneKaldir ?? "Nesne Kaldır" },
-                          { href: "/remaura?category=mesh3d", label: "Remaura AI 3D (görüntüden 3D)" },
-                          { href: "/convert", label: "3D Dönüştürücü" },
-                          { href: "/remaura/video-optimize", label: "Video Optimizasyonu" },
-                          { href: "/remaura/webm-to-mp4", label: "WebM → MP4" },
-                          { href: "/studio", label: "Studio" },
-                          ...(session?.isSuperAdmin ? [{ href: "/remaura/koleksiyon-edit", label: "Koleksiyon Edit" }] : []),
-                        ].map((link) => (
-                          <Link key={link.href} href={link.href} onClick={() => setMobileMenuOpen(false)} className="rounded-lg px-2 py-2 text-[13px] text-foreground/85 hover:bg-foreground/[0.02]">
-                            {link.label}
+                        {REMAURA_CATEGORIES.filter(cat => !cat.isSuperAdminOnly || session?.isSuperAdmin).map((cat) => (
+                          <Link
+                            key={cat.id}
+                            href={cat.path}
+                            onClick={() => setMobileMenuOpen(false)}
+                            className="rounded-lg px-2 py-2 text-[13px] text-foreground/85 hover:bg-foreground/[0.02]"
+                          >
+                            {t.remauraNav[cat.labelKey]}
                           </Link>
                         ))}
                       </div>

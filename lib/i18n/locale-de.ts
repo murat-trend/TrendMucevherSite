@@ -316,6 +316,18 @@ export const deMessages = {
     discover: "Remaura AI entdecken",
     pricing: "Preise",
   },
+  remauraNav: {
+    jewelryDesign: "Schmuckdesign",
+    backgroundRemoval: "Hintergrund entfernen",
+    photoEdit: "Foto bearbeiten",
+    removeObject: "Objekt entfernen",
+    ai3d: "Remaura AI 3D",
+    convert3d: "3D-Konverter",
+    videoOptimize: "Videooptimierung",
+    webmToMp4: "WebM → MP4",
+    studio: "Studio",
+    kolleksiyonEdit: "Kollektion bearbeiten",
+  },
   remauraWorkspace: {
     title: "Trend Mücevher",
     heroTitle: "REMAURA",
