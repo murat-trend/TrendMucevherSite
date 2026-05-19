@@ -191,7 +191,7 @@ export function ModellerStlPreview({ stlUrl }: { stlUrl: string }) {
           style={{
             width: '70%',
             maxWidth: '320px',
-            opacity: 0.25,
+            opacity: 0.55,
             mixBlendMode: 'screen',
             pointerEvents: 'none',
           }}
