@@ -3,6 +3,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { RemauraWorkspace } from "@/components/remaura/RemauraWorkspace";
 import { RemauraLocalizedLandingHeader } from "@/components/remaura/RemauraLocalizedLandingHeader";
+import { RemauraAccessGate } from "@/components/remaura/RemauraAccessGate";
 import { createClient } from "@/utils/supabase/server";
 import { isRemauraSuperAdminUserId } from "@/lib/billing/super-admin";
 
@@ -111,10 +112,12 @@ export default async function RemauraPage() {
   ) : null;
 
   return (
-    <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <RemauraLocalizedLandingHeader variant="main" />
-      <RemauraWorkspace adminNavLink={adminNavLink} />
-    </>
+    <RemauraAccessGate categoryId="jewelry">
+      <>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        <RemauraLocalizedLandingHeader variant="main" />
+        <RemauraWorkspace adminNavLink={adminNavLink} />
+      </>
+    </RemauraAccessGate>
   );
 }

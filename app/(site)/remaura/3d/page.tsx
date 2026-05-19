@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Remaura3DLanding } from "./Remaura3DLanding";
+import { RemauraAccessGate } from "@/components/remaura/RemauraAccessGate";
 
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://trendmucevher.com").replace(/\/$/, "");
 const pageUrl = `${siteUrl}/remaura/3d`;
@@ -20,5 +21,9 @@ export const metadata: Metadata = {
 };
 
 export default function Remaura3DPage() {
-  return <Remaura3DLanding />;
+  return (
+    <RemauraAccessGate categoryId="mesh3d">
+      <Remaura3DLanding />
+    </RemauraAccessGate>
+  );
 }

@@ -6,6 +6,7 @@ import {
   RemauraBillingModalProvider,
   useRemauraBillingModal,
 } from "@/components/remaura/RemauraBillingModalProvider";
+import { RemauraAccessGate } from "@/components/remaura/RemauraAccessGate";
 import { useRemauraCreditsCheck } from "@/hooks/useRemauraCreditsCheck";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 
@@ -750,8 +751,10 @@ function NesneKaldirPageContent() {
 
 export default function NesneKaldirPage() {
   return (
-    <RemauraBillingModalProvider>
-      <NesneKaldirPageContent />
-    </RemauraBillingModalProvider>
+    <RemauraAccessGate categoryId="nesne-kaldir">
+      <RemauraBillingModalProvider>
+        <NesneKaldirPageContent />
+      </RemauraBillingModalProvider>
+    </RemauraAccessGate>
   );
 }
