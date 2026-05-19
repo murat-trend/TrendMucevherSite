@@ -505,7 +505,7 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
               userSelect: 'none',
               zIndex: 10,
               overflow: 'hidden',
-              display: modelLoaded ? 'flex' : 'none',
+              display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}>
