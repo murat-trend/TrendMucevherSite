@@ -21,7 +21,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/modeller", key: "modeller" },
   { href: "/ozel-siparis", key: "customOrder" },
   { href: "/egitim/matrixgold", label: "Eğitim" },
-  { href: "/remaura", key: "remaura", adminOnly: true },
+  { href: "/remaura", key: "remaura" },
   { href: "/gunluk", key: "daily" },
   { href: "/iletisim", key: "contact" },
   { href: "/admin", key: "superAdmin", adminOnly: true },

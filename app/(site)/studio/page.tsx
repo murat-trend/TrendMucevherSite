@@ -6,6 +6,7 @@ import {
   RemauraBillingModalProvider,
   useRemauraBillingModal,
 } from "@/components/remaura/RemauraBillingModalProvider"
+import { RemauraAccessGate } from "@/components/remaura/RemauraAccessGate"
 import { useRemauraCreditsCheck } from "@/hooks/useRemauraCreditsCheck"
 import { useLanguage } from "@/components/i18n/LanguageProvider"
 import { FFmpeg } from "@ffmpeg/ffmpeg"
@@ -43,9 +44,11 @@ async function ffmpegDeleteQuiet(ffmpeg: FFmpeg, name: string) {
 
 export default function SesStudioPage() {
   return (
-    <RemauraBillingModalProvider>
-      <SesStudioPageInner />
-    </RemauraBillingModalProvider>
+    <RemauraAccessGate categoryId="studio">
+      <RemauraBillingModalProvider>
+        <SesStudioPageInner />
+      </RemauraBillingModalProvider>
+    </RemauraAccessGate>
   )
 }
 

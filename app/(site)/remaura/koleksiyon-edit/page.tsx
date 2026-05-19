@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { isRemauraSuperAdminUserId } from "@/lib/billing/super-admin";
 import { KoleksiyonEditClient } from "./KoleksiyonEditClient";
+import { RemauraAccessGate } from "@/components/remaura/RemauraAccessGate";
 
 export const metadata = {
   robots: { index: false, follow: false },
@@ -28,5 +29,9 @@ export default async function KoleksiyonEditPage() {
     redirect("/remaura");
   }
 
-  return <KoleksiyonEditClient />;
+  return (
+    <RemauraAccessGate categoryId="koleksiyon-edit">
+      <KoleksiyonEditClient />
+    </RemauraAccessGate>
+  );
 }
