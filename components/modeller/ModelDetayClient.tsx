@@ -273,6 +273,7 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
   const [activeImage, setActiveImage] = useState<string | null>(null)
   const [selectedLicense, setSelectedLicense] = useState<'personal' | 'commercial'>('personal')
   const [viewerReady, setViewerReady] = useState(false)
+  const [modelLoaded, setModelLoaded] = useState(false)
   const viewerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -460,6 +461,7 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
                   exposure="1.2"
                   environment-image="https://modelviewer.dev/shared-assets/environments/moon_1k.hdr"
                   style={{ width: '100%', height: '100%', display: 'block', background: '#111111', '--poster-color': '#111111' } as React.CSSProperties}
+                  onLoad={() => setModelLoaded(true)}
                 />
               ) : signedGlbUrl && glbReachable === true && !viewerReady ? (
                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6f6a63', fontSize: '12px', letterSpacing: '0.08em' }}>
@@ -503,7 +505,7 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
               userSelect: 'none',
               zIndex: 10,
               overflow: 'hidden',
-              display: 'flex',
+              display: modelLoaded ? 'flex' : 'none',
               alignItems: 'center',
               justifyContent: 'center',
             }}>
@@ -521,6 +523,18 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
                   pointerEvents: 'none',
                 }}
               />
+              <svg
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <defs>
+                  <pattern id="wm-pattern" x="0" y="0" width="220" height="100" patternUnits="userSpaceOnUse" patternTransform="rotate(-30)">
+                    <text x="0" y="20" fontFamily="Georgia, serif" fontWeight="700" fontSize="11" fill="rgba(255,255,255,0.12)" letterSpacing="1">trendmucevher.com</text>
+                    <text x="0" y="36" fontFamily="Georgia, serif" fontWeight="400" fontSize="9" fill="rgba(255,255,255,0.09)" letterSpacing="0.5">by Murat Kaynaroğlu</text>
+                  </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#wm-pattern)" />
+              </svg>
             </div>
           </div>
 

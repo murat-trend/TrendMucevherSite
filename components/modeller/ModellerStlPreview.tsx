@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
@@ -16,6 +16,7 @@ function loaderUrlForFetch(modelUrl: string): string {
 export function ModellerStlPreview({ stlUrl }: { stlUrl: string }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
+  const [modelLoaded, setModelLoaded] = useState(false);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
@@ -153,6 +154,7 @@ export function ModellerStlPreview({ stlUrl }: { stlUrl: string }) {
         group.updateMatrixWorld(true);
 
         modelRootRef.current = group;
+        setModelLoaded(true);
 
         if (controls) {
           const fh = b2.max.y - b2.min.y;
@@ -178,7 +180,7 @@ export function ModellerStlPreview({ stlUrl }: { stlUrl: string }) {
         userSelect: 'none',
         zIndex: 10,
         overflow: 'hidden',
-        display: 'flex',
+        display: modelLoaded ? 'flex' : 'none',
         alignItems: 'center',
         justifyContent: 'center',
       }}>
@@ -196,6 +198,18 @@ export function ModellerStlPreview({ stlUrl }: { stlUrl: string }) {
             pointerEvents: 'none',
           }}
         />
+        <svg
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            <pattern id="wm-pattern-stl" x="0" y="0" width="220" height="100" patternUnits="userSpaceOnUse" patternTransform="rotate(-30)">
+              <text x="0" y="20" fontFamily="Georgia, serif" fontWeight="700" fontSize="11" fill="rgba(255,255,255,0.12)" letterSpacing="1">trendmucevher.com</text>
+              <text x="0" y="36" fontFamily="Georgia, serif" fontWeight="400" fontSize="9" fill="rgba(255,255,255,0.09)" letterSpacing="0.5">by Murat Kaynaroğlu</text>
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#wm-pattern-stl)" />
+        </svg>
       </div>
     </div>
   );
