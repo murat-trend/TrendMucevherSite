@@ -167,5 +167,36 @@ export function ModellerStlPreview({ stlUrl }: { stlUrl: string }) {
     );
   }, [stlUrl]);
 
-  return <div ref={mountRef} className="h-full w-full min-h-[200px]" />;
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: '200px' }}>
+      <div ref={mountRef} style={{ position: 'absolute', inset: 0 }} />
+      {/* Watermark */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        pointerEvents: 'none',
+        userSelect: 'none',
+        zIndex: 10,
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+        <video
+          src="/rem-watermark.webm"
+          autoPlay
+          loop
+          muted
+          playsInline
+          style={{
+            width: '70%',
+            maxWidth: '320px',
+            opacity: 0.09,
+            mixBlendMode: 'multiply',
+            pointerEvents: 'none',
+          }}
+        />
+      </div>
+    </div>
+  );
 }
