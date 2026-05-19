@@ -495,16 +495,77 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
               ))}
             </div>
 
-            {/* Watermark — tekrar eden desen */}
-            <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', userSelect: 'none', overflow: 'hidden' }}>
-              <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+            {/* Watermark */}
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              pointerEvents: 'none',
+              userSelect: 'none',
+              zIndex: 10,
+              overflow: 'hidden',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '6px',
+                opacity: 0.13,
+                animation: 'none',
+              }}>
+                <img
+                  src="/rem-icon-128.png"
+                  alt=""
+                  draggable={false}
+                  style={{
+                    width: '72px',
+                    height: '72px',
+                    objectFit: 'contain',
+                    filter: 'grayscale(0.3) brightness(1.4)',
+                    animation: 'wm-spin 12s linear infinite',
+                  }}
+                />
+                <span style={{
+                  fontFamily: 'Georgia, serif',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.12em',
+                  color: 'rgba(255,255,255,0.9)',
+                  textTransform: 'uppercase',
+                  whiteSpace: 'nowrap',
+                }}>
+                  Trend Mücevher
+                </span>
+                <span style={{
+                  fontFamily: 'Georgia, serif',
+                  fontSize: '9px',
+                  fontWeight: 400,
+                  letterSpacing: '0.08em',
+                  color: 'rgba(255,255,255,0.75)',
+                  whiteSpace: 'nowrap',
+                }}>
+                  by Murat Kaynaroğlu
+                </span>
+              </div>
+              <svg
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+                xmlns="http://www.w3.org/2000/svg"
+              >
                 <defs>
-                  <pattern id="wm" x="0" y="0" width="220" height="100" patternUnits="userSpaceOnUse" patternTransform="rotate(-30)">
-                    <text x="0" y="20" fontFamily="Georgia, serif" fontWeight="700" fontSize="11" fill="rgba(255,255,255,0.12)" letterSpacing="1">trendmucevher.com</text>
-                    <text x="0" y="36" fontFamily="Georgia, serif" fontWeight="400" fontSize="9" fill="rgba(255,255,255,0.09)" letterSpacing="0.5">by Murat Kaynaroğlu</text>
+                  <pattern
+                    id="wm-pattern"
+                    x="0" y="0"
+                    width="200" height="90"
+                    patternUnits="userSpaceOnUse"
+                    patternTransform="rotate(-30)"
+                  >
+                    <text x="0" y="20" fontFamily="Georgia, serif" fontWeight="700" fontSize="12" fill="rgba(255,255,255,0.18)" letterSpacing="1">trendmucevher.com</text>
+                    <text x="0" y="36" fontFamily="Georgia, serif" fontWeight="400" fontSize="9" fill="rgba(255,255,255,0.14)" letterSpacing="0.5">by Murat Kaynaroğlu</text>
                   </pattern>
                 </defs>
-                <rect width="100%" height="100%" fill="url(#wm)" />
+                <rect width="100%" height="100%" fill="url(#wm-pattern)" />
               </svg>
             </div>
           </div>
