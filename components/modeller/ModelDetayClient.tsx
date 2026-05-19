@@ -516,8 +516,8 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
                 style={{
                   width: '70%',
                   maxWidth: '320px',
-                  opacity: 0.09,
-                  mixBlendMode: 'multiply',
+                  opacity: 0.25,
+                  mixBlendMode: 'screen',
                   pointerEvents: 'none',
                 }}
               />
