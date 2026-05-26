@@ -221,8 +221,9 @@ export async function POST(req: Request) {
       ];
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await fal.subscribe("fal-ai/flux-general", {
-      input,
+      input: input as any,
       logs: false,
     });
 
