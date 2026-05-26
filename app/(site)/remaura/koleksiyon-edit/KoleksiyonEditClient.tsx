@@ -811,7 +811,7 @@ export function KoleksiyonEditClient() {
 
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         {/* ── Left panel ─────────────────────────────────────────────────── */}
-        <div style={{ width: 340, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.06)", overflowY: "auto" }}>
+        <div style={{ width: 340, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.06)", overflowY: "auto", minHeight: "calc(100vh - 49px)" }}>
           <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 20 }}>
 
             {/* Referans görsel */}
@@ -1088,15 +1088,22 @@ export function KoleksiyonEditClient() {
         </div>
 
         {/* ── Right panel ────────────────────────────────────────────────── */}
-        <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: 20, minHeight: "calc(100vh - 49px)" }}>
 
           {load.kind === "generating" && <GridSkeleton />}
 
           {load.kind !== "generating" && images.length === 0 && (
             <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <p style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.35em", color: "rgba(255,255,255,0.1)" }}>
-                Görseller burada görünecek
-              </p>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1">
+                  <rect x="3" y="3" width="18" height="18" rx="3"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <path d="M21 15l-5-5L5 21"/>
+                </svg>
+                <p style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.35em", color: "rgba(255,255,255,0.08)", textAlign: "center", lineHeight: 2 }}>
+                  Tema gir ve<br/>Görsel Üret&apos;e bas
+                </p>
+              </div>
             </div>
           )}
 
