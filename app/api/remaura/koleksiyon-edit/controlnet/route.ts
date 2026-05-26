@@ -134,6 +134,7 @@ export async function POST(req: Request) {
     formKarakterleri?: string[];
     metalRengi?: string;
     targetLetter?: string;    // Hedef harf (B, C, vs.)
+    referansGucu?: number;    // IP-Adapter scale (0.3–1.0)
   };
 
   const {
@@ -144,6 +145,7 @@ export async function POST(req: Request) {
     formKarakterleri,
     metalRengi,
     targetLetter = "",
+    referansGucu = 0.75,
   } = body;
 
   if (!letterTemplate) {
@@ -191,27 +193,32 @@ export async function POST(req: Request) {
   const seed = Math.floor(Math.random() * 1_000_000);
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const input: any = {
+    const input: Record<string, unknown> = {
       prompt,
       controlnets: [
         {
           path: "InstantX/FLUX.1-dev-Controlnet-Canny",
           control_image_url: templateUrl,
-          conditioning_scale: 0.6,
+          conditioning_scale: 0.80,
         },
       ],
       num_images: 1,
       seed,
       image_size: "square_hd",
-      num_inference_steps: 28,
+      num_inference_steps: 32,
       guidance_scale: 3.5,
       output_format: "jpeg",
     };
 
-    // Referans görsel varsa IP-Adapter style olarak ekle
+    // Referans görsel varsa IP-Adapter ile stil transferi yap
     if (refUrl) {
-      input.image_url = refUrl;
+      input.ip_adapters = [
+        {
+          path: "XLabs-AI/flux-ip-adapter",
+          image_url: refUrl,
+          scale: referansGucu,
+        },
+      ];
     }
 
     const result = await fal.subscribe("fal-ai/flux-general", {

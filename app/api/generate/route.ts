@@ -299,7 +299,7 @@ export async function POST(req: Request) {
       );
 
       const editResult = await client.images.edit({
-        model: "gpt-image-1.5",
+        model: "gpt-image-2",
         image: files.length === 1 ? files[0]! : files,
         prompt: editPrompt,
         size: size === "auto" ? "1024x1024" : size,
@@ -309,7 +309,7 @@ export async function POST(req: Request) {
       imageBase64 = editResult.data?.[0]?.b64_json;
     } else {
       const result = await client.images.generate({
-        model: "gpt-image-1.5",
+        model: "gpt-image-2",
         prompt: promptForImageModel,
         size: size === "auto" ? "auto" : size,
         quality: "high",
@@ -364,25 +364,35 @@ export async function POST(req: Request) {
       estimatedCostUsd: 0.2,
       message: errMsg || "generate_error",
     });
+
     if (err?.status === 401 || err?.code === "invalid_api_key") {
       return NextResponse.json(
-        {
-          error:
-            "API anahtarı geçersiz. https://platform.openai.com/api-keys adresinden yeni anahtar oluşturun. .env.local dosyasında OPENAI_API_KEY=sk-proj-xxx formatında (tırnak yok, boşluk yok) kaydedin.",
-        },
+        { error: "API anahtarı geçersiz. https://platform.openai.com/api-keys adresinden yeni anahtar oluşturun. .env.local dosyasında OPENAI_API_KEY=sk-proj-xxx formatında (tırnak yok, boşluk yok) kaydedin." },
         { status: 401 }
       );
     }
-    const isSafetyRejection = err?.status === 400 || /safety|rejected|content_policy/i.test(errMsg);
-    if (isSafetyRejection) {
+
+    if (err?.code === "model_not_found" || /model.*not.*found|no such model/i.test(errMsg)) {
       return NextResponse.json(
-        {
-          error:
-            "İstek güvenlik filtresi tarafından reddedildi. Promptu sadeleştirmeyi veya farklı bir ifade denemeyi deneyin. Hata devam ederse help.openai.com ile iletişime geçin.",
-        },
+        { error: "Model bulunamadı. Lütfen yönetici ile iletişime geçin." },
         { status: 400 }
       );
     }
+
+    if (err?.status === 429) {
+      return NextResponse.json(
+        { error: "Çok fazla istek. Lütfen biraz bekleyin." },
+        { status: 429 }
+      );
+    }
+
+    if (err?.code === "content_policy_violation" || err?.status === 400 || /safety|rejected|content_policy/i.test(errMsg)) {
+      return NextResponse.json(
+        { error: "İstek güvenlik filtresi tarafından reddedildi. Promptu sadeleştirmeyi veya farklı bir ifade denemeyi deneyin. Hata devam ederse help.openai.com ile iletişime geçin." },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
       { error: typeof errMsg === "string" && errMsg ? errMsg : "Sunucu hatası" },
       { status: 500 }

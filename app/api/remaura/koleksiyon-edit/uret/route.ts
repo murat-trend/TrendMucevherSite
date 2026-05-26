@@ -193,7 +193,7 @@ export async function POST(req: Request) {
         image_size: "square_hd",
         enhance_prompt: false,
         guidance_scale: 7,
-        num_inference_steps: 28,
+        num_inference_steps: 32,
         safety_tolerance: "5",
         output_format: "jpeg",
       } as any,

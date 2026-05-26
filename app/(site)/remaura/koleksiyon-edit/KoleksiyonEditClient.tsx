@@ -243,6 +243,7 @@ export function KoleksiyonEditClient() {
   const [refName, setRefName] = useState("");
   const [referansGucu, setReferansGucu] = useState(0.85);
   const [harfGirdisi, setHarfGirdisi] = useState("");
+  const [varyasyonSayisi, setVaryasyonSayisi] = useState(1);
 
   // GPT-4o analiz sonucu
   type AnalizSonucu = {
@@ -277,6 +278,21 @@ export function KoleksiyonEditClient() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const maskImgRef = useRef<HTMLImageElement>(null);
   const isDrawingRef = useRef(false);
+
+  const [kaydediliyor, setKaydediliyor] = useState<number | null>(null);
+  const [kaydedildi, setKaydedildi] = useState<Set<number>>(new Set());
+
+  type PromptGecmisi = {
+    id: string;
+    tarih: string;
+    takiTipi: string;
+    tema: string;
+    metalRengi: string;
+    seed?: number;
+    gorselUrl: string;
+  };
+  const [promptGecmisi, setPromptGecmisi] = useState<PromptGecmisi[]>([]);
+  const [gecmisAcik, setGecmisAcik] = useState(false);
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -474,6 +490,7 @@ export function KoleksiyonEditClient() {
           formKarakterleri,
           metalRengi,
           targetLetter: harfGirdisi.trim(),
+          referansGucu,
         }),
       });
       const data = await res.json();
@@ -483,6 +500,15 @@ export function KoleksiyonEditClient() {
       const pad = (n: number) => String(n).padStart(2, "0");
       const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
       setImages(imgs);
+      setPromptGecmisi(prev => [{
+        id: Date.now().toString(),
+        tarih: new Date().toLocaleTimeString("tr-TR"),
+        takiTipi,
+        tema: tema || "(referanstan)",
+        metalRengi,
+        seed: data.seed,
+        gorselUrl: imgs[0],
+      }, ...prev.slice(0, 9)]);
       setOriginals(imgs);
       setFilenames(imgs.map((_, i) => `remaura-cn-${ts}-${i + 1}.png`));
     } catch (e) { setError((e as Error)?.message ?? "Bağlantı hatası."); }
@@ -499,7 +525,7 @@ export function KoleksiyonEditClient() {
       const res = await fetch("/api/remaura/koleksiyon-edit/uret", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ takiTipi, tema, formKarakterleri, metalRengi, referansGorsel: refBase64, numImages: 1, referansGucu, stilPrompt: analiz?.stilPrompt }),
+        body: JSON.stringify({ takiTipi, tema, formKarakterleri, metalRengi, referansGorsel: refBase64, numImages: varyasyonSayisi, referansGucu, stilPrompt: analiz?.stilPrompt }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Üretim başarısız."); return; }
@@ -508,6 +534,15 @@ export function KoleksiyonEditClient() {
       const pad = (n: number) => String(n).padStart(2, "0");
       const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
       setImages(imgs);
+      setPromptGecmisi(prev => [{
+        id: Date.now().toString(),
+        tarih: new Date().toLocaleTimeString("tr-TR"),
+        takiTipi,
+        tema: tema || "(referanstan)",
+        metalRengi,
+        seed: data.seed,
+        gorselUrl: imgs[0],
+      }, ...prev.slice(0, 9)]);
       setOriginals(imgs);
       setFilenames(imgs.map((_, i) => `remaura-${ts}-${i + 1}.png`));
     } catch { setError("Bağlantı hatası."); }
@@ -688,6 +723,28 @@ export function KoleksiyonEditClient() {
     finally { setLoad({ kind: "idle" }); }
   }
 
+  async function handleKaydet(index: number) {
+    setKaydediliyor(index);
+    setError(null);
+    try {
+      const res = await fetch("/api/remaura/koleksiyon-edit/kaydet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gorselUrl: images[index],
+          koleksiyonAdi: koleksiyonAdi || undefined,
+          tip: takiTipi,
+          tema: tema || undefined,
+          metal: metalRengi,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Kayıt başarısız."); return; }
+      setKaydedildi(prev => new Set([...prev, index]));
+    } catch { setError("Bağlantı hatası."); }
+    finally { setKaydediliyor(null); }
+  }
+
   // ─── Drag-drop ───────────────────────────────────────────────────────────────
 
   function onDrop(e: React.DragEvent) {
@@ -712,6 +769,45 @@ export function KoleksiyonEditClient() {
         <span style={{ color: "rgba(255,255,255,0.2)" }}>/</span>
         <span style={{ fontSize: 10, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.35)" }}>Koleksiyon Edit</span>
       </div>
+
+      {/* Geçmiş paneli */}
+      {promptGecmisi.length > 0 && (
+        <div style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "8px 16px" }}>
+          <button
+            type="button"
+            onClick={() => setGecmisAcik(p => !p)}
+            style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", background: "none",
+              border: "none", cursor: "pointer", textTransform: "uppercase",
+              letterSpacing: "0.2em", display: "flex", alignItems: "center", gap: 6 }}
+          >
+            <span>Geçmiş ({promptGecmisi.length})</span>
+            <span>{gecmisAcik ? "▲" : "▼"}</span>
+          </button>
+          {gecmisAcik && (
+            <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingTop: 8, paddingBottom: 4 }}>
+              {promptGecmisi.map(g => (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => {
+                    setTakiTipi(g.takiTipi as TakiTipi);
+                    setTema(g.tema);
+                    setMetalRengi(g.metalRengi as MetalRengi);
+                    setGecmisAcik(false);
+                  }}
+                  style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 4,
+                    background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: 8, padding: 6, cursor: "pointer", width: 72 }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={g.gorselUrl} alt="" style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 6 }} />
+                  <span style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", textAlign: "center" }}>{g.tarih}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         {/* ── Left panel ─────────────────────────────────────────────────── */}
@@ -924,6 +1020,22 @@ export function KoleksiyonEditClient() {
               </div>
             </div>
 
+            {/* Varyasyon sayısı */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <Label>Varyasyon Sayısı</Label>
+              <div style={{ display: "flex", gap: 6 }}>
+                {[1, 2, 3, 4].map(n => (
+                  <ChipBtn
+                    key={n}
+                    active={varyasyonSayisi === n}
+                    onClick={() => setVaryasyonSayisi(n)}
+                  >
+                    {n}
+                  </ChipBtn>
+                ))}
+              </div>
+            </div>
+
             {/* Error */}
             {error && (
               <div style={{ fontSize: 11, color: "rgba(248,113,113,0.85)", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, padding: "8px 12px" }}>
@@ -1054,6 +1166,13 @@ export function KoleksiyonEditClient() {
                         Orijinal
                       </ActionBtn>
                     )}
+                    <ActionBtn
+                      onClick={() => handleKaydet(i)}
+                      disabled={isOpBusy(i) || kaydediliyor === i}
+                      accent
+                    >
+                      {kaydediliyor === i ? "Kaydediliyor…" : kaydedildi.has(i) ? "✓ Kaydedildi" : "Kaydet"}
+                    </ActionBtn>
                     <ActionBtn onClick={() => handleDownload(i)} disabled={isOpBusy(i)} accent>
                       İndir
                     </ActionBtn>
