@@ -810,9 +810,16 @@ export function KoleksiyonEditClient() {
       )}
 
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-        {/* ── Left panel ─────────────────────────────────────────────────── */}
+        {/* ── Sol Panel ─────────────────────────────────────────────────── */}
         <div style={{ width: 340, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.06)", overflowY: "auto", minHeight: "calc(100vh - 49px)" }}>
-          <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 20 }}>
+
+          {/* ── PANEL 1: HIZLI ÜRETİM ── */}
+          <div style={{ padding: 20, borderBottom: "2px solid rgba(183,110,121,0.15)", display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 3, height: 16, background: ACCENT, borderRadius: 2 }} />
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.35em", textTransform: "uppercase", color: ACCENT }}>Hızlı Üretim</span>
+              <span style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em" }}>— GPT Image</span>
+            </div>
 
             {/* Referans görsel */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -821,16 +828,7 @@ export function KoleksiyonEditClient() {
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={onDrop}
                 onClick={() => fileRef.current?.click()}
-                style={{
-                  border: "1px dashed rgba(255,255,255,0.1)",
-                  borderRadius: 12,
-                  cursor: "pointer",
-                  overflow: "hidden",
-                  minHeight: 80,
-                  display: "flex",
-                  alignItems: "center",
-                  transition: "border-color 0.15s",
-                }}
+                style={{ border: "1px dashed rgba(255,255,255,0.1)", borderRadius: 12, cursor: "pointer", overflow: "hidden", minHeight: 80, display: "flex", alignItems: "center", transition: "border-color 0.15s" }}
                 onMouseEnter={(e) => (e.currentTarget.style.borderColor = "rgba(183,110,121,0.4)")}
                 onMouseLeave={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)")}
               >
@@ -840,15 +838,12 @@ export function KoleksiyonEditClient() {
                     <img src={refBase64} alt="ref" style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 8, flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{refName}</p>
-                      <button
-                        type="button"
+                      <button type="button"
                         onClick={(e) => { e.stopPropagation(); setRefBase64(null); setRefName(""); setAnaliz(null); if (fileRef.current) fileRef.current.value = ""; }}
                         style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", background: "none", border: "none", cursor: "pointer", marginTop: 4, padding: 0 }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.6)")}
                         onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.3)")}
-                      >
-                        Kaldır
-                      </button>
+                      >Kaldır</button>
                     </div>
                   </div>
                 ) : (
@@ -868,12 +863,9 @@ export function KoleksiyonEditClient() {
                       {referansGucu < 0.4 ? "Prompt ağır" : referansGucu > 0.7 ? "Referans ağır" : "Dengeli"}
                     </span>
                   </div>
-                  <input
-                    type="range" min={0.1} max={1.0} step={0.05}
-                    value={referansGucu}
+                  <input type="range" min={0.1} max={1.0} step={0.05} value={referansGucu}
                     onChange={(e) => setReferansGucu(Number(e.target.value))}
-                    style={{ width: "100%", accentColor: ACCENT }}
-                  />
+                    style={{ width: "100%", accentColor: ACCENT }} />
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ fontSize: 8, color: "rgba(255,255,255,0.2)" }}>Yaratıcı</span>
                     <span style={{ fontSize: 8, color: "rgba(255,255,255,0.2)" }}>Birebir</span>
@@ -881,69 +873,12 @@ export function KoleksiyonEditClient() {
                 </div>
               )}
               <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileChange(f); }} />
-
-              {/* Analiz yükleniyor */}
-              {analizYukleniyor && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0" }}>
-                  <Spinner size={12} />
-                  <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.2em" }}>
-                    Görsel analiz ediliyor…
-                  </span>
-                </div>
-              )}
-
-              {/* Analiz sonucu */}
-              {analiz && !analizYukleniyor && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10 }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                    <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", color: ACCENT }}>
-                      {analiz.takiTipi}
-                    </span>
-                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", fontWeight: 600 }}>
-                      {analiz.konu}
-                    </span>
-                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", lineHeight: 1.5 }}>
-                      {analiz.mevcutSahne}
-                    </span>
-                  </div>
-                  <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
-                  <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                    <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: "rgba(255,255,255,0.25)" }}>
-                      Aynı stilden kompozisyon önerileri
-                    </span>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      {analiz.oneriler.map((oneri, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => setTema(oneri)}
-                          style={{
-                            textAlign: "left", padding: "6px 10px", borderRadius: 7,
-                            fontSize: 10, color: "rgba(255,255,255,0.55)",
-                            background: tema === oneri ? "rgba(183,110,121,0.12)" : "rgba(255,255,255,0.02)",
-                            border: `1px solid ${tema === oneri ? "rgba(183,110,121,0.35)" : "rgba(255,255,255,0.06)"}`,
-                            cursor: "pointer", transition: "all 0.12s",
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(183,110,121,0.3)"; e.currentTarget.style.color = "rgba(255,255,255,0.75)"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = tema === oneri ? "rgba(183,110,121,0.35)" : "rgba(255,255,255,0.06)"; e.currentTarget.style.color = tema === oneri ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.55)"; }}
-                        >
-                          {oneri}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Koleksiyon adı */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <Label>Koleksiyon Adı</Label>
-              <FieldInput
-                value={koleksiyonAdi}
-                onChange={(e) => setKoleksiyonAdi(e.target.value)}
-                placeholder="Opsiyonel"
-              />
+              <FieldInput value={koleksiyonAdi} onChange={(e) => setKoleksiyonAdi(e.target.value)} placeholder="Opsiyonel" />
             </div>
 
             {/* Takı tipi */}
@@ -959,29 +894,7 @@ export function KoleksiyonEditClient() {
             {/* Tema */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <Label>Tema / Açıklama</Label>
-              <FieldTextarea
-                rows={4}
-                value={tema}
-                onChange={(e) => setTema(e.target.value)}
-                placeholder="Örnek: lotus çiçeği, ince kol, boş yuva"
-              />
-            </div>
-
-            {/* Harf (ControlNet) */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <Label>Hedef Harf <span style={{ textTransform: "none", letterSpacing: "normal", fontWeight: 400, color: "rgba(255,255,255,0.2)" }}>(ControlNet)</span></Label>
-              <FieldInput
-                value={harfGirdisi}
-                onChange={(e) => setHarfGirdisi(e.target.value.toUpperCase().charAt(0) || "")}
-                placeholder="Örn: B"
-                maxLength={1}
-                style={{ textAlign: "center", fontSize: 20, fontWeight: 700, letterSpacing: "0.2em" }}
-              />
-              {harfGirdisi && (
-                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.25)", letterSpacing: "0.1em" }}>
-                  Referans görsel ile birlikte kullanın → stil transfer + form kontrolü
-                </span>
-              )}
+              <FieldTextarea rows={4} value={tema} onChange={(e) => setTema(e.target.value)} placeholder="Örnek: lotus çiçeği, ince kol, boş yuva" />
             </div>
 
             {/* Form karakteri */}
@@ -999,20 +912,8 @@ export function KoleksiyonEditClient() {
               <Label>Metal Rengi</Label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {METAL_RENGI.map(({ label, hex }) => (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={() => setMetalRengi(label)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      padding: "5px 10px", borderRadius: 6,
-                      fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em",
-                      border: "1px solid", cursor: "pointer", transition: "all 0.15s",
-                      background: metalRengi === label ? "rgba(183,110,121,0.16)" : "rgba(255,255,255,0.03)",
-                      borderColor: metalRengi === label ? ACCENT : "rgba(255,255,255,0.08)",
-                      color: metalRengi === label ? ACCENT_LIGHT : "rgba(255,255,255,0.4)",
-                    }}
-                  >
+                  <button key={label} type="button" onClick={() => setMetalRengi(label)}
+                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", border: "1px solid", cursor: "pointer", transition: "all 0.15s", background: metalRengi === label ? "rgba(183,110,121,0.16)" : "rgba(255,255,255,0.03)", borderColor: metalRengi === label ? ACCENT : "rgba(255,255,255,0.08)", color: metalRengi === label ? ACCENT_LIGHT : "rgba(255,255,255,0.4)" }}>
                     <span style={{ width: 10, height: 10, borderRadius: "50%", background: hex, border: "1px solid rgba(255,255,255,0.2)", flexShrink: 0 }} />
                     {label}
                   </button>
@@ -1025,13 +926,7 @@ export function KoleksiyonEditClient() {
               <Label>Varyasyon Sayısı</Label>
               <div style={{ display: "flex", gap: 6 }}>
                 {[1, 2, 3, 4].map(n => (
-                  <ChipBtn
-                    key={n}
-                    active={varyasyonSayisi === n}
-                    onClick={() => setVaryasyonSayisi(n)}
-                  >
-                    {n}
-                  </ChipBtn>
+                  <ChipBtn key={n} active={varyasyonSayisi === n} onClick={() => setVaryasyonSayisi(n)}>{n}</ChipBtn>
                 ))}
               </div>
             </div>
@@ -1043,48 +938,85 @@ export function KoleksiyonEditClient() {
               </div>
             )}
 
-            {/* Üret */}
-            <button
-              type="button"
-              onClick={handleUret}
-              disabled={load.kind === "generating"}
-              style={{
-                width: "100%", padding: "12px 0", borderRadius: 12,
-                fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em",
-                border: `1px solid ${ACCENT}`, cursor: load.kind === "generating" ? "not-allowed" : "pointer",
-                opacity: load.kind === "generating" ? 0.6 : 1,
-                transition: "all 0.15s",
-                background: "rgba(183,110,121,0.14)", color: ACCENT_LIGHT,
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              }}
-            >
+            {/* GÖRSEL ÜRET butonu */}
+            <button type="button" onClick={handleUret} disabled={load.kind === "generating"}
+              style={{ width: "100%", padding: "12px 0", borderRadius: 12, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", border: `1px solid ${ACCENT}`, cursor: load.kind === "generating" ? "not-allowed" : "pointer", opacity: load.kind === "generating" ? 0.6 : 1, transition: "all 0.15s", background: "rgba(183,110,121,0.14)", color: ACCENT_LIGHT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
               {load.kind === "generating" && <Spinner />}
               {load.kind === "generating" ? "Üretiliyor…" : "Görsel Üret"}
             </button>
+          </div>
 
-            {/* ControlNet Üret — sadece harf girildiğinde görünür */}
-            {harfGirdisi && (
-              <button
-                type="button"
-                onClick={handleControlnetUret}
-                disabled={load.kind === "generating"}
-                style={{
-                  width: "100%", padding: "12px 0", borderRadius: 12,
-                  fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em",
-                  border: "1px solid rgba(100,160,255,0.4)",
-                  cursor: load.kind === "generating" ? "not-allowed" : "pointer",
-                  opacity: load.kind === "generating" ? 0.6 : 1,
-                  transition: "all 0.15s",
-                  background: "rgba(100,160,255,0.08)", color: "rgba(140,190,255,0.8)",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                }}
-              >
-                {load.kind === "generating" && <Spinner />}
-                {load.kind === "generating" ? "Üretiliyor…" : `ControlNet Üret  ·  ${harfGirdisi}`}
-              </button>
+          {/* ── PANEL 2: KOLEKSİYON MODU ── */}
+          <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 3, height: 16, background: "rgba(100,160,255,0.7)", borderRadius: 2 }} />
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(100,160,255,0.8)" }}>Koleksiyon Modu</span>
+              <span style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em" }}>— Stil Transferi</span>
+            </div>
+
+            {/* Analiz sonucu */}
+            {analiz && !analizYukleniyor && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", color: ACCENT }}>{analiz.takiTipi}</span>
+                  <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", fontWeight: 600 }}>{analiz.konu}</span>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", lineHeight: 1.5 }}>{analiz.mevcutSahne}</span>
+                </div>
+                <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: "rgba(255,255,255,0.25)" }}>Koleksiyon için tasarım önerileri</span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {analiz.oneriler.map((oneri, idx) => (
+                      <button key={idx} type="button" onClick={() => setTema(oneri)}
+                        style={{ textAlign: "left", padding: "6px 10px", borderRadius: 7, fontSize: 10, color: "rgba(255,255,255,0.55)", background: tema === oneri ? "rgba(183,110,121,0.12)" : "rgba(255,255,255,0.02)", border: `1px solid ${tema === oneri ? "rgba(183,110,121,0.35)" : "rgba(255,255,255,0.06)"}`, cursor: "pointer", transition: "all 0.12s" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(183,110,121,0.3)"; e.currentTarget.style.color = "rgba(255,255,255,0.75)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = tema === oneri ? "rgba(183,110,121,0.35)" : "rgba(255,255,255,0.06)"; e.currentTarget.style.color = tema === oneri ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.55)"; }}
+                      >{oneri}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             )}
 
+            {/* Analiz yükleniyor */}
+            {analizYukleniyor && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0" }}>
+                <Spinner size={12} />
+                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.2em" }}>Stil analiz ediliyor…</span>
+              </div>
+            )}
+
+            {/* Referans bekleniyor */}
+            {!analiz && !analizYukleniyor && (
+              <div style={{ padding: "12px", background: "rgba(100,160,255,0.04)", border: "1px dashed rgba(100,160,255,0.15)", borderRadius: 8 }}>
+                <p style={{ fontSize: 10, color: "rgba(100,160,255,0.4)", textAlign: "center", letterSpacing: "0.1em" }}>
+                  Koleksiyon modu için yukarıdan<br/>referans görsel yükle
+                </p>
+              </div>
+            )}
+
+            {/* Hedef harf — ControlNet */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <Label>Hedef Harf <span style={{ textTransform: "none", letterSpacing: "normal", fontWeight: 400, color: "rgba(255,255,255,0.2)" }}>(ControlNet)</span></Label>
+              <FieldInput value={harfGirdisi}
+                onChange={(e) => setHarfGirdisi(e.target.value.toUpperCase().charAt(0) || "")}
+                placeholder="Örn: B" maxLength={1}
+                style={{ textAlign: "center", fontSize: 20, fontWeight: 700, letterSpacing: "0.2em" }} />
+            </div>
+
+            {/* KOLEKSİYON ÜRET butonu */}
+            <button type="button"
+              onClick={harfGirdisi ? handleControlnetUret : handleUret}
+              disabled={load.kind === "generating" || !analiz}
+              style={{ width: "100%", padding: "12px 0", borderRadius: 12, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", border: "1px solid rgba(100,160,255,0.4)", cursor: (load.kind === "generating" || !analiz) ? "not-allowed" : "pointer", opacity: (load.kind === "generating" || !analiz) ? 0.4 : 1, transition: "all 0.15s", background: "rgba(100,160,255,0.08)", color: "rgba(140,190,255,0.8)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+              {load.kind === "generating" && <Spinner />}
+              {load.kind === "generating" ? "Üretiliyor…"
+                : !analiz ? "Önce referans görsel yükle"
+                : harfGirdisi ? `Koleksiyon Üret · ${harfGirdisi}`
+                : "Koleksiyon Üret"}
+            </button>
           </div>
+
         </div>
 
         {/* ── Right panel ────────────────────────────────────────────────── */}
