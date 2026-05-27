@@ -165,18 +165,23 @@ export async function POST(req: Request) {
         const parts = (turn3.candidates?.[0]?.content?.parts ?? []) as any[];
         for (const part of parts) {
           if (!part.thought && part.inlineData?.mimeType?.startsWith("image/")) {
-            return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` as string;
+            return {
+              image: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`,
+              styleAnalysis,
+            };
           }
         }
         return null;
       })
     );
 
-    const images = results.filter(Boolean) as string[];
-    if (images.length === 0)
+    const validResults = results.filter(Boolean) as { image: string; styleAnalysis: string }[];
+    if (validResults.length === 0)
       return NextResponse.json({ error: "Görsel üretilemedi." }, { status: 500 });
 
-    return NextResponse.json({ images });
+    const images = validResults.map(r => r.image);
+    const styleAnalysis = validResults[0]?.styleAnalysis ?? null;
+    return NextResponse.json({ images, styleAnalysis });
 
   } catch (err: unknown) {
     console.error("[gemini-uret] error:", err);

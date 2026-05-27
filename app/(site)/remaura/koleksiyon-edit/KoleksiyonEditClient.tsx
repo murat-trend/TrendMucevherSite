@@ -273,6 +273,13 @@ export function KoleksiyonEditClient() {
   const [harfGirdisi, setHarfGirdisi] = useState("");
   const [varyasyonSayisi, setVaryasyonSayisi] = useState(1);
 
+  // Stil kartı
+  const [stilKartiModal, setStilKartiModal] = useState(false);
+  const [stilKartiIsim, setStilKartiIsim] = useState("");
+  const [stilKartiKaydediliyor, setStilKartiKaydediliyor] = useState(false);
+  const [sonStilAnalizi, setSonStilAnalizi] = useState<string | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+
   // GPT-4o analiz sonucu
   type AnalizSonucu = {
     takiTipi: string;
@@ -572,6 +579,7 @@ export function KoleksiyonEditClient() {
       const pad = (n: number) => String(n).padStart(2, "0");
       const ts = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
       setImages(imgs);
+      if (data.styleAnalysis) setSonStilAnalizi(data.styleAnalysis);
       setOriginals(imgs);
       setFilenames(imgs.map((_, i) => `remaura-gemini-${ts}-${i+1}.png`));
       setPromptGecmisi(prev => [{
@@ -817,6 +825,31 @@ export function KoleksiyonEditClient() {
       setKaydedildi(prev => new Set([...prev, index]));
     } catch { setError(ke.errConnection); }
     finally { setKaydediliyor(null); }
+  }
+
+  async function handleStilKartiKaydet() {
+    if (!stilKartiIsim.trim() || !sonStilAnalizi) return;
+    setStilKartiKaydediliyor(true);
+    try {
+      const res = await fetch("/api/remaura/koleksiyon-edit/stil-karti", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          isim: stilKartiIsim.trim(),
+          stil_prompt: sonStilAnalizi,
+          metal: metalRengi || null,
+          referans_gorsel_url: null,
+          ornek_uretim_url: images[0] ?? null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Stil kartı kaydedilemedi."); return; }
+      setStilKartiModal(false);
+      setStilKartiIsim("");
+      setToastMsg("✓ Stil kartı kaydedildi");
+      setTimeout(() => setToastMsg(null), 3000);
+    } catch { setError("Bağlantı hatası."); }
+    finally { setStilKartiKaydediliyor(false); }
   }
 
   // ─── Drag-drop ───────────────────────────────────────────────────────────────
@@ -1089,6 +1122,24 @@ export function KoleksiyonEditClient() {
                 : harfGirdisi ? `${ke.collectionBtn} · ${harfGirdisi}`
                 : ke.collectionBtn}
             </button>
+
+            {/* Stili Kaydet — sadece üretim sonrası görünür */}
+            {sonStilAnalizi && (
+              <button
+                type="button"
+                onClick={() => setStilKartiModal(true)}
+                style={{
+                  width: "100%", marginTop: 8, padding: "9px 0",
+                  borderRadius: 8, fontSize: 9, fontWeight: 700,
+                  textTransform: "uppercase", letterSpacing: "0.25em",
+                  border: "1px solid rgba(100,160,255,0.3)",
+                  background: "rgba(100,160,255,0.06)",
+                  color: "rgba(100,160,255,0.7)", cursor: "pointer",
+                }}
+              >
+                ✦ Stili Kaydet
+              </button>
+            )}
           </div>
 
         </div>
@@ -1304,6 +1355,77 @@ export function KoleksiyonEditClient() {
               <span style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.4)" }}>{ke.processing}</span>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Toast ────────────────────────────────────────────────────────── */}
+      {toastMsg && (
+        <div style={{
+          position: "fixed", bottom: 32, left: "50%", transform: "translateX(-50%)",
+          zIndex: 100, padding: "10px 20px", borderRadius: 10,
+          background: "rgba(100,160,255,0.15)", border: "1px solid rgba(100,160,255,0.35)",
+          color: "rgba(140,190,255,0.9)", fontSize: 11, fontWeight: 700,
+          letterSpacing: "0.15em", textTransform: "uppercase", pointerEvents: "none",
+        }}>
+          {toastMsg}
+        </div>
+      )}
+
+      {/* ── Stil Kartı Modal ──────────────────────────────────────────────── */}
+      {stilKartiModal && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 50,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+        }} onClick={() => !stilKartiKaydediliyor && setStilKartiModal(false)}>
+          <div style={{
+            width: 320, borderRadius: 16,
+            border: "1px solid rgba(255,255,255,0.1)",
+            background: "#111", padding: 20,
+            display: "flex", flexDirection: "column", gap: 14,
+          }} onClick={e => e.stopPropagation()}>
+            <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+              letterSpacing: "0.3em", color: "rgba(100,160,255,0.8)" }}>
+              ✦ Stil Kartı Kaydet
+            </p>
+            <p style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", lineHeight: 1.6 }}>
+              Bu stili kaydedersen, ileride aynı koleksiyona yeni parçalar eklemek için tekrar kullanabilirsin.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              <Label>Koleksiyon Adı</Label>
+              <FieldInput
+                value={stilKartiIsim}
+                onChange={e => setStilKartiIsim(e.target.value)}
+                placeholder="Örn: Orchidaceae Koleksiyonu"
+                autoFocus
+              />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button"
+                onClick={() => setStilKartiModal(false)}
+                disabled={stilKartiKaydediliyor}
+                style={{ flex: 1, padding: "9px 0", borderRadius: 8, fontSize: 9,
+                  fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  color: "rgba(255,255,255,0.4)", background: "none", cursor: "pointer",
+                  opacity: stilKartiKaydediliyor ? 0.4 : 1 }}>
+                İptal
+              </button>
+              <button type="button"
+                onClick={handleStilKartiKaydet}
+                disabled={stilKartiKaydediliyor || !stilKartiIsim.trim()}
+                style={{ flex: 1, padding: "9px 0", borderRadius: 8, fontSize: 9,
+                  fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em",
+                  border: "1px solid rgba(100,160,255,0.4)",
+                  background: "rgba(100,160,255,0.1)",
+                  color: "rgba(100,160,255,0.8)", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  opacity: (stilKartiKaydediliyor || !stilKartiIsim.trim()) ? 0.4 : 1 }}>
+                {stilKartiKaydediliyor && <Spinner size={12} />}
+                {stilKartiKaydediliyor ? "Kaydediliyor…" : "Kaydet"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
