@@ -367,7 +367,7 @@ export async function POST(req: Request) {
 
     if (err?.status === 401 || err?.code === "invalid_api_key") {
       return NextResponse.json(
-        { error: "API anahtarı geçersiz. https://platform.openai.com/api-keys adresinden yeni anahtar oluşturun. .env.local dosyasında OPENAI_API_KEY=sk-proj-xxx formatında (tırnak yok, boşluk yok) kaydedin." },
+        { error: "API anahtarı geçersiz. https://platform.openai.com/api-keys adresinden yeni anahtar oluşturun. .env.local dosyasında OPENAI_API_KEY formatında (tırnak yok, boşluk yok) kaydedin." },
         { status: 401 }
       );
     }

@@ -47,7 +47,7 @@ function template() {
   const template = `# Rotate sonrası yeni anahtarlar
 # Eski .env.local yedeklendi - aşağıdaki değerleri güncelleyin
 
-OPENAI_API_KEY=sk-proj-YENİ_ANAHTAR_BURAYA
+OPENAI_API_KEY=BURAYA_OPENAI_ANAHTARINIZI_YAZIN
 
 # Meshy AI - 3D model üretimi
 MESHY_API_KEY=msy_YENİ_ANAHTAR_BURAYA
