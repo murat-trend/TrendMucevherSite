@@ -8,6 +8,8 @@ loadEnvConfig(process.cwd());
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
+const MODEL = "gemini-3.1-flash-image-preview";
+
 async function requireAdmin() {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
@@ -20,35 +22,40 @@ async function requireAdmin() {
 }
 
 async function translateToEnglish(text: string): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || !text.trim()) return text;
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key || !text.trim()) return text;
   try {
     const Anthropic = (await import("@anthropic-ai/sdk")).default;
-    const client = new Anthropic({ apiKey });
+    const client = new Anthropic({ apiKey: key });
     const msg = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 200,
-      system: "You are a translator. The user will send a jewelry design description in Turkish, English, German, or Russian. Translate it to English. Return only the English translation, nothing else.",
+      system: "Translate jewelry design descriptions from Turkish, German, or Russian to English. Return only the translation.",
       messages: [{ role: "user", content: text }],
     });
     const block = msg.content[0];
     return block?.type === "text" ? block.text.trim() : text;
-  } catch {
-    return text;
-  }
+  } catch { return text; }
 }
 
-const TAKI_TR: Record<string, string> = {
-  "Yüzük": "yüzük", "Kolye": "kolye ucu", "Küpe": "küpe çifti",
-  "Bilezik": "bilezik", "Broş": "broş",
+const TAKI_EN: Record<string, string> = {
+  "Yüzük": "ring",
+  "Kolye": "necklace pendant",
+  "Küpe": "pair of earrings",
+  "Bilezik": "bracelet",
+  "Broş": "brooch",
 };
-const METAL_TR: Record<string, string> = {
-  "Sarı Altın": "sarı altın", "Rose Gold": "rose gold",
-  "Beyaz Altın": "beyaz altın", "Gümüş": "gümüş",
-  "Oksitlenmiş Gümüş": "oksitlenmiş antik gümüş",
+
+const METAL_EN: Record<string, string> = {
+  "Sarı Altın": "yellow gold",
+  "Rose Gold": "rose gold",
+  "Beyaz Altın": "white gold",
+  "Gümüş": "silver",
+  "Oksitlenmiş Gümüş": "oxidized antique silver",
 };
+
 const KAMERA: Record<string, string> = {
-  "Yüzük": "45-degree overhead angle, ring band fully visible, top face clearly shown, e-commerce jewelry standard angle",
+  "Yüzük": "45-degree overhead angle, ring band fully visible, top face clearly shown",
   "Kolye": "front-facing view, pendant centered, chain visible on both sides",
   "Küpe": "front-facing view, pair of earrings side by side, symmetric composition",
   "Bilezik": "45-degree overhead angle, bracelet showing both inner and outer surface",
@@ -64,30 +71,21 @@ export async function POST(req: Request) {
 
   const body = await req.json() as {
     takiTipi?: string;
-    tema?: string;
     metalRengi?: string;
+    tema?: string;
     formKarakterleri?: string[];
     referansGorsel: string;
     numImages?: number;
   };
-  const { takiTipi, tema, metalRengi, formKarakterleri, referansGorsel, numImages = 1 } = body;
+  const { takiTipi, metalRengi, tema, formKarakterleri, referansGorsel, numImages = 1 } = body;
   if (!referansGorsel) return NextResponse.json({ error: "Referans görsel zorunlu." }, { status: 400 });
 
-  const takiTr  = TAKI_TR[takiTipi ?? ""] ?? "takı";
-  const metalTr = METAL_TR[metalRengi ?? ""] ?? "gümüş";
-  const kamera  = KAMERA[takiTipi ?? ""] ?? "professional product photography angle";
-  const formStr = Array.isArray(formKarakterleri) && formKarakterleri.length > 0
-    ? formKarakterleri.join(", ") : "";
+  const takiEn  = TAKI_EN[takiTipi ?? ""] ?? "jewelry piece";
+  const metalEn = METAL_EN[metalRengi ?? ""] ?? "silver";
+  const kamera  = KAMERA[takiTipi ?? ""] ?? "professional jewelry photography angle";
+  const formEn  = Array.isArray(formKarakterleri) && formKarakterleri.length > 0
+    ? await translateToEnglish(formKarakterleri.join(", ")) : "";
   const temaEn  = tema?.trim() ? await translateToEnglish(tema) : "";
-
-  const prompt = [
-    `Referans görseldeki takının stilini birebir kullanarak yeni bir ${metalTr} ${takiTr} tasarla.`,
-    `Korunacaklar: aynı metal rengi ve yüzey işlemi, aynı teknik (filigre/gravür/döküm), aynı dekoratif motifler, aynı taş rengi ve yerleşimi.`,
-    `Değişecek: sadece takı tipi — ${takiTr} olacak, referansın formu değil.`,
-    formStr ? `Form karakteri: ${formStr}.` : "",
-    temaEn ? `Theme: ${temaEn}.` : "",
-    `Camera: ${kamera}. Studio background (black or white). No hands, no model, no body parts. Single centered jewelry piece. Professional jewelry photography quality. Ultra detailed metal surface.`,
-  ].filter(Boolean).join(" ");
 
   const raw  = referansGorsel.includes(",") ? referansGorsel.split(",")[1] : referansGorsel;
   const mime = (referansGorsel.match(/data:([^;]+);/)?.[1] ?? "image/jpeg");
@@ -96,33 +94,85 @@ export async function POST(req: Request) {
     const { GoogleGenAI } = await import("@google/genai");
     const ai = new GoogleGenAI({ apiKey: googleKey });
 
-    const results: string[] = [];
-    const count = Math.min(numImages, 4);
+    // Her varyasyon için bağımsız multi-turn conversation
+    const results = await Promise.all(
+      Array.from({ length: Math.min(numImages, 4) }, async () => {
 
-    // Paralel üretim
-    await Promise.all(Array.from({ length: count }, async (_, i) => {
-      const response = await ai.models.generateContent({
-        model: "gemini-3.1-flash-image-preview",
-        contents: [
-          { text: prompt },
-          { inlineData: { mimeType: mime, data: raw } },
-        ],
-        config: {
-          responseModalities: ["IMAGE"],
-        } as any,
-      });
+        // ── TURN 1: Stil analizi (TEXT only) ──────────────────────────────
+        const turn1 = await ai.models.generateContent({
+          model: MODEL,
+          contents: [{
+            role: "user",
+            parts: [
+              { inlineData: { mimeType: mime, data: raw } },
+              {
+                text:
+                  "Analyze ONLY the decorative style of this jewelry. " +
+                  "Describe: metal color and surface finish, craftsmanship technique, " +
+                  "decorative motifs, stone type and placement, overall mood. " +
+                  "Do NOT mention the jewelry type or shape.",
+              },
+            ],
+          }],
+          config: { responseModalities: ["TEXT"] } as any,
+        });
 
-      // Thought olmayan image part'ı bul
-      const parts = response.candidates?.[0]?.content?.parts ?? [];
-      for (const part of parts) {
-        if (!part.thought && part.inlineData?.mimeType?.startsWith("image/")) {
-          results[i] = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-          break;
+        const styleAnalysis = (turn1.candidates?.[0]?.content?.parts ?? [])
+          .filter((p: any) => !p.thought && p.text)
+          .map((p: any) => p.text as string)
+          .join("") || "elegant metalwork style";
+
+        // ── TURN 3: Yeni takı üretimi (IMAGE + TEXT) ──────────────────────
+        const generatePrompt = [
+          `Using the style described above, design a new ${metalEn} ${takiEn}.`,
+          `The jewelry type must be: ${takiEn}. Do not generate any other jewelry type.`,
+          `Apply the same metal finish, technique, motifs and stones to the ${takiEn} form.`,
+          temaEn ? `Theme accent: ${temaEn}.` : "",
+          formEn ? `Form style: ${formEn}.` : "",
+          `Camera: ${kamera}.`,
+          `White studio background. No hands, no model, no body parts.`,
+          `Single centered ${takiEn}. Professional jewelry photography. Ultra detailed.`,
+        ].filter(Boolean).join(" ");
+
+        const turn3 = await ai.models.generateContent({
+          model: MODEL,
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { inlineData: { mimeType: mime, data: raw } },
+                {
+                  text:
+                    "Analyze ONLY the decorative style. " +
+                    "Describe metal, technique, motifs, stones, mood. " +
+                    "Do NOT mention jewelry type.",
+                },
+              ],
+            },
+            {
+              role: "model",
+              parts: [{ text: styleAnalysis }],
+            },
+            {
+              role: "user",
+              parts: [{ text: generatePrompt }],
+            },
+          ],
+          config: { responseModalities: ["IMAGE", "TEXT"] } as any,
+        });
+
+        // thought olmayan image part'ı bul
+        const parts = (turn3.candidates?.[0]?.content?.parts ?? []) as any[];
+        for (const part of parts) {
+          if (!part.thought && part.inlineData?.mimeType?.startsWith("image/")) {
+            return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` as string;
+          }
         }
-      }
-    }));
+        return null;
+      })
+    );
 
-    const images = results.filter(Boolean);
+    const images = results.filter(Boolean) as string[];
     if (images.length === 0)
       return NextResponse.json({ error: "Görsel üretilemedi." }, { status: 500 });
 
