@@ -86,6 +86,14 @@ async function analyzeStyleWithVision(base64: string): Promise<string> {
   }
 }
 
+async function toFalUrl(image: string, fal: { storage: { upload: (f: File) => Promise<string> } }): Promise<string> {
+  if (image.startsWith("http://") || image.startsWith("https://")) return image;
+  const raw = image.includes(",") ? image.split(",")[1] : image;
+  const buf = Buffer.from(raw, "base64");
+  const file = new File([new Uint8Array(buf)], "image.jpg", { type: "image/jpeg" });
+  return await fal.storage.upload(file);
+}
+
 const TAKI_TIPI_EN: Record<string, string> = {
   "Yüzük": "ring",
   "Kolye": "necklace",
@@ -206,6 +214,41 @@ export async function POST(req: Request) {
     const { fal } = await import("@fal-ai/client");
     fal.config({ credentials: falKey });
 
+    // Referans görsel varsa → flux-pro/kontext ile direkt stil transferi
+    if (referansGorsel) {
+      const refUrl = await toFalUrl(referansGorsel, fal);
+      const metalEn = METAL_RENGI_EN[metalRengi ?? ""] ?? "gold";
+      const kameraAcisi = KAMERA_ACISI[takiTipi ?? ""] ?? "professional product photography angle";
+
+      const kontextPrompt = [
+        `Generate a new ${metalEn} ${takiTipiEn}.`,
+        `Keep the EXACT same craftsmanship style, surface technique, decorative motifs and metal finish from the reference image.`,
+        `This is a ${takiTipiEn}, not the same piece as the reference.`,
+        kameraAcisi,
+        temaEn || "",
+        formStr || "",
+        `Pure white background. No model, no hands. Single centered jewelry piece. Studio lighting.`,
+      ].filter(Boolean).join(" ");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await fal.subscribe("fal-ai/flux-pro/kontext", {
+        input: {
+          prompt: kontextPrompt,
+          image_url: refUrl,
+          num_images: Math.min(numImages, 4),
+          aspect_ratio: "1:1",
+          output_format: "jpeg",
+          safety_tolerance: "3",
+        } as any,
+        logs: false,
+      });
+
+      type FalImage = { url: string };
+      const images = ((result.data as { images?: FalImage[] })?.images ?? []).map((img) => img.url);
+      return NextResponse.json({ images, seed: 0 });
+    }
+
+    // Referanssız üretim — flux-pro/v1.1
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await fal.subscribe("fal-ai/flux-pro/v1.1", {
       input: {
