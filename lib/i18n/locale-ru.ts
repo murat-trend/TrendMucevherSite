@@ -650,7 +650,7 @@ export const ruMessages = {
   koleksiyonEdit: {
     breadcrumb: "Редактор коллекции",
     panel1Title: "Быстрая генерация",
-    panel1Sub: "GPT Изображение",
+    panel1Sub: "ИИ Изображение",
     refLabel: "Референсное фото",
     refOptional: "(необязательно)",
     refDrag: "Перетащите или нажмите",

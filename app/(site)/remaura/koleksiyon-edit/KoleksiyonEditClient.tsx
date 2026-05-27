@@ -581,12 +581,12 @@ export function KoleksiyonEditClient() {
       setImages(imgs);
       if (data.styleAnalysis) setSonStilAnalizi(data.styleAnalysis);
       setOriginals(imgs);
-      setFilenames(imgs.map((_, i) => `remaura-gemini-${ts}-${i+1}.png`));
+      setFilenames(imgs.map((_, i) => `remaura-${ts}-${i+1}.png`));
       setPromptGecmisi(prev => [{
         id: Date.now().toString(),
         tarih: new Date().toLocaleTimeString("tr-TR"),
         takiTipi,
-        tema: tema || "(gemini koleksiyon)",
+        tema: tema || "(koleksiyon)",
         metalRengi,
         gorselUrl: imgs[0],
       }, ...prev.slice(0, 9)]);

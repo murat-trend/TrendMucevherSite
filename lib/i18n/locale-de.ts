@@ -650,7 +650,7 @@ export const deMessages = {
   koleksiyonEdit: {
     breadcrumb: "Kollektion bearbeiten",
     panel1Title: "Schnell generieren",
-    panel1Sub: "GPT Bild",
+    panel1Sub: "KI-Bild",
     refLabel: "Referenzbild",
     refOptional: "(optional)",
     refDrag: "Ziehen oder klicken",

@@ -654,7 +654,7 @@ export const translations = {
     koleksiyonEdit: {
       breadcrumb: "Koleksiyon Edit",
       panel1Title: "Hızlı Üretim",
-      panel1Sub: "GPT Image",
+      panel1Sub: "AI Görsel",
       refLabel: "Referans Görsel",
       refOptional: "(opsiyonel)",
       refDrag: "Sürükle veya tıkla",
@@ -1398,7 +1398,7 @@ export const translations = {
     koleksiyonEdit: {
       breadcrumb: "Collection Edit",
       panel1Title: "Quick Generate",
-      panel1Sub: "GPT Image",
+      panel1Sub: "AI Image",
       refLabel: "Reference Image",
       refOptional: "(optional)",
       refDrag: "Drag or click",
