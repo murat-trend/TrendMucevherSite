@@ -66,7 +66,7 @@ Bu görseli aşağıdaki formatta JSON olarak analiz et. Başka hiçbir şey yaz
   "konu": "Görseldeki ana konu veya figür (Türkçe, 1-2 cümle)",
   "mevcutSahne": "Mevcut kompozisyonun kısa açıklaması (Türkçe)",
   "stilAciklamasi": "Malzeme, teknik ve estetik dilin Türkçe özeti (2-3 cümle)",
-  "stilPrompt": "ONLY IN ENGLISH: detailed artistic style prompt for AI image generation. Include: material (bronze/gold/silver), finish (oxidized/polished/antique), technique (bas-relief/filigree/casting), form (circular medallion/pendant/ring), decorative elements (baroque border/rope frame/acanthus), mood (dramatic/elegant/dark). This will be used directly in image generation.",
+  "stilPrompt": "ONLY IN ENGLISH: describe ONLY the material, surface finish, craftsmanship technique, decorative elements and mood. NEVER mention the jewelry type (ring/necklace/earring etc), NEVER mention specific gemstone names. Example format: 'oxidized silver, deep bas-relief engraving, baroque floral scrollwork, dramatic shadows, antique finish, high contrast studio lighting'",
   "oneriler": [
     "Aynı karakterin/konunun farklı bir sahne veya kompozisyon önerisi (Türkçe)",
     "İkinci öneri",

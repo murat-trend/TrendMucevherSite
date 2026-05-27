@@ -175,13 +175,15 @@ export async function POST(req: Request) {
   const takiStr = TAKI_TIPI_EN[takiTipi ?? ""] ?? "necklace";
 
   const prompt = [
-    `luxury ${letterDesc} ${takiStr}`,
+    `SUBJECT: luxury ${letterDesc} ${TAKI_TIPI_EN[takiTipi ?? ""] ?? "pendant"} — this is specifically a ${TAKI_TIPI_EN[takiTipi ?? ""] ?? "pendant"}, NOT a ring`,
     `${metalStr} metal`,
     temaEn,
     formStr,
     styleDescription,
-    "minimalist accent stones, focus on polished metal surfaces",
-    "botanical elegance, ornamental decorations",
+    "minimalist accent stones",
+    "focus on polished metal surfaces",
+    "botanical elegance",
+    "ornamental decorations",
     "professional product photography",
     "pure white background",
     "centered single object",

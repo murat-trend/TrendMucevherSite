@@ -141,11 +141,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Tema veya referans görsel gerekli." }, { status: 400 });
   }
 
-  // stilPrompt varsa (GPT-4o analiz yapıldı) doğrudan kullan, yoksa Vision analizi yap
+  // stilPrompt'tan takı tipi kelimelerini temizle (prompt çakışmasını önlemek için)
+  const cleanedStilPrompt = stilPrompt
+    ? stilPrompt
+        .replace(/\b(ring|necklace|earring|bracelet|brooch|pendant|bangle)\b/gi, "")
+        .replace(/\s+/g, " ")
+        .trim()
+    : null;
+
+  // cleanedStilPrompt varsa (GPT-4o analiz yapıldı) doğrudan kullan, yoksa Vision analizi yap
   const [temaEn, styleDescription] = await Promise.all([
     tema?.trim() ? translateToEnglish(tema) : Promise.resolve(""),
-    stilPrompt
-      ? Promise.resolve(stilPrompt)
+    cleanedStilPrompt
+      ? Promise.resolve(cleanedStilPrompt)
       : referansGorsel
         ? analyzeStyleWithVision(referansGorsel)
         : Promise.resolve(""),
@@ -162,11 +170,10 @@ export async function POST(req: Request) {
   ].join(", ");
 
   const promptBody = [
-    `${TAKI_TIPI_EN[takiTipi ?? ""] ?? "jewelry"} jewelry`,
+    `SUBJECT: single ${METAL_RENGI_EN[metalRengi ?? ""] ?? "gold"} ${TAKI_TIPI_EN[takiTipi ?? ""] ?? "jewelry"} — NOT a ring, NOT a necklace, this is specifically a ${TAKI_TIPI_EN[takiTipi ?? ""] ?? "jewelry"}`,
     temaEn,
     formStr,
     styleDescription,
-    `${METAL_RENGI_EN[metalRengi ?? ""] ?? "gold"} metal`,
     "women's collection",
     "professional product photography",
     "pure white background",
