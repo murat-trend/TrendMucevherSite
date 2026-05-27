@@ -30,6 +30,7 @@
     "@gltf-transform/core": "^4.3.0",
     "@gltf-transform/extensions": "^4.3.0",
     "@gltf-transform/functions": "^4.3.0",
+    "@google/genai": "^2.6.0",
     "@imgly/background-removal": "^1.7.0",
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.101.0",
