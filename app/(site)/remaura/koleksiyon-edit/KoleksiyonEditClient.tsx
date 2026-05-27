@@ -515,6 +515,57 @@ export function KoleksiyonEditClient() {
     finally { setLoad({ kind: "idle" }); }
   }
 
+  async function handleKoleksiyonUret() {
+    if (!analiz) { setError("Önce referans görsel yükle."); return; }
+    if (!refBase64) { setError("Referans görsel gerekli."); return; }
+    setError(null);
+    setLoad({ kind: "generating" });
+    setImages([]);
+    setFilenames([]);
+    try {
+      const endpoint = harfGirdisi
+        ? "/api/remaura/koleksiyon-edit/controlnet"
+        : "/api/remaura/koleksiyon-edit/uret";
+      const body = harfGirdisi
+        ? JSON.stringify({
+            letterTemplate: generateLetterTemplate(harfGirdisi),
+            referansGorsel: refBase64,
+            takiTipi, tema, formKarakterleri, metalRengi,
+            targetLetter: harfGirdisi.trim(),
+            referansGucu,
+          })
+        : JSON.stringify({
+            takiTipi, tema, formKarakterleri, metalRengi,
+            referansGorsel: refBase64,
+            numImages: varyasyonSayisi,
+            referansGucu,
+            stilPrompt: analiz?.stilPrompt,
+            koleksiyonModu: true,
+          });
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Üretim başarısız."); return; }
+      const imgs: string[] = data.images ?? [];
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const ts = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      setImages(imgs);
+      setOriginals(imgs);
+      setFilenames(imgs.map((_, i) => `remaura-kol-${ts}-${i+1}.png`));
+      setPromptGecmisi(prev => [{
+        id: Date.now().toString(),
+        tarih: new Date().toLocaleTimeString("tr-TR"),
+        takiTipi, tema: tema || "(koleksiyon)", metalRengi,
+        seed: data.seed, gorselUrl: imgs[0],
+      }, ...prev.slice(0, 9)]);
+    } catch (e) { setError((e as Error)?.message ?? "Bağlantı hatası."); }
+    finally { setLoad({ kind: "idle" }); }
+  }
+
   async function handleUret() {
     if (!tema.trim() && !refBase64) { setError("Tema veya referans görsel gerekli."); return; }
     setError(null);
@@ -1006,7 +1057,7 @@ export function KoleksiyonEditClient() {
 
             {/* KOLEKSİYON ÜRET butonu */}
             <button type="button"
-              onClick={harfGirdisi ? handleControlnetUret : handleUret}
+              onClick={handleKoleksiyonUret}
               disabled={load.kind === "generating" || !analiz}
               style={{ width: "100%", padding: "12px 0", borderRadius: 12, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", border: "1px solid rgba(100,160,255,0.4)", cursor: (load.kind === "generating" || !analiz) ? "not-allowed" : "pointer", opacity: (load.kind === "generating" || !analiz) ? 0.4 : 1, transition: "all 0.15s", background: "rgba(100,160,255,0.08)", color: "rgba(140,190,255,0.8)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
               {load.kind === "generating" && <Spinner />}

@@ -94,6 +94,14 @@ const TAKI_TIPI_EN: Record<string, string> = {
   "Broş": "brooch",
 };
 
+const KAMERA_ACISI: Record<string, string> = {
+  "Yüzük": "45-degree overhead angle, camera looking down at 45 degrees from above-front, ring band fully visible, top face of ring clearly shown, e-commerce jewelry standard angle",
+  "Kolye": "front-facing view, pendant centered, chain visible on both sides, slight downward angle",
+  "Küpe": "front-facing view, pair of earrings side by side, symmetric composition, slight 3/4 angle",
+  "Bilezik": "45-degree overhead angle, bracelet laid flat or on slight tilt showing inner and outer surface",
+  "Broş": "perfectly flat front-facing view, entire brooch visible, no perspective distortion",
+};
+
 const METAL_RENGI_EN: Record<string, string> = {
   "Sarı Altın": "yellow gold",
   "Rose Gold": "rose gold",
@@ -173,11 +181,14 @@ export async function POST(req: Request) {
     "no hands", "no fingers", "no human body parts", "no model",
   ].join(", ");
 
+  const takiTipiEn = TAKI_TIPI_EN[takiTipi ?? ""] ?? "jewelry";
   const promptBody = [
-    `SUBJECT: single ${METAL_RENGI_EN[metalRengi ?? ""] ?? "gold"} ${TAKI_TIPI_EN[takiTipi ?? ""] ?? "jewelry"} — NOT a ring, NOT a necklace, this is specifically a ${TAKI_TIPI_EN[takiTipi ?? ""] ?? "jewelry"}`,
+    `IMPORTANT: This is a ${takiTipiEn}. Generate ONLY a ${takiTipiEn}.`,
+    `CAMERA ANGLE — CRITICAL: ${KAMERA_ACISI[takiTipi ?? ""] ?? "professional product photography angle"}`,
     temaEn,
     formStr,
     styleDescription,
+    `${METAL_RENGI_EN[metalRengi ?? ""] ?? "gold"} metal`,
     "women's collection",
     "professional product photography",
     "pure white background",
@@ -203,9 +214,9 @@ export async function POST(req: Request) {
         seed,
         image_size: "square_hd",
         enhance_prompt: false,
-        guidance_scale: 7,
+        guidance_scale: 8,
         num_inference_steps: 32,
-        safety_tolerance: "5",
+        safety_tolerance: "2",
         output_format: "jpeg",
       } as any,
       logs: false,

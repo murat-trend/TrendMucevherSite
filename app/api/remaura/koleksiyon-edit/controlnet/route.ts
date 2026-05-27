@@ -100,6 +100,14 @@ const TAKI_TIPI_EN: Record<string, string> = {
   "Broş": "brooch",
 };
 
+const KAMERA_ACISI: Record<string, string> = {
+  "Yüzük": "45-degree overhead angle, camera looking down at 45 degrees from above-front, ring band fully visible, top face of ring clearly shown, e-commerce jewelry standard angle",
+  "Kolye": "front-facing view, pendant centered, chain visible on both sides, slight downward angle",
+  "Küpe": "front-facing view, pair of earrings side by side, symmetric composition, slight 3/4 angle",
+  "Bilezik": "45-degree overhead angle, bracelet laid flat or on slight tilt showing inner and outer surface",
+  "Broş": "perfectly flat front-facing view, entire brooch visible, no perspective distortion",
+};
+
 const METAL_RENGI_EN: Record<string, string> = {
   "Sarı Altın": "yellow gold",
   "Rose Gold": "rose gold",
@@ -175,15 +183,14 @@ export async function POST(req: Request) {
   const takiStr = TAKI_TIPI_EN[takiTipi ?? ""] ?? "necklace";
 
   const prompt = [
-    `SUBJECT: luxury ${letterDesc} ${TAKI_TIPI_EN[takiTipi ?? ""] ?? "pendant"} — this is specifically a ${TAKI_TIPI_EN[takiTipi ?? ""] ?? "pendant"}, NOT a ring`,
+    `SUBJECT: luxury ${letterDesc} ${TAKI_TIPI_EN[takiTipi ?? ""] ?? "pendant"}`,
+    `CAMERA ANGLE — CRITICAL: ${KAMERA_ACISI[takiTipi ?? ""] ?? "professional product photography angle"}`,
     `${metalStr} metal`,
     temaEn,
     formStr,
     styleDescription,
     "minimalist accent stones",
     "focus on polished metal surfaces",
-    "botanical elegance",
-    "ornamental decorations",
     "professional product photography",
     "pure white background",
     "centered single object",
@@ -208,7 +215,7 @@ export async function POST(req: Request) {
       seed,
       image_size: "square_hd",
       num_inference_steps: 32,
-      guidance_scale: 3.5,
+      guidance_scale: 4.5,
       output_format: "jpeg",
     };
 
