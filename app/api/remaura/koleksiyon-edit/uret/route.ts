@@ -143,98 +143,77 @@ export async function POST(req: Request) {
     metalRengi?: string;
     referansGorsel?: string;
     numImages?: number;
-    referansGucu?: number;
-    stilPrompt?: string;   // GPT-4o analizinden gelen hazır stil promptu
+    stilKartiId?: string;
+    stilPrompt?: string;
   };
 
-  const {
-    takiTipi,
-    tema,
-    formKarakterleri,
-    metalRengi,
-    referansGorsel,
-    numImages = 1,
-    stilPrompt,
-  } = body;
+  const { takiTipi, tema, formKarakterleri, metalRengi,
+          referansGorsel, numImages = 1, stilKartiId, stilPrompt } = body;
 
-  if (!tema?.trim() && !referansGorsel && !stilPrompt) {
-    return NextResponse.json({ error: "Tema veya referans görsel gerekli." }, { status: 400 });
+  if (!tema?.trim() && !referansGorsel && !stilPrompt && !stilKartiId) {
+    return NextResponse.json({ error: "Tema, referans görsel veya stil kartı gerekli." }, { status: 400 });
   }
 
-  // stilPrompt'tan takı tipi kelimelerini temizle (prompt çakışmasını önlemek için)
-  const cleanedStilPrompt = stilPrompt
-    ? stilPrompt
-        .replace(/\b(ring|necklace|earring|bracelet|brooch|pendant|bangle|choker)\b/gi, "")
-        .replace(/\s+/g, " ")
-        .trim()
-    : null;
+  const takiTipiEn  = TAKI_TIPI_EN[takiTipi ?? ""] ?? "jewelry";
+  const metalEn     = METAL_RENGI_EN[metalRengi ?? ""] ?? "gold";
+  const kameraAcisi = KAMERA_ACISI[takiTipi ?? ""] ?? "professional product photography angle";
+  const formStr     = Array.isArray(formKarakterleri) && formKarakterleri.length > 0
+    ? formKarakterleri.map(f => FORM_EN[f] ?? f.toLowerCase()).join(", ") : "";
+  const temaEn      = tema?.trim() ? await translateToEnglish(tema) : "";
 
-  // cleanedStilPrompt varsa (GPT-4o analiz yapıldı) doğrudan kullan, yoksa Vision analizi yap
-  const [temaEn, styleDescription] = await Promise.all([
-    tema?.trim() ? translateToEnglish(tema) : Promise.resolve(""),
-    cleanedStilPrompt
-      ? Promise.resolve(cleanedStilPrompt)
-      : referansGorsel
-        ? analyzeStyleWithVision(referansGorsel)
-        : Promise.resolve(""),
-  ]);
+  const { fal } = await import("@fal-ai/client");
+  fal.config({ credentials: falKey });
 
-  const formStr = Array.isArray(formKarakterleri) && formKarakterleri.length > 0
-    ? formKarakterleri.map((f) => FORM_EN[f] ?? f.toLowerCase()).join(", ") : "";
+  // ── Stil kaynağını belirle ────────────────────────────────
+  let stilDescription = "";
+  let referansUrl: string | null = null;
 
-  const noStoneClause = [
-    "absolutely no gemstones", "no diamonds", "no rubies", "no sapphires",
-    "no emeralds", "no crystals", "no pearls", "no rhinestones", "no pavé",
-    "no prong set stones", "bare empty settings", "bare metal only",
-    "no hands", "no fingers", "no human body parts", "no model",
-  ].join(", ");
+  if (stilKartiId) {
+    // Kaydedilmiş stil kartından al
+    const admin = (() => {
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!url || !key) return null;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { createClient: sc } = require("@supabase/supabase-js");
+      return sc(url, key, { auth: { persistSession: false } });
+    })();
+    if (admin) {
+      const { data } = await admin.from("stil_kartlari").select("*").eq("id", stilKartiId).single();
+      if (data) {
+        stilDescription = data.stil_prompt;
+        referansUrl = data.referans_gorsel_url ?? null;
+      }
+    }
+  } else if (stilPrompt) {
+    // GPT-4o analizinden gelen hazır stil promptu
+    stilDescription = stilPrompt
+      .replace(/\b(ring|necklace|earring|bracelet|brooch|pendant|bangle|choker)\b/gi, "")
+      .replace(/\s+/g, " ").trim();
+  } else if (referansGorsel) {
+    // Yeni referans görsel — hem CDN URL'e yükle hem analiz et
+    referansUrl = await toFalUrl(referansGorsel, fal);
+    stilDescription = await analyzeStyleWithVision(referansGorsel);
+  }
 
-  const takiTipiEn = TAKI_TIPI_EN[takiTipi ?? ""] ?? "jewelry";
-  const promptBody = [
-    `IMPORTANT: This is a ${takiTipiEn}. Generate ONLY a ${takiTipiEn}.`,
-    `CAMERA ANGLE — CRITICAL: ${KAMERA_ACISI[takiTipi ?? ""] ?? "professional product photography angle"}`,
-    temaEn,
-    formStr,
-    styleDescription,
-    `${METAL_RENGI_EN[metalRengi ?? ""] ?? "gold"} metal`,
-    "women's collection",
-    "professional product photography",
-    "pure white background",
-    "seamless white studio backdrop",
-    "centered single object",
-    "sharp edges",
-    "studio lighting",
-    "ultra detailed metal surface texture",
-  ].filter(Boolean).join(", ");
-
-  const prompt = `${noStoneClause}, ${promptBody}`;
-  const seed = Math.floor(Math.random() * 1_000_000);
-
+  // ── Üretim ───────────────────────────────────────────────
   try {
-    const { fal } = await import("@fal-ai/client");
-    fal.config({ credentials: falKey });
-
-    // Referans görsel varsa → flux-pro/kontext ile direkt stil transferi
-    if (referansGorsel) {
-      const refUrl = await toFalUrl(referansGorsel, fal);
-      const metalEn = METAL_RENGI_EN[metalRengi ?? ""] ?? "gold";
-      const kameraAcisi = KAMERA_ACISI[takiTipi ?? ""] ?? "professional product photography angle";
-
-      const kontextPrompt = [
+    if (referansUrl) {
+      // Referans URL var → flux-pro/kontext (model görseli görür)
+      const prompt = [
         `Generate a new ${metalEn} ${takiTipiEn}.`,
-        `Keep the EXACT same craftsmanship style, surface technique, decorative motifs and metal finish from the reference image.`,
-        `This is a ${takiTipiEn}, not the same piece as the reference.`,
-        kameraAcisi,
-        temaEn || "",
-        formStr || "",
-        `Pure white background. No model, no hands. Single centered jewelry piece. Studio lighting.`,
+        `STYLE LOCK: Keep the EXACT same craftsmanship technique, decorative motifs, metal finish and surface texture from the reference. Create a new ${takiTipiEn} — not a copy of the reference piece.`,
+        `CAMERA: ${kameraAcisi}`,
+        temaEn,
+        formStr,
+        `Pure white background. No model, no hands, no body parts. Single centered jewelry piece. Studio lighting. Ultra detailed.`,
       ].filter(Boolean).join(" ");
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await fal.subscribe("fal-ai/flux-pro/kontext", {
         input: {
-          prompt: kontextPrompt,
-          image_url: refUrl,
+          prompt,
+          image_url: referansUrl,
           num_images: Math.min(numImages, 4),
           aspect_ratio: "1:1",
           output_format: "jpeg",
@@ -244,33 +223,38 @@ export async function POST(req: Request) {
       });
 
       type FalImage = { url: string };
-      const images = ((result.data as { images?: FalImage[] })?.images ?? []).map((img) => img.url);
-      return NextResponse.json({ images, seed: 0 });
+      const images = ((result.data as { images?: FalImage[] })?.images ?? []).map(i => i.url);
+      return NextResponse.json({ images, seed: 0, stilDescription });
+
+    } else {
+      // Referans yok → flux-pro/v1.1-ultra (metin bazlı)
+      const prompt = [
+        `A single ${metalEn} ${takiTipiEn}, luxury jewelry product photography.`,
+        kameraAcisi,
+        stilDescription || temaEn,
+        formStr,
+        `Ultra detailed metal surface, intricate craftsmanship, sharp focus.`,
+        `Pure white background, centered, studio lighting, no hands, no model.`,
+      ].filter(Boolean).join(". ");
+
+      const seed = Math.floor(Math.random() * 1_000_000);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await fal.subscribe("fal-ai/flux-pro/v1.1-ultra", {
+        input: {
+          prompt,
+          num_images: Math.min(numImages, 4),
+          seed,
+          aspect_ratio: "1:1",
+          output_format: "jpeg",
+          safety_tolerance: "3",
+        } as any,
+        logs: false,
+      });
+
+      type FalImage = { url: string };
+      const images = ((result.data as { images?: FalImage[] })?.images ?? []).map(i => i.url);
+      return NextResponse.json({ images, seed, stilDescription });
     }
-
-    // Referanssız üretim — flux-pro/v1.1
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await fal.subscribe("fal-ai/flux-pro/v1.1", {
-      input: {
-        prompt,
-        num_images: Math.min(numImages, 4),
-        seed,
-        image_size: "square_hd",
-        enhance_prompt: false,
-        guidance_scale: 8,
-        num_inference_steps: 32,
-        safety_tolerance: "2",
-        output_format: "jpeg",
-      } as any,
-      logs: false,
-    });
-
-    type FalImage = { url: string };
-    const images = ((result.data as { images?: FalImage[] })?.images ?? []).map(
-      (img) => img.url
-    );
-
-    return NextResponse.json({ images, seed, styleDescription });
   } catch (err: unknown) {
     console.error("[uret] fal error:", err);
     const e = err as { message?: string };

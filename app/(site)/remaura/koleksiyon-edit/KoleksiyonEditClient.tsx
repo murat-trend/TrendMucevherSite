@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLanguage } from "@/components/i18n/LanguageProvider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -233,6 +234,33 @@ function GridSkeleton() {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function KoleksiyonEditClient() {
+  const { t } = useLanguage();
+  const ke = t.koleksiyonEdit;
+
+  // Display maps — keep internal state as Turkish keys (backend uses them)
+  const takiDisplay: Record<TakiTipi, string> = {
+    "Yüzük": ke.ringLabel,
+    "Kolye": ke.necklaceLabel,
+    "Küpe": ke.earringLabel,
+    "Bilezik": ke.braceletLabel,
+    "Broş": ke.broochLabel,
+  };
+  const metalDisplay: Record<MetalRengi, string> = {
+    "Sarı Altın": ke.metalYellowGold,
+    "Rose Gold": ke.metalRoseGold,
+    "Beyaz Altın": ke.metalWhiteGold,
+    "Gümüş": ke.metalSilver,
+    "Oksitlenmiş Gümüş": ke.metalOxidized,
+  };
+  const formDisplay: Record<FormKarakteri, string> = {
+    "İnce & Zarif": ke.formThin,
+    "Geometrik": ke.formGeometric,
+    "Organik": ke.formOrganic,
+    "Filigran": ke.formFiligree,
+    "Kabartmalı": ke.formEmbossed,
+    "Asimetrik": ke.formAsymmetric,
+  };
+
   // Form
   const [koleksiyonAdi, setKoleksiyonAdi] = useState("");
   const [takiTipi, setTakiTipi] = useState<TakiTipi>("Yüzük");
@@ -383,10 +411,10 @@ export function KoleksiyonEditClient() {
         body: JSON.stringify({ action: maskAction, image: src, mask: maskBase64 }),
       });
       const json = await res.json();
-      if (!res.ok) { setError(json.error ?? "Maske işlemi başarısız."); return; }
+      if (!res.ok) { setError(json.error ?? ke.errMask); return; }
       setMaskResult(json.image ?? null);
       setMaskMode(false);
-    } catch { setError("Bağlantı hatası."); }
+    } catch { setError(ke.errConnection); }
     finally { setMaskLoading(false); }
   }
 
@@ -472,7 +500,7 @@ export function KoleksiyonEditClient() {
   }
 
   async function handleControlnetUret() {
-    if (!harfGirdisi.trim()) { setError("Hedef harf gerekli."); return; }
+    if (!harfGirdisi.trim()) { setError(ke.errLetterRequired); return; }
     setError(null);
     setLoad({ kind: "generating" });
     setImages([]);
@@ -494,7 +522,7 @@ export function KoleksiyonEditClient() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "ControlNet üretimi başarısız."); return; }
+      if (!res.ok) { setError(data.error ?? ke.errGenerating); return; }
       const imgs: string[] = data.images ?? [];
       const now = new Date();
       const pad = (n: number) => String(n).padStart(2, "0");
@@ -511,63 +539,58 @@ export function KoleksiyonEditClient() {
       }, ...prev.slice(0, 9)]);
       setOriginals(imgs);
       setFilenames(imgs.map((_, i) => `remaura-cn-${ts}-${i + 1}.png`));
-    } catch (e) { setError((e as Error)?.message ?? "Bağlantı hatası."); }
+    } catch (e) { setError((e as Error)?.message ?? ke.errConnection); }
     finally { setLoad({ kind: "idle" }); }
   }
 
   async function handleKoleksiyonUret() {
-    if (!analiz) { setError("Önce referans görsel yükle."); return; }
-    if (!refBase64) { setError("Referans görsel gerekli."); return; }
+    if (!analiz) { setError(ke.errAnalyzeFirst); return; }
+    if (!refBase64) { setError(ke.errRefRequired); return; }
     setError(null);
     setLoad({ kind: "generating" });
     setImages([]);
     setFilenames([]);
     try {
-      const endpoint = harfGirdisi
-        ? "/api/remaura/koleksiyon-edit/controlnet"
-        : "/api/remaura/koleksiyon-edit/uret";
-      const body = harfGirdisi
-        ? JSON.stringify({
-            letterTemplate: generateLetterTemplate(harfGirdisi),
-            referansGorsel: refBase64,
-            takiTipi, tema, formKarakterleri, metalRengi,
-            targetLetter: harfGirdisi.trim(),
-            referansGucu,
-          })
-        : JSON.stringify({
-            takiTipi, tema, formKarakterleri, metalRengi,
-            referansGorsel: refBase64,
-            numImages: varyasyonSayisi,
-            referansGucu,
-            stilPrompt: analiz?.stilPrompt,
-            koleksiyonModu: true,
-          });
+      // Referans görsel varsa → Gemini (görsel tabanlı stil transferi)
+      const endpoint = "/api/remaura/koleksiyon-edit/gemini-uret";
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body,
+        body: JSON.stringify({
+          takiTipi,
+          tema,
+          metalRengi,
+          formKarakterleri,
+          referansGorsel: refBase64,
+          numImages: varyasyonSayisi,
+        }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Üretim başarısız."); return; }
+      if (!res.ok) { setError(data.error ?? ke.errGenerating); return; }
       const imgs: string[] = data.images ?? [];
       const now = new Date();
       const pad = (n: number) => String(n).padStart(2, "0");
       const ts = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
       setImages(imgs);
       setOriginals(imgs);
-      setFilenames(imgs.map((_, i) => `remaura-kol-${ts}-${i+1}.png`));
+      setFilenames(imgs.map((_, i) => `remaura-gemini-${ts}-${i+1}.png`));
       setPromptGecmisi(prev => [{
         id: Date.now().toString(),
         tarih: new Date().toLocaleTimeString("tr-TR"),
-        takiTipi, tema: tema || "(koleksiyon)", metalRengi,
-        seed: data.seed, gorselUrl: imgs[0],
+        takiTipi,
+        tema: tema || "(gemini koleksiyon)",
+        metalRengi,
+        gorselUrl: imgs[0],
       }, ...prev.slice(0, 9)]);
-    } catch (e) { setError((e as Error)?.message ?? "Bağlantı hatası."); }
-    finally { setLoad({ kind: "idle" }); }
+    } catch (e) {
+      setError((e as Error)?.message ?? ke.errConnection);
+    } finally {
+      setLoad({ kind: "idle" });
+    }
   }
 
   async function handleUret() {
-    if (!tema.trim() && !refBase64) { setError("Tema veya referans görsel gerekli."); return; }
+    if (!tema.trim() && !refBase64) { setError(ke.errThemeOrRef); return; }
     setError(null);
     setLoad({ kind: "generating" });
     setImages([]);
@@ -579,7 +602,7 @@ export function KoleksiyonEditClient() {
         body: JSON.stringify({ takiTipi, tema, formKarakterleri, metalRengi, referansGorsel: refBase64, numImages: varyasyonSayisi, referansGucu, stilPrompt: analiz?.stilPrompt }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Üretim başarısız."); return; }
+      if (!res.ok) { setError(data.error ?? ke.errGenerating); return; }
       const imgs: string[] = data.images ?? [];
       const now = new Date();
       const pad = (n: number) => String(n).padStart(2, "0");
@@ -596,7 +619,7 @@ export function KoleksiyonEditClient() {
       }, ...prev.slice(0, 9)]);
       setOriginals(imgs);
       setFilenames(imgs.map((_, i) => `remaura-${ts}-${i + 1}.png`));
-    } catch { setError("Bağlantı hatası."); }
+    } catch { setError(ke.errConnection); }
     finally { setLoad({ kind: "idle" }); }
   }
 
@@ -615,9 +638,9 @@ export function KoleksiyonEditClient() {
         body: JSON.stringify({ image: images[index], ...payload }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "İşlem başarısız."); return null; }
+      if (!res.ok) { setError(data.error ?? ke.errGenerating); return null; }
       return data.image ?? null;
-    } catch { setError("Bağlantı hatası."); return null; }
+    } catch { setError(ke.errConnection); return null; }
     finally { setLoad({ kind: "idle" }); }
   }
 
@@ -628,12 +651,12 @@ export function KoleksiyonEditClient() {
   // ─── Per-image actions ───────────────────────────────────────────────────────
 
   async function handleRemoveBg(index: number) {
-    const result = await callStability(index, { action: "remove-background" }, "BG kaldırılıyor");
+    const result = await callStability(index, { action: "remove-background" }, ke.actionRemoveBg);
     if (result) replaceImg(index, result);
   }
 
   async function handleUpscale(index: number) {
-    const result = await callStability(index, { action: "upscale" }, "Upscale");
+    const result = await callStability(index, { action: "upscale" }, ke.actionUpscale);
     if (result) replaceImg(index, result);
   }
 
@@ -646,13 +669,13 @@ export function KoleksiyonEditClient() {
         result = await callStability(
           modal.index,
           { action: "search-replace", searchPrompt: modal.searchPrompt, replacePrompt: modal.replacePrompt },
-          "Değiştiriliyor"
+          ke.actionReplace
         );
       } else {
         result = await callStability(
           modal.index,
           { action: "recolor", selectPrompt: modal.selectPrompt, colorPrompt: modal.colorPrompt },
-          "Renklendiriliyor"
+          ke.actionRecolor
         );
       }
       if (result) replaceImg(modal.index, result);
@@ -666,7 +689,7 @@ export function KoleksiyonEditClient() {
   }
 
   async function handleTasKaldir(index: number) {
-    setLoad({ kind: "op", index, label: "Taş kaldırılıyor" });
+    setLoad({ kind: "op", index, label: ke.actionRemoveStone });
     setError(null);
     try {
       const res = await fetch("/api/remaura/koleksiyon-edit/tas-kaldir", {
@@ -676,9 +699,9 @@ export function KoleksiyonEditClient() {
       });
       let data: Record<string, unknown> = {};
       try { data = await res.json(); } catch { data = { error: `HTTP ${res.status}` }; }
-      if (!res.ok) { setError((data.error as string) ?? "Taş kaldırma başarısız."); return; }
+      if (!res.ok) { setError((data.error as string) ?? ke.errGenerating); return; }
       if (data.image) replaceImg(index, data.image as string);
-    } catch (e) { setError((e as Error)?.message ?? "Bağlantı hatası."); }
+    } catch (e) { setError((e as Error)?.message ?? ke.errConnection); }
     finally { setLoad({ kind: "idle" }); }
   }
 
@@ -770,7 +793,7 @@ export function KoleksiyonEditClient() {
       a.click();
       URL.revokeObjectURL(url);
 
-    } catch { setError("İndirme başarısız."); }
+    } catch { setError(ke.errDownload); }
     finally { setLoad({ kind: "idle" }); }
   }
 
@@ -790,9 +813,9 @@ export function KoleksiyonEditClient() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Kayıt başarısız."); return; }
+      if (!res.ok) { setError(data.error ?? ke.errSave); return; }
       setKaydedildi(prev => new Set([...prev, index]));
-    } catch { setError("Bağlantı hatası."); }
+    } catch { setError(ke.errConnection); }
     finally { setKaydediliyor(null); }
   }
 
@@ -818,7 +841,7 @@ export function KoleksiyonEditClient() {
       <div style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "14px 28px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
         <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.4em", color: ACCENT }}>Remaura</span>
         <span style={{ color: "rgba(255,255,255,0.2)" }}>/</span>
-        <span style={{ fontSize: 10, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.35)" }}>Koleksiyon Edit</span>
+        <span style={{ fontSize: 10, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.35)" }}>{ke.breadcrumb}</span>
       </div>
 
       {/* Geçmiş paneli */}
@@ -831,7 +854,7 @@ export function KoleksiyonEditClient() {
               border: "none", cursor: "pointer", textTransform: "uppercase",
               letterSpacing: "0.2em", display: "flex", alignItems: "center", gap: 6 }}
           >
-            <span>Geçmiş ({promptGecmisi.length})</span>
+            <span>{ke.history} ({promptGecmisi.length})</span>
             <span>{gecmisAcik ? "▲" : "▼"}</span>
           </button>
           {gecmisAcik && (
@@ -868,13 +891,13 @@ export function KoleksiyonEditClient() {
           <div style={{ padding: 20, borderBottom: "2px solid rgba(183,110,121,0.15)", display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ width: 3, height: 16, background: ACCENT, borderRadius: 2 }} />
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.35em", textTransform: "uppercase", color: ACCENT }}>Hızlı Üretim</span>
-              <span style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em" }}>— GPT Image</span>
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.35em", textTransform: "uppercase", color: ACCENT }}>{ke.panel1Title}</span>
+              <span style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em" }}>— {ke.panel1Sub}</span>
             </div>
 
             {/* Referans görsel */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <Label>Referans Görsel <span style={{ textTransform: "none", letterSpacing: "normal", fontWeight: 400, color: "rgba(255,255,255,0.2)" }}>(opsiyonel)</span></Label>
+              <Label>{ke.refLabel} <span style={{ textTransform: "none", letterSpacing: "normal", fontWeight: 400, color: "rgba(255,255,255,0.2)" }}>{ke.refOptional}</span></Label>
               <div
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={onDrop}
@@ -894,7 +917,7 @@ export function KoleksiyonEditClient() {
                         style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", background: "none", border: "none", cursor: "pointer", marginTop: 4, padding: 0 }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.6)")}
                         onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.3)")}
-                      >Kaldır</button>
+                      >{ke.refRemove}</button>
                     </div>
                   </div>
                 ) : (
@@ -902,24 +925,24 @@ export function KoleksiyonEditClient() {
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", textTransform: "uppercase", letterSpacing: "0.2em" }}>Sürükle veya tıkla</span>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", textTransform: "uppercase", letterSpacing: "0.2em" }}>{ke.refDrag}</span>
                   </div>
                 )}
               </div>
               {refBase64 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <Label>Referans Gücü</Label>
+                    <Label>{ke.refStrength}</Label>
                     <span style={{ fontSize: 9, color: "rgba(255,255,255,0.35)" }}>
-                      {referansGucu < 0.4 ? "Prompt ağır" : referansGucu > 0.7 ? "Referans ağır" : "Dengeli"}
+                      {referansGucu < 0.4 ? ke.refPromptHeavy : referansGucu > 0.7 ? ke.refRefHeavy : ke.refBalanced}
                     </span>
                   </div>
                   <input type="range" min={0.1} max={1.0} step={0.05} value={referansGucu}
                     onChange={(e) => setReferansGucu(Number(e.target.value))}
                     style={{ width: "100%", accentColor: ACCENT }} />
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: 8, color: "rgba(255,255,255,0.2)" }}>Yaratıcı</span>
-                    <span style={{ fontSize: 8, color: "rgba(255,255,255,0.2)" }}>Birebir</span>
+                    <span style={{ fontSize: 8, color: "rgba(255,255,255,0.2)" }}>{ke.refCreative}</span>
+                    <span style={{ fontSize: 8, color: "rgba(255,255,255,0.2)" }}>{ke.refExact}</span>
                   </div>
                 </div>
               )}
@@ -928,45 +951,45 @@ export function KoleksiyonEditClient() {
 
             {/* Koleksiyon adı */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <Label>Koleksiyon Adı</Label>
-              <FieldInput value={koleksiyonAdi} onChange={(e) => setKoleksiyonAdi(e.target.value)} placeholder="Opsiyonel" />
+              <Label>{ke.collLabel}</Label>
+              <FieldInput value={koleksiyonAdi} onChange={(e) => setKoleksiyonAdi(e.target.value)} placeholder={ke.collPlaceholder} />
             </div>
 
             {/* Takı tipi */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <Label>Takı Tipi</Label>
+              <Label>{ke.jewelryLabel}</Label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {TAKI_TIPI.map((t) => (
-                  <ChipBtn key={t} active={takiTipi === t} onClick={() => setTakiTipi(t)}>{t}</ChipBtn>
+                {TAKI_TIPI.map((tip) => (
+                  <ChipBtn key={tip} active={takiTipi === tip} onClick={() => setTakiTipi(tip)}>{takiDisplay[tip]}</ChipBtn>
                 ))}
               </div>
             </div>
 
             {/* Tema */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <Label>Tema / Açıklama</Label>
-              <FieldTextarea rows={4} value={tema} onChange={(e) => setTema(e.target.value)} placeholder="Örnek: lotus çiçeği, ince kol, boş yuva" />
+              <Label>{ke.themeLabel}</Label>
+              <FieldTextarea rows={4} value={tema} onChange={(e) => setTema(e.target.value)} placeholder={ke.themePlaceholder} />
             </div>
 
             {/* Form karakteri */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <Label>Form Karakteri <span style={{ textTransform: "none", letterSpacing: "normal", fontWeight: 400, color: "rgba(255,255,255,0.2)" }}>(çoklu)</span></Label>
+              <Label>{ke.formLabel} <span style={{ textTransform: "none", letterSpacing: "normal", fontWeight: 400, color: "rgba(255,255,255,0.2)" }}>{ke.formMultiple}</span></Label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {FORM_KARAKTERLERI.map((k) => (
-                  <ChipBtn key={k} active={formKarakterleri.includes(k)} onClick={() => toggleForm(k)}>{k}</ChipBtn>
+                  <ChipBtn key={k} active={formKarakterleri.includes(k)} onClick={() => toggleForm(k)}>{formDisplay[k]}</ChipBtn>
                 ))}
               </div>
             </div>
 
             {/* Metal rengi */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <Label>Metal Rengi</Label>
+              <Label>{ke.metalLabel}</Label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {METAL_RENGI.map(({ label, hex }) => (
                   <button key={label} type="button" onClick={() => setMetalRengi(label)}
                     style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", border: "1px solid", cursor: "pointer", transition: "all 0.15s", background: metalRengi === label ? "rgba(183,110,121,0.16)" : "rgba(255,255,255,0.03)", borderColor: metalRengi === label ? ACCENT : "rgba(255,255,255,0.08)", color: metalRengi === label ? ACCENT_LIGHT : "rgba(255,255,255,0.4)" }}>
                     <span style={{ width: 10, height: 10, borderRadius: "50%", background: hex, border: "1px solid rgba(255,255,255,0.2)", flexShrink: 0 }} />
-                    {label}
+                    {metalDisplay[label]}
                   </button>
                 ))}
               </div>
@@ -974,7 +997,7 @@ export function KoleksiyonEditClient() {
 
             {/* Varyasyon sayısı */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <Label>Varyasyon Sayısı</Label>
+              <Label>{ke.variationLabel}</Label>
               <div style={{ display: "flex", gap: 6 }}>
                 {[1, 2, 3, 4].map(n => (
                   <ChipBtn key={n} active={varyasyonSayisi === n} onClick={() => setVaryasyonSayisi(n)}>{n}</ChipBtn>
@@ -993,7 +1016,7 @@ export function KoleksiyonEditClient() {
             <button type="button" onClick={handleUret} disabled={load.kind === "generating"}
               style={{ width: "100%", padding: "12px 0", borderRadius: 12, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", border: `1px solid ${ACCENT}`, cursor: load.kind === "generating" ? "not-allowed" : "pointer", opacity: load.kind === "generating" ? 0.6 : 1, transition: "all 0.15s", background: "rgba(183,110,121,0.14)", color: ACCENT_LIGHT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
               {load.kind === "generating" && <Spinner />}
-              {load.kind === "generating" ? "Üretiliyor…" : "Görsel Üret"}
+              {load.kind === "generating" ? ke.generating : ke.generateBtn}
             </button>
           </div>
 
@@ -1001,8 +1024,8 @@ export function KoleksiyonEditClient() {
           <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ width: 3, height: 16, background: "rgba(100,160,255,0.7)", borderRadius: 2 }} />
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(100,160,255,0.8)" }}>Koleksiyon Modu</span>
-              <span style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em" }}>— Stil Transferi</span>
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(100,160,255,0.8)" }}>{ke.panel2Title}</span>
+              <span style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em" }}>— {ke.panel2Sub}</span>
             </div>
 
             {/* Analiz sonucu */}
@@ -1015,7 +1038,7 @@ export function KoleksiyonEditClient() {
                 </div>
                 <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                  <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: "rgba(255,255,255,0.25)" }}>Koleksiyon için tasarım önerileri</span>
+                  <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: "rgba(255,255,255,0.25)" }}>{ke.suggestionsLabel}</span>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     {analiz.oneriler.map((oneri, idx) => (
                       <button key={idx} type="button" onClick={() => setTema(oneri)}
@@ -1033,7 +1056,7 @@ export function KoleksiyonEditClient() {
             {analizYukleniyor && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0" }}>
                 <Spinner size={12} />
-                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.2em" }}>Stil analiz ediliyor…</span>
+                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.2em" }}>{ke.analyzingStyle}</span>
               </div>
             )}
 
@@ -1041,17 +1064,17 @@ export function KoleksiyonEditClient() {
             {!analiz && !analizYukleniyor && (
               <div style={{ padding: "12px", background: "rgba(100,160,255,0.04)", border: "1px dashed rgba(100,160,255,0.15)", borderRadius: 8 }}>
                 <p style={{ fontSize: 10, color: "rgba(100,160,255,0.4)", textAlign: "center", letterSpacing: "0.1em" }}>
-                  Koleksiyon modu için yukarıdan<br/>referans görsel yükle
+                  {ke.refUploadHint}
                 </p>
               </div>
             )}
 
             {/* Hedef harf — ControlNet */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <Label>Hedef Harf <span style={{ textTransform: "none", letterSpacing: "normal", fontWeight: 400, color: "rgba(255,255,255,0.2)" }}>(ControlNet)</span></Label>
+              <Label>{ke.letterLabel} <span style={{ textTransform: "none", letterSpacing: "normal", fontWeight: 400, color: "rgba(255,255,255,0.2)" }}>{ke.letterSub}</span></Label>
               <FieldInput value={harfGirdisi}
                 onChange={(e) => setHarfGirdisi(e.target.value.toUpperCase().charAt(0) || "")}
-                placeholder="Örn: B" maxLength={1}
+                placeholder={ke.letterPlaceholder} maxLength={1}
                 style={{ textAlign: "center", fontSize: 20, fontWeight: 700, letterSpacing: "0.2em" }} />
             </div>
 
@@ -1061,10 +1084,10 @@ export function KoleksiyonEditClient() {
               disabled={load.kind === "generating" || !analiz}
               style={{ width: "100%", padding: "12px 0", borderRadius: 12, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", border: "1px solid rgba(100,160,255,0.4)", cursor: (load.kind === "generating" || !analiz) ? "not-allowed" : "pointer", opacity: (load.kind === "generating" || !analiz) ? 0.4 : 1, transition: "all 0.15s", background: "rgba(100,160,255,0.08)", color: "rgba(140,190,255,0.8)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
               {load.kind === "generating" && <Spinner />}
-              {load.kind === "generating" ? "Üretiliyor…"
-                : !analiz ? "Önce referans görsel yükle"
-                : harfGirdisi ? `Koleksiyon Üret · ${harfGirdisi}`
-                : "Koleksiyon Üret"}
+              {load.kind === "generating" ? ke.generating
+                : !analiz ? ke.uploadFirst
+                : harfGirdisi ? `${ke.collectionBtn} · ${harfGirdisi}`
+                : ke.collectionBtn}
             </button>
           </div>
 
@@ -1084,7 +1107,7 @@ export function KoleksiyonEditClient() {
                   <path d="M21 15l-5-5L5 21"/>
                 </svg>
                 <p style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.35em", color: "rgba(255,255,255,0.08)", textAlign: "center", lineHeight: 2 }}>
-                  Tema gir ve<br/>Görsel Üret&apos;e bas
+                  {ke.emptyHint}
                 </p>
               </div>
             </div>
@@ -1110,7 +1133,7 @@ export function KoleksiyonEditClient() {
                       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
                         <Spinner size={24} />
                         <span style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: "0.25em", color: "rgba(255,255,255,0.4)" }}>
-                          {load.kind === "op" ? load.label : "Kaydediliyor"}
+                          {load.kind === "op" ? load.label : ke.saving}
                         </span>
                       </div>
                     )}
@@ -1121,39 +1144,39 @@ export function KoleksiyonEditClient() {
                     </div>
                     {load.kind === "downloading" && load.index === i && (
                       <div style={{ position: "absolute", top: 8, right: 8, fontSize: 8, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: "rgba(183,110,121,0.85)", color: "white", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                        İndiriliyor…
+                        {ke.downloading}
                       </div>
                     )}
                   </div>
 
                   {/* Action buttons */}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                    <ActionBtn onClick={() => handleRemoveBg(i)} disabled={isOpBusy(i)}>Remove BG</ActionBtn>
-                    <ActionBtn onClick={() => handleUpscale(i)} disabled={isOpBusy(i)}>Upscale</ActionBtn>
+                    <ActionBtn onClick={() => handleRemoveBg(i)} disabled={isOpBusy(i)}>{ke.actionRemoveBg}</ActionBtn>
+                    <ActionBtn onClick={() => handleUpscale(i)} disabled={isOpBusy(i)}>{ke.actionUpscale}</ActionBtn>
                     <ActionBtn
                       onClick={() => setModal({ type: "recolor", index: i, selectPrompt: "", colorPrompt: "" })}
                       disabled={isOpBusy(i)}
                     >
-                      Recolor
+                      {ke.actionRecolor}
                     </ActionBtn>
                     <ActionBtn
                       onClick={() => setModal({ type: "replace", index: i, searchPrompt: "", replacePrompt: "" })}
                       disabled={isOpBusy(i)}
                     >
-                      Değiştir
+                      {ke.actionReplace}
                     </ActionBtn>
                     <ActionBtn onClick={() => handleTasKaldir(i)} disabled={isOpBusy(i)}>
-                      Taş Kaldır
+                      {ke.actionRemoveStone}
                     </ActionBtn>
                     <ActionBtn
                       onClick={() => { setLightbox(i); setMaskMode(true); setMaskResult(null); }}
                       disabled={isOpBusy(i)}
                     >
-                      Maskele
+                      {ke.actionMask}
                     </ActionBtn>
                     {originals[i] && images[i] !== originals[i] && (
                       <ActionBtn onClick={() => handleRevert(i)} disabled={isOpBusy(i)}>
-                        Orijinal
+                        {ke.actionRevert}
                       </ActionBtn>
                     )}
                     <ActionBtn
@@ -1161,10 +1184,10 @@ export function KoleksiyonEditClient() {
                       disabled={isOpBusy(i) || kaydediliyor === i}
                       accent
                     >
-                      {kaydediliyor === i ? "Kaydediliyor…" : kaydedildi.has(i) ? "✓ Kaydedildi" : "Kaydet"}
+                      {kaydediliyor === i ? ke.actionSaving : kaydedildi.has(i) ? ke.actionSaved : ke.actionSave}
                     </ActionBtn>
                     <ActionBtn onClick={() => handleDownload(i)} disabled={isOpBusy(i)} accent>
-                      İndir
+                      {ke.actionDownload}
                     </ActionBtn>
                   </div>
 
@@ -1193,14 +1216,14 @@ export function KoleksiyonEditClient() {
           {maskResult ? (
             <div style={{ display: "flex", gap: 20, maxWidth: "90vw" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
-                <span style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.3)" }}>Orijinal</span>
+                <span style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.3)" }}>{ke.original}</span>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={images[lightbox]} alt="Orijinal" style={{ maxWidth: "42vw", maxHeight: "68vh", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", display: "block" }} />
+                <img src={images[lightbox]} alt={ke.original} style={{ maxWidth: "42vw", maxHeight: "68vh", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", display: "block" }} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
-                <span style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.3)" }}>Sonuç</span>
+                <span style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.3)" }}>{ke.result}</span>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={maskResult} alt="Sonuç" style={{ maxWidth: "42vw", maxHeight: "68vh", borderRadius: 10, border: "1px solid rgba(183,110,121,0.3)", display: "block" }} />
+                <img src={maskResult} alt={ke.result} style={{ maxWidth: "42vw", maxHeight: "68vh", borderRadius: 10, border: "1px solid rgba(183,110,121,0.3)", display: "block" }} />
               </div>
             </div>
           ) : (
@@ -1239,37 +1262,37 @@ export function KoleksiyonEditClient() {
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement("a"); a.href = url; a.download = `${slug}_mask.png`; a.click();
                     URL.revokeObjectURL(url);
-                  } catch { setError("İndirme başarısız."); }
+                  } catch { setError(ke.errDownload); }
                 }}>
-                  İndir
+                  {ke.actionDownload}
                 </ActionBtn>
                 <ActionBtn onClick={() => { replaceImg(lightbox, maskResult); closeLightbox(); }}>
-                  Görseli Güncelle
+                  {ke.updateImage}
                 </ActionBtn>
-                <ActionBtn onClick={() => setMaskResult(null)}>Geri</ActionBtn>
+                <ActionBtn onClick={() => setMaskResult(null)}>{ke.back}</ActionBtn>
               </>
             ) : maskMode ? (
               <>
-                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.2em" }}>Fırça</span>
+                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.2em" }}>{ke.brush}</span>
                 <input
                   type="range" min={10} max={80} value={brushSize}
                   onChange={(e) => setBrushSize(Number(e.target.value))}
                   style={{ width: 90, accentColor: ACCENT }}
                 />
                 <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", minWidth: 22, textAlign: "center" }}>{brushSize}</span>
-                <ActionBtn onClick={clearMask}>Temizle</ActionBtn>
+                <ActionBtn onClick={clearMask}>{ke.clear}</ActionBtn>
                 <ActionBtn onClick={() => applyMask("erase")} disabled={maskLoading}>
-                  {maskLoading ? "…" : "Sil"}
+                  {maskLoading ? "…" : ke.erase}
                 </ActionBtn>
                 <ActionBtn onClick={() => applyMask("inpaint")} disabled={maskLoading}>
-                  {maskLoading ? "…" : "Doldur"}
+                  {maskLoading ? "…" : ke.fill}
                 </ActionBtn>
-                <ActionBtn onClick={() => setMaskMode(false)}>İptal</ActionBtn>
+                <ActionBtn onClick={() => setMaskMode(false)}>{ke.cancel}</ActionBtn>
               </>
             ) : (
               <>
-                <ActionBtn onClick={() => setMaskMode(true)}>Maskele &amp; Sil</ActionBtn>
-                <ActionBtn accent onClick={() => handleDownload(lightbox)}>İndir</ActionBtn>
+                <ActionBtn onClick={() => setMaskMode(true)}>{ke.maskAndErase}</ActionBtn>
+                <ActionBtn accent onClick={() => handleDownload(lightbox)}>{ke.actionDownload}</ActionBtn>
               </>
             )}
           </div>
@@ -1278,7 +1301,7 @@ export function KoleksiyonEditClient() {
           {maskLoading && (
             <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
               <Spinner size={32} />
-              <span style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.4)" }}>İşleniyor…</span>
+              <span style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.4)" }}>{ke.processing}</span>
             </div>
           )}
         </div>
@@ -1296,26 +1319,26 @@ export function KoleksiyonEditClient() {
           >
             {/* Title */}
             <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", color: ACCENT_LIGHT }}>
-              {modal.type === "replace" ? "Ara & Değiştir" : "Renklendirme"}
+              {modal.type === "replace" ? ke.searchReplaceTitle : ke.recolorTitle}
             </p>
 
             {/* Replace inputs */}
             {modal.type === "replace" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                  <Label>Ne arıyorsun?</Label>
+                  <Label>{ke.searchLabel}</Label>
                   <FieldInput
                     value={modal.searchPrompt}
                     onChange={(e) => setModal({ ...modal, searchPrompt: e.target.value })}
-                    placeholder="örn. the ring band"
+                    placeholder={ke.searchPlaceholder}
                   />
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                  <Label>Ne olsun?</Label>
+                  <Label>{ke.replaceLabel}</Label>
                   <FieldInput
                     value={modal.replacePrompt}
                     onChange={(e) => setModal({ ...modal, replacePrompt: e.target.value })}
-                    placeholder="örn. twisted rope pattern"
+                    placeholder={ke.replacePlaceholder}
                   />
                 </div>
               </div>
@@ -1325,19 +1348,19 @@ export function KoleksiyonEditClient() {
             {modal.type === "recolor" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                  <Label>Neyi?</Label>
+                  <Label>{ke.recolorSelectLabel}</Label>
                   <FieldInput
                     value={modal.selectPrompt}
                     onChange={(e) => setModal({ ...modal, selectPrompt: e.target.value })}
-                    placeholder="örn. the ring"
+                    placeholder={ke.recolorSelectPlaceholder}
                   />
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                  <Label>Hangi renk / metal?</Label>
+                  <Label>{ke.recolorColorLabel}</Label>
                   <FieldInput
                     value={modal.colorPrompt}
                     onChange={(e) => setModal({ ...modal, colorPrompt: e.target.value })}
-                    placeholder="örn. rose gold metal"
+                    placeholder={ke.recolorColorPlaceholder}
                   />
                 </div>
               </div>
@@ -1351,7 +1374,7 @@ export function KoleksiyonEditClient() {
                 disabled={modalLoading}
                 style={{ flex: 1, padding: "9px 0", borderRadius: 8, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.4)", background: "none", cursor: "pointer", opacity: modalLoading ? 0.4 : 1 }}
               >
-                İptal
+                {ke.cancel}
               </button>
               <button
                 type="button"
@@ -1360,7 +1383,7 @@ export function KoleksiyonEditClient() {
                 style={{ flex: 1, padding: "9px 0", borderRadius: 8, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", border: `1px solid ${ACCENT}`, background: "rgba(183,110,121,0.18)", color: ACCENT_LIGHT, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: modalLoading ? 0.7 : 1 }}
               >
                 {modalLoading && <Spinner size={12} />}
-                {modalLoading ? "İşleniyor…" : "Uygula"}
+                {modalLoading ? ke.processing : ke.applyBtn}
               </button>
             </div>
           </div>
