@@ -68,14 +68,17 @@ Bu görseli aşağıdaki formatta JSON olarak analiz et. Başka hiçbir şey yaz
   "stilAciklamasi": "Malzeme, teknik ve estetik dilin Türkçe özeti (2-3 cümle)",
   "stilPrompt": "ONLY IN ENGLISH: describe ONLY the material, surface finish, craftsmanship technique, decorative elements and mood. NEVER mention the jewelry type (ring/necklace/earring etc), NEVER mention specific gemstone names. Example format: 'oxidized silver, deep bas-relief engraving, baroque floral scrollwork, dramatic shadows, antique finish, high contrast studio lighting'",
   "oneriler": [
-    "Aynı karakterin/konunun farklı bir sahne veya kompozisyon önerisi (Türkçe)",
-    "İkinci öneri",
-    "Üçüncü öneri",
-    "Dördüncü öneri"
+    "Bu referans görselin stilini kullanan YENİ bir takı tasarımı önerisi — farklı takı tipi veya farklı motif, ama aynı stil dili (Türkçe, kısa, üretilebilir tema olarak yaz)",
+    "İkinci öneri — örn: aynı stil ama farklı bir doğa motifi veya sembol",
+    "Üçüncü öneri — örn: aynı metal ve işçilik tekniği ama farklı form",
+    "Dördüncü öneri — örn: aynı koleksiyona ait olabilecek tamamlayıcı bir parça"
   ]
 }
 
-Öneriler aynı karakteri/konuyu farklı anlar veya kompozisyonlarda göstermeli. Bambaşka karakterler önerme.`;
+Öneriler bu referans görselin STİL DNA'sını koruyan yeni takı tasarım fikirleri olmalı.
+Sahne, ışık, fotoğraf kompozisyonu önerme — sadece üretilebilir takı tasarım temaları öner.
+Örnek iyi öneri: "Lotus çiçeği motifli, aynı barok kıvrımlarla işlenmiş kolye ucu"
+Örnek kötü öneri: "Gece ışığında parlayan yüzey üzerinde gösterim"`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
