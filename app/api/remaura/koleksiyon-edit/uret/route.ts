@@ -164,42 +164,41 @@ export async function POST(req: Request) {
   const { fal } = await import("@fal-ai/client");
   fal.config({ credentials: falKey });
 
-  // ── Stil kaynağını belirle ────────────────────────────────
-  let stilDescription = "";
-  let referansUrl: string | null = null;
-
-  if (stilKartiId) {
-    // Kaydedilmiş stil kartından al
-    const admin = (() => {
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      if (!url || !key) return null;
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { createClient: sc } = require("@supabase/supabase-js");
-      return sc(url, key, { auth: { persistSession: false } });
-    })();
-    if (admin) {
-      const { data } = await admin.from("stil_kartlari").select("*").eq("id", stilKartiId).single();
-      if (data) {
-        stilDescription = data.stil_prompt;
-        referansUrl = data.referans_gorsel_url ?? null;
-      }
-    }
-  } else if (stilPrompt) {
-    // GPT-4o analizinden gelen hazır stil promptu
-    stilDescription = stilPrompt
-      .replace(/\b(ring|necklace|earring|bracelet|brooch|pendant|bangle|choker)\b/gi, "")
-      .replace(/\s+/g, " ").trim();
-  } else if (referansGorsel) {
-    // Yeni referans görsel — hem CDN URL'e yükle hem analiz et
-    referansUrl = await toFalUrl(referansGorsel, fal);
-    stilDescription = await analyzeStyleWithVision(referansGorsel);
-  }
-
-  // ── Üretim ───────────────────────────────────────────────
+  // ── Stil kaynağını belirle + Üretim ─────────────────────
   try {
+    let stilDescription = "";
+    let referansUrl: string | null = null;
+
+    if (stilKartiId) {
+      // Kaydedilmiş stil kartından al
+      const admin = (() => {
+        const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (!url || !key) return null;
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { createClient: sc } = require("@supabase/supabase-js");
+        return sc(url, key, { auth: { persistSession: false } });
+      })();
+      if (admin) {
+        const { data } = await admin.from("stil_kartlari").select("*").eq("id", stilKartiId).single();
+        if (data) {
+          stilDescription = data.stil_prompt;
+          referansUrl = data.referans_gorsel_url ?? null;
+        }
+      }
+    } else if (stilPrompt) {
+      // Analiz sonucundan gelen hazır stil açıklaması
+      stilDescription = stilPrompt
+        .replace(/\b(ring|necklace|earring|bracelet|brooch|pendant|bangle|choker)\b/gi, "")
+        .replace(/\s+/g, " ").trim();
+    } else if (referansGorsel) {
+      // Referans görsel — CDN URL'e yükle + stil analizi
+      referansUrl = await toFalUrl(referansGorsel, fal);
+      stilDescription = await analyzeStyleWithVision(referansGorsel);
+    }
+
     if (referansUrl) {
-      // Referans URL var → flux-pro/kontext (model görseli görür)
+      // Referans görselli üretim (görsel bazlı stil transferi)
       const prompt = [
         `Generate a new ${metalEn} ${takiTipiEn}.`,
         `STYLE LOCK: Keep the EXACT same craftsmanship technique, decorative motifs, metal finish and surface texture from the reference. Create a new ${takiTipiEn} — not a copy of the reference piece.`,
@@ -217,17 +216,20 @@ export async function POST(req: Request) {
           num_images: Math.min(numImages, 4),
           aspect_ratio: "1:1",
           output_format: "jpeg",
-          safety_tolerance: "3",
+          safety_tolerance: 3,
         } as any,
         logs: false,
       });
 
       type FalImage = { url: string };
       const images = ((result.data as { images?: FalImage[] })?.images ?? []).map(i => i.url);
+      if (images.length === 0) {
+        return NextResponse.json({ error: "Görsel üretilemedi, lütfen tekrar deneyin." }, { status: 500 });
+      }
       return NextResponse.json({ images, seed: 0, stilDescription });
 
     } else {
-      // Referans yok → flux-pro/v1.1-ultra (metin bazlı)
+      // Metin bazlı üretim
       const prompt = [
         `A single ${metalEn} ${takiTipiEn}, luxury jewelry product photography.`,
         kameraAcisi,
@@ -246,18 +248,27 @@ export async function POST(req: Request) {
           seed,
           aspect_ratio: "1:1",
           output_format: "jpeg",
-          safety_tolerance: "3",
+          safety_tolerance: 3,
         } as any,
         logs: false,
       });
 
       type FalImage = { url: string };
       const images = ((result.data as { images?: FalImage[] })?.images ?? []).map(i => i.url);
+      if (images.length === 0) {
+        return NextResponse.json({ error: "Görsel üretilemedi, lütfen tekrar deneyin." }, { status: 500 });
+      }
       return NextResponse.json({ images, seed, stilDescription });
     }
   } catch (err: unknown) {
-    console.error("[uret] fal error:", err);
-    const e = err as { message?: string };
-    return NextResponse.json({ error: e?.message ?? "Görsel üretimi başarısız." }, { status: 500 });
+    console.error("[uret] error:", err);
+    const e = err as { status?: number; message?: string; body?: { detail?: string } };
+    // Hata koduna göre kullanıcı dostu mesaj — servis adı gösterilmez
+    const status = e?.status ?? 500;
+    let userMsg = "Görsel üretimi başarısız oldu, lütfen tekrar deneyin.";
+    if (status === 401 || status === 403) userMsg = "Yetkilendirme hatası, lütfen yöneticiye bildirin.";
+    else if (status === 429) userMsg = "İstek limiti aşıldı, lütfen birkaç dakika sonra tekrar deneyin.";
+    else if (status === 503 || status === 504) userMsg = "Servis geçici olarak meşgul, lütfen tekrar deneyin.";
+    return NextResponse.json({ error: userMsg }, { status: 500 });
   }
 }

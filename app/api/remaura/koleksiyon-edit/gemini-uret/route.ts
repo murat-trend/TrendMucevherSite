@@ -185,7 +185,11 @@ export async function POST(req: Request) {
 
   } catch (err: unknown) {
     console.error("[gemini-uret] error:", err);
-    const e = err as { message?: string };
-    return NextResponse.json({ error: e?.message ?? "Gemini üretimi başarısız." }, { status: 500 });
+    const e = err as { status?: number; message?: string };
+    const status = e?.status ?? 500;
+    let userMsg = "Koleksiyon görseli üretilemedi, lütfen tekrar deneyin.";
+    if (status === 429) userMsg = "İstek limiti aşıldı, lütfen birkaç dakika sonra tekrar deneyin.";
+    else if (status === 503 || status === 504) userMsg = "Servis geçici olarak meşgul, lütfen tekrar deneyin.";
+    return NextResponse.json({ error: userMsg }, { status: 500 });
   }
 }

@@ -116,7 +116,6 @@ KRİTİK KURALLAR:
     return NextResponse.json(sonuc);
   } catch (err: unknown) {
     console.error("[analiz] error:", err);
-    const e = err as { message?: string };
-    return NextResponse.json({ error: e?.message ?? "Analiz başarısız." }, { status: 500 });
+    return NextResponse.json({ error: "Stil analizi başarısız oldu." }, { status: 500 });
   }
 }
