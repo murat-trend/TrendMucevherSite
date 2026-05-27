@@ -58,27 +58,28 @@ export async function POST(req: Request) {
     const { default: OpenAI } = await import("openai");
     const openai = new OpenAI({ apiKey });
 
-    const systemPrompt = `Sen bir lüks mücevher tasarımı uzmanısın. Sana bir mücevher görseli verilecek.
-Bu görseli aşağıdaki formatta JSON olarak analiz et. Başka hiçbir şey yazma, sadece JSON döndür.
+    const systemPrompt = `Sen bir lüks mücevher stil analiz uzmanısın.
+Sana bir referans mücevher görseli verilecek.
+Bu görseli analiz edip aşağıdaki JSON formatında döndür. Başka hiçbir şey yazma.
+
+KRİTİK KURALLAR:
+1. stilPrompt SADECE teknik stil bilgisi içermeli — takı tipi (yüzük/küpe/kolye) ASLA yazma
+2. stilPrompt metal rengini, yüzey dokusunu, işçilik tekniğini, motifi kesin olarak belirt
+3. Öneriler fotoğraf sahnesi değil — aynı stil DNA'sıyla yapılabilecek YENİ takı tasarım fikirleri olmalı
 
 {
   "takiTipi": "kolye ucu / yüzük / bilezik / küpe vb.",
-  "konu": "Görseldeki ana konu veya figür (Türkçe, 1-2 cümle)",
-  "mevcutSahne": "Mevcut kompozisyonun kısa açıklaması (Türkçe)",
+  "konu": "Görseldeki ana motif veya konu (Türkçe, 1-2 cümle)",
+  "mevcutSahne": "Mevcut tasarımın kısa teknik açıklaması (Türkçe)",
   "stilAciklamasi": "Malzeme, teknik ve estetik dilin Türkçe özeti (2-3 cümle)",
-  "stilPrompt": "ONLY IN ENGLISH: describe ONLY the material, surface finish, craftsmanship technique, decorative elements and mood. NEVER mention the jewelry type (ring/necklace/earring etc), NEVER mention specific gemstone names. Example format: 'oxidized silver, deep bas-relief engraving, baroque floral scrollwork, dramatic shadows, antique finish, high contrast studio lighting'",
+  "stilPrompt": "ONLY IN ENGLISH — describe EXACTLY: (1) metal color and finish, (2) surface technique, (3) decorative motifs, (4) stone treatment, (5) overall mood. FORMAT: '[metal] [finish], [technique], [motifs], [stone details], [mood]'. NEVER mention jewelry type. Example: 'oxidized silver, filigree wirework technique, rose and butterfly botanical motifs, small amethyst accent stones, dark dramatic antique mood, high detail craftsmanship'",
   "oneriler": [
-    "Bu referans görselin stilini kullanan YENİ bir takı tasarımı önerisi — farklı takı tipi veya farklı motif, ama aynı stil dili (Türkçe, kısa, üretilebilir tema olarak yaz)",
-    "İkinci öneri — örn: aynı stil ama farklı bir doğa motifi veya sembol",
-    "Üçüncü öneri — örn: aynı metal ve işçilik tekniği ama farklı form",
-    "Dördüncü öneri — örn: aynı koleksiyona ait olabilecek tamamlayıcı bir parça"
+    "Bu referansın STİL DNA'sını kullanan yeni bir takı tasarım fikri — kısa, üretilebilir tema (Türkçe). Örnek: 'Aynı filigre tekniğiyle lotus ve yusufçuk motifli kolye ucu'",
+    "İkinci öneri — farklı motif ama aynı metal ve işçilik tekniği",
+    "Üçüncü öneri — aynı koleksiyona ait olabilecek tamamlayıcı parça fikri",
+    "Dördüncü öneri — aynı stil ama farklı bir kültürel motif veya sembol"
   ]
-}
-
-Öneriler bu referans görselin STİL DNA'sını koruyan yeni takı tasarım fikirleri olmalı.
-Sahne, ışık, fotoğraf kompozisyonu önerme — sadece üretilebilir takı tasarım temaları öner.
-Örnek iyi öneri: "Lotus çiçeği motifli, aynı barok kıvrımlarla işlenmiş kolye ucu"
-Örnek kötü öneri: "Gece ışığında parlayan yüzey üzerinde gösterim"`;
+}`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",

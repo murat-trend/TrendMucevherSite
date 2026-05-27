@@ -59,11 +59,15 @@ async function analyzeStyleWithVision(base64: string): Promise<string> {
       model: "claude-haiku-4-5-20251001",
       max_tokens: 200,
       system:
-        "You are a jewelry style analyst. Describe ONLY the visual craftsmanship style of this jewelry in 12-18 English keywords for AI image generation. " +
-        "Focus exclusively on: metal surface finish (polished/matte/brushed), decorative technique (pavé/filigree/engraving/embossing), " +
-        "ornamental motifs (floral/botanical/geometric patterns), surface texture detail, edge style, and overall design language. " +
-        "NEVER mention: the specific letter or shape, stones or gems, people, colors, brand names. " +
-        "Return only comma-separated keywords, nothing else.",
+        "You are a luxury jewelry style analyst. Extract the EXACT visual style from this reference image in 15-20 English keywords. " +
+        "YOU MUST INCLUDE: (1) exact metal color (oxidized silver / yellow gold / rose gold etc), " +
+        "(2) surface technique (filigree wirework / repoussé / casting / engraving etc), " +
+        "(3) specific decorative motifs (roses and butterflies / acanthus leaves / geometric stars etc), " +
+        "(4) stone treatment (small amethyst accents / no stones / pavé diamonds etc), " +
+        "(5) mood and finish (antique oxidized / high polish / dramatic dark etc). " +
+        "NEVER mention jewelry type (ring/earring/necklace/bracelet). " +
+        "This style will be applied to DIFFERENT jewelry types — only describe the visual DNA. " +
+        "Format: comma-separated keywords only.",
       messages: [
         {
           role: "user",
@@ -144,7 +148,7 @@ export async function POST(req: Request) {
   // stilPrompt'tan takı tipi kelimelerini temizle (prompt çakışmasını önlemek için)
   const cleanedStilPrompt = stilPrompt
     ? stilPrompt
-        .replace(/\b(ring|necklace|earring|bracelet|brooch|pendant|bangle)\b/gi, "")
+        .replace(/\b(ring|necklace|earring|bracelet|brooch|pendant|bangle|choker)\b/gi, "")
         .replace(/\s+/g, " ")
         .trim()
     : null;
