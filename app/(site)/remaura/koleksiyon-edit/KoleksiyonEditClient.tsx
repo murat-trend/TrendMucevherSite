@@ -1,12 +1,32 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TAKI_TIPI = ["Yüzük", "Kolye", "Küpe", "Bilezik", "Broş"] as const;
+const TAKI_TIPI = ["Yüzük", "Kolye Ucu", "Kolye", "Küpe", "Bilezik", "Broş"] as const;
 type TakiTipi = (typeof TAKI_TIPI)[number];
+
+// Türkçe takı tipi → İngilizce (Imagen 3 prompt için)
+const TAKI_TIPI_EN: Record<TakiTipi, string> = {
+  "Yüzük":    "ring",
+  "Kolye Ucu": "pendant",
+  "Kolye":    "necklace with chain",
+  "Küpe":     "earring",
+  "Bilezik":  "bracelet",
+  "Broş":     "brooch",
+};
+
+// Türkçe metal rengi → İngilizce (Imagen 3 prompt için)
+const METAL_RENGI_EN: Record<string, string> = {
+  "Sarı Altın":        "18k yellow gold",
+  "Rose Gold":         "18k rose gold",
+  "Beyaz Altın":       "18k white gold",
+  "Gümüş":             "sterling silver",
+  "Oksitlenmiş Gümüş": "oxidized silver",
+};
 
 const FORM_KARAKTERLERI = [
   "İnce & Zarif",
@@ -231,6 +251,46 @@ function GridSkeleton() {
   );
 }
 
+// ─── Öneri metninden takı tipini algıla ──────────────────────────────────────
+
+function detectTakiTipi(text: string): TakiTipi | null {
+  const t = text.toLocaleLowerCase("tr-TR");
+  // "kolye ucu" / "pendant" ÖNCE — "kolye" içerdiği için sıra önemli
+  if (/kolye ucu|pendant/.test(t))   return "Kolye Ucu";
+  if (/küpe|kupe|earring/.test(t))   return "Küpe";
+  if (/bilezik|bracelet/.test(t))    return "Bilezik";
+  if (/kolye|necklace/.test(t))      return "Kolye";
+  if (/broş|bros|brooch/.test(t))    return "Broş";
+  if (/yüzük|yuzuk|ring/.test(t))    return "Yüzük";
+  return null;
+}
+
+// ─── Image compression ────────────────────────────────────────────────────────
+
+function compressImage(dataUrl: string, maxPx = 2048, quality = 0.97): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      // Görsel zaten küçükse boyutunu değiştirme
+      const ratio = Math.min(maxPx / img.width, maxPx / img.height, 1);
+      const w = Math.round(img.width * ratio);
+      const h = Math.round(img.height * ratio);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d")!;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, 0, 0, w, h);
+      // PNG → kayıpsız PNG çıkar; diğerleri → yüksek kalite JPEG
+      const isPng = dataUrl.startsWith("data:image/png");
+      resolve(isPng ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => resolve(dataUrl); // hata olursa orijinali kullan
+    img.src = dataUrl;
+  });
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function KoleksiyonEditClient() {
@@ -239,11 +299,12 @@ export function KoleksiyonEditClient() {
 
   // Display maps — keep internal state as Turkish keys (backend uses them)
   const takiDisplay: Record<TakiTipi, string> = {
-    "Yüzük": ke.ringLabel,
-    "Kolye": ke.necklaceLabel,
-    "Küpe": ke.earringLabel,
-    "Bilezik": ke.braceletLabel,
-    "Broş": ke.broochLabel,
+    "Yüzük":    ke.ringLabel,
+    "Kolye Ucu": ke.pendantLabel,
+    "Kolye":    ke.necklaceLabel,
+    "Küpe":     ke.earringLabel,
+    "Bilezik":  ke.braceletLabel,
+    "Broş":     ke.broochLabel,
   };
   const metalDisplay: Record<MetalRengi, string> = {
     "Sarı Altın": ke.metalYellowGold,
@@ -280,13 +341,21 @@ export function KoleksiyonEditClient() {
   const [sonStilAnalizi, setSonStilAnalizi] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
-  // GPT-4o analiz sonucu
+  // GPT-4o analiz sonucu — Evrensel Stil Transfer Motoru
+  type StyleLock = {
+    metal_finish: string;
+    surface_technique: string;
+    decorative_motifs: string;
+    stone_treatment: string;
+    overall_mood: string;
+    photography_setting: string;
+  };
   type AnalizSonucu = {
     takiTipi: string;
     konu: string;
     mevcutSahne: string;
     stilAciklamasi: string;
-    stilPrompt: string;
+    styleLock: StyleLock;
     oneriler: string[];
   };
   const [analiz, setAnaliz] = useState<AnalizSonucu | null>(null);
@@ -348,6 +417,59 @@ export function KoleksiyonEditClient() {
     setMaskLoading(false);
     isDrawingRef.current = false;
   }
+
+  // ─── Tasarım sayfasından görsel aktarımı (localStorage) ─────────────────────
+  useEffect(() => {
+    const gorsel = localStorage.getItem("koleksiyon_edit_gorsel");
+    if (!gorsel) return;
+    localStorage.removeItem("koleksiyon_edit_gorsel");
+    // Düzenleme grid'ine yükle — action butonları (Taş Kaldır, Maskele vb.) aktif olsun
+    setImages([gorsel]);
+    setOriginals([gorsel]);
+    setFilenames(["galeri-gorseli.png"]);
+    // Sol panele de referans olarak ekle
+    setRefBase64(gorsel);
+    setRefName("galeri-gorseli.png");
+    setAnaliz(null);
+    setAnalizHata(false);
+    setAnalizYukleniyor(true);
+    fetch("/api/remaura/koleksiyon-edit/analiz", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: gorsel }),
+    })
+      .then(async (r) => {
+        if (!r.ok) { setAnalizHata(true); return; }
+        const data = await r.json() as AnalizSonucu;
+        if (data) setAnaliz(data);
+      })
+      .catch(() => { setAnalizHata(true); })
+      .finally(() => { setAnalizYukleniyor(false); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ─── Galeri "Kullan" → stilKartiId URL parametresi ───────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const stilKartiId = params.get("stilKartiId");
+    if (!stilKartiId) return;
+    // URL'den parametreyi temizle (history replace)
+    const clean = window.location.pathname;
+    window.history.replaceState({}, "", clean);
+    fetch("/api/remaura/koleksiyon-edit/stil-karti")
+      .then((r) => r.json())
+      .then((data) => {
+        const kart = (data.kartlar as Array<{ id: string; isim: string; metal: string | null; stil_prompt: string }> | undefined)
+          ?.find((k) => k.id === stilKartiId);
+        if (!kart) return;
+        setSonStilAnalizi(kart.stil_prompt);
+        if (kart.metal) setMetalRengi(kart.metal as MetalRengi);
+        setToastMsg(`"${kart.isim}" stil kartı yüklendi`);
+        setTimeout(() => setToastMsg(null), 3000);
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ESC closes lightbox
   useEffect(() => {
@@ -468,7 +590,9 @@ export function KoleksiyonEditClient() {
   const handleFileChange = useCallback(async (file: File) => {
     const reader = new FileReader();
     reader.onload = async () => {
-      const base64 = reader.result as string;
+      const raw = reader.result as string;
+      // Görsel kalitesini koru — max 2048px, JPEG %97 (ince mücevher detayları için)
+      const base64 = await compressImage(raw, 2048, 0.97);
       setRefBase64(base64);
       setRefName(file.name);
       setAnaliz(null);
@@ -481,13 +605,14 @@ export function KoleksiyonEditClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ image: base64 }),
         });
-        const data = await res.json();
-        if (res.ok) setAnaliz(data);
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) setAnaliz(data as AnalizSonucu);
         else setAnalizHata(true);
       } catch { setAnalizHata(true); }
       finally { setAnalizYukleniyor(false); }
     };
     reader.readAsDataURL(file);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleAnalizTekrar() {
@@ -571,53 +696,81 @@ export function KoleksiyonEditClient() {
   }
 
   async function handleKoleksiyonUret() {
-    if (!analiz) { setError(ke.errAnalyzeFirst); return; }
-    if (!refBase64) { setError(ke.errRefRequired); return; }
+    if (!analiz?.styleLock) { setError(ke.errAnalyzeFirst); return; }
     setError(null);
     setLoad({ kind: "generating" });
     setImages([]);
     setFilenames([]);
 
+    // ── Yeni tasarım konseptini İngilizce inşa et (Imagen 3 için) ────────────
+    const metalEN = METAL_RENGI_EN[metalRengi] ?? metalRengi;
+    const takiEN  = TAKI_TIPI_EN[takiTipi]    ?? takiTipi;
+    const conceptParts: string[] = [`a ${metalEN} ${takiEN}`];
+    if (harfGirdisi.trim()) conceptParts.push(`featuring the letter "${harfGirdisi.trim().toUpperCase()}"`);
+    if (tema.trim()) conceptParts.push(`with ${tema.trim()} motif`);
+    const new_design_concept = conceptParts.join(" ");
+
+    // ── Paralel üretim — her varyasyon bağımsız istek ─────────────────────────
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 270_000); // 4.5 dakika
+    const timeoutId = setTimeout(() => controller.abort(), 270_000);
 
     try {
-      const res = await fetch("/api/remaura/koleksiyon-edit/gemini-uret", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          takiTipi,
-          tema,
-          metalRengi,
-          formKarakterleri,
-          referansGorsel: refBase64,
-          numImages: varyasyonSayisi,
-        }),
-        signal: controller.signal,
-      });
+      const variationRequests = Array.from({ length: varyasyonSayisi }, () =>
+        fetch("/api/remaura/koleksiyon-edit/gemini-uret", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            styleLock: analiz.styleLock,
+            new_design_concept,
+          }),
+          signal: controller.signal,
+        }).then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error((data as { error?: string }).error ?? ke.errGenerating);
+          return (data as { image?: string }).image ?? "";
+        })
+      );
 
-      let data: Record<string, unknown> = {};
-      try { data = await res.json(); } catch { /* JSON parse hatası */ }
+      // Promise.allSettled — bir varyasyon hata verirse diğerleri çökmez
+      const results = await Promise.allSettled(variationRequests);
 
-      if (!res.ok) { setError((data.error as string) ?? ke.errGenerating); return; }
-      const imgs: string[] = (data.images as string[]) ?? [];
-      if (imgs.length === 0) { setError(ke.errGenerating); return; }
+      const successImages: string[] = [];
+      const failedCount = results.filter((r) => r.status === "rejected").length;
+
+      for (const result of results) {
+        if (result.status === "fulfilled" && result.value) {
+          successImages.push(result.value);
+        }
+      }
+
+      if (successImages.length === 0) {
+        setError(ke.errGenerating);
+        return;
+      }
+
+      // Kısmi başarı uyarısı
+      if (failedCount > 0) {
+        setError(`${successImages.length} varyasyon üretildi, ${failedCount} başarısız oldu.`);
+      }
 
       const now = new Date();
       const pad = (n: number) => String(n).padStart(2, "0");
-      const ts = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-      setImages(imgs);
-      if (data.styleAnalysis) setSonStilAnalizi(data.styleAnalysis as string);
-      setOriginals(imgs);
-      setFilenames(imgs.map((_, i) => `remaura-${ts}-${i+1}.png`));
-      setPromptGecmisi(prev => [{
+      const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+
+      setImages(successImages);
+      setOriginals(successImages);
+      setFilenames(successImages.map((_, i) => `remaura-koleksiyon-${ts}-${i + 1}.jpg`));
+      // styleLock'u "stili kaydet" akışı için sakla
+      setSonStilAnalizi(JSON.stringify(analiz.styleLock));
+      setPromptGecmisi((prev) => [{
         id: Date.now().toString(),
         tarih: new Date().toLocaleTimeString("tr-TR"),
         takiTipi,
-        tema: tema || "(koleksiyon)",
+        tema: tema || harfGirdisi || "(koleksiyon)",
         metalRengi,
-        gorselUrl: imgs[0],
+        gorselUrl: successImages[0],
       }, ...prev.slice(0, 9)]);
+
     } catch (e: unknown) {
       if ((e as { name?: string })?.name === "AbortError") {
         setError("Görsel üretimi çok uzun sürdü. Lütfen daha küçük bir varyasyon sayısı seçip tekrar deneyin.");
@@ -644,7 +797,20 @@ export function KoleksiyonEditClient() {
       const res = await fetch("/api/remaura/koleksiyon-edit/uret", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ takiTipi, tema, formKarakterleri, metalRengi, referansGorsel: refBase64, numImages: varyasyonSayisi, referansGucu, stilPrompt: analiz?.stilPrompt }),
+        body: JSON.stringify({
+          takiTipi, tema, formKarakterleri, metalRengi,
+          referansGorsel: refBase64, numImages: varyasyonSayisi, referansGucu,
+          // styleLock'tan İngilizce stil özeti türet — Flux endpoint'i için
+          stilPrompt: analiz?.styleLock
+            ? [
+                analiz.styleLock.metal_finish,
+                analiz.styleLock.surface_technique,
+                analiz.styleLock.decorative_motifs,
+                analiz.styleLock.stone_treatment,
+                analiz.styleLock.overall_mood,
+              ].filter(Boolean).join(", ")
+            : undefined,
+        }),
         signal: controller.signal,
       });
 
@@ -926,6 +1092,24 @@ export function KoleksiyonEditClient() {
         <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.4em", color: ACCENT }}>Remaura</span>
         <span style={{ color: "rgba(255,255,255,0.2)" }}>/</span>
         <span style={{ fontSize: 10, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.35)" }}>{ke.breadcrumb}</span>
+        <Link
+          href="/remaura/galeri"
+          style={{
+            marginLeft: "auto",
+            fontSize: 9,
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: "0.25em",
+            color: ACCENT_LIGHT,
+            textDecoration: "none",
+            padding: "5px 14px",
+            border: `1px solid ${ACCENT}`,
+            borderRadius: 5,
+            background: "rgba(183,110,121,0.1)",
+          }}
+        >
+          Galeri →
+        </Link>
       </div>
 
       {/* Geçmiş paneli */}
@@ -969,10 +1153,10 @@ export function KoleksiyonEditClient() {
 
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         {/* ── Sol Panel ─────────────────────────────────────────────────── */}
-        <div style={{ width: 340, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.06)", overflowY: "auto", minHeight: "calc(100vh - 49px)" }}>
+        <div style={{ width: 300, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.06)", overflowY: "auto", minHeight: "calc(100vh - 49px)" }}>
 
           {/* ── PANEL 1: HIZLI ÜRETİM ── */}
-          <div style={{ padding: 20, borderBottom: "2px solid rgba(183,110,121,0.15)", display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ width: 3, height: 16, background: ACCENT, borderRadius: 2 }} />
               <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.35em", textTransform: "uppercase", color: ACCENT }}>{ke.panel1Title}</span>
@@ -1104,113 +1288,9 @@ export function KoleksiyonEditClient() {
             </button>
           </div>
 
-          {/* ── PANEL 2: KOLEKSİYON MODU ── */}
-          <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 3, height: 16, background: "rgba(100,160,255,0.7)", borderRadius: 2 }} />
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(100,160,255,0.8)" }}>{ke.panel2Title}</span>
-              <span style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em" }}>— {ke.panel2Sub}</span>
-            </div>
-
-            {/* Analiz sonucu */}
-            {analiz && !analizYukleniyor && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10 }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                  <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", color: ACCENT }}>{analiz.takiTipi}</span>
-                  <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", fontWeight: 600 }}>{analiz.konu}</span>
-                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", lineHeight: 1.5 }}>{analiz.mevcutSahne}</span>
-                </div>
-                <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
-                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                  <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: "rgba(255,255,255,0.25)" }}>{ke.suggestionsLabel}</span>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    {analiz.oneriler.map((oneri, idx) => (
-                      <button key={idx} type="button" onClick={() => setTema(oneri)}
-                        style={{ textAlign: "left", padding: "6px 10px", borderRadius: 7, fontSize: 10, color: "rgba(255,255,255,0.55)", background: tema === oneri ? "rgba(183,110,121,0.12)" : "rgba(255,255,255,0.02)", border: `1px solid ${tema === oneri ? "rgba(183,110,121,0.35)" : "rgba(255,255,255,0.06)"}`, cursor: "pointer", transition: "all 0.12s" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(183,110,121,0.3)"; e.currentTarget.style.color = "rgba(255,255,255,0.75)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = tema === oneri ? "rgba(183,110,121,0.35)" : "rgba(255,255,255,0.06)"; e.currentTarget.style.color = tema === oneri ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.55)"; }}
-                      >{oneri}</button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Analiz yükleniyor */}
-            {analizYukleniyor && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0" }}>
-                <Spinner size={12} />
-                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.2em" }}>{ke.analyzingStyle}</span>
-              </div>
-            )}
-
-            {/* Referans bekleniyor */}
-            {!analiz && !analizYukleniyor && !analizHata && (
-              <div style={{ padding: "12px", background: "rgba(100,160,255,0.04)", border: "1px dashed rgba(100,160,255,0.15)", borderRadius: 8 }}>
-                <p style={{ fontSize: 10, color: "rgba(100,160,255,0.4)", textAlign: "center", letterSpacing: "0.1em" }}>
-                  {ke.refUploadHint}
-                </p>
-              </div>
-            )}
-
-            {/* Analiz hata */}
-            {analizHata && !analizYukleniyor && (
-              <div style={{ padding: "10px 12px", background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                <span style={{ fontSize: 10, color: "rgba(248,113,113,0.8)" }}>Stil analizi başarısız oldu.</span>
-                <button
-                  type="button"
-                  onClick={handleAnalizTekrar}
-                  style={{ flexShrink: 0, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", padding: "4px 10px", borderRadius: 5, border: "1px solid rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.1)", color: "rgba(248,113,113,0.9)", cursor: "pointer" }}
-                >
-                  Tekrar Dene
-                </button>
-              </div>
-            )}
-
-            {/* Hedef harf — ControlNet */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <Label>{ke.letterLabel} <span style={{ textTransform: "none", letterSpacing: "normal", fontWeight: 400, color: "rgba(255,255,255,0.2)" }}>{ke.letterSub}</span></Label>
-              <FieldInput value={harfGirdisi}
-                onChange={(e) => setHarfGirdisi(e.target.value.toUpperCase().charAt(0) || "")}
-                placeholder={ke.letterPlaceholder} maxLength={1}
-                style={{ textAlign: "center", fontSize: 20, fontWeight: 700, letterSpacing: "0.2em" }} />
-            </div>
-
-            {/* KOLEKSİYON ÜRET butonu */}
-            <button type="button"
-              onClick={handleKoleksiyonUret}
-              disabled={load.kind === "generating" || !analiz || analizYukleniyor}
-              style={{ width: "100%", padding: "12px 0", borderRadius: 12, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", border: "1px solid rgba(100,160,255,0.4)", cursor: (load.kind === "generating" || !analiz || analizYukleniyor) ? "not-allowed" : "pointer", opacity: (load.kind === "generating" || !analiz || analizYukleniyor) ? 0.4 : 1, transition: "all 0.15s", background: "rgba(100,160,255,0.08)", color: "rgba(140,190,255,0.8)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-              {load.kind === "generating" && <Spinner />}
-              {load.kind === "generating" ? ke.generating
-                : analizYukleniyor ? ke.analyzingStyle
-                : !analiz ? ke.uploadFirst
-                : harfGirdisi ? `${ke.collectionBtn} · ${harfGirdisi}`
-                : ke.collectionBtn}
-            </button>
-
-            {/* Stili Kaydet — sadece üretim sonrası görünür */}
-            {sonStilAnalizi && (
-              <button
-                type="button"
-                onClick={() => setStilKartiModal(true)}
-                style={{
-                  width: "100%", marginTop: 8, padding: "9px 0",
-                  borderRadius: 8, fontSize: 9, fontWeight: 700,
-                  textTransform: "uppercase", letterSpacing: "0.25em",
-                  border: "1px solid rgba(100,160,255,0.3)",
-                  background: "rgba(100,160,255,0.06)",
-                  color: "rgba(100,160,255,0.7)", cursor: "pointer",
-                }}
-              >
-                ✦ Stili Kaydet
-              </button>
-            )}
-          </div>
-
         </div>
 
-        {/* ── Right panel ────────────────────────────────────────────────── */}
+        {/* ── Orta: Üretilen görseller ─────────────────────────────────── */}
         <div style={{ flex: 1, overflowY: "auto", padding: 20, minHeight: "calc(100vh - 49px)" }}>
 
           {load.kind === "generating" && <GridSkeleton />}
@@ -1236,13 +1316,13 @@ export function KoleksiyonEditClient() {
                 <div key={i} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
 
                   {/* Image */}
-                  <div style={{ position: "relative", aspectRatio: "1", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,0.06)", background: "#000" }}>
+                  <div style={{ position: "relative", aspectRatio: "1", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,0.06)", background: "#111" }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={src}
                       alt={`Konsept ${i + 1}`}
                       onClick={() => { setLightbox(i); setMaskMode(false); setMaskResult(null); }}
-                      style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
+                      style={{ width: "100%", height: "100%", objectFit: "contain", cursor: "pointer", imageRendering: "auto" }}
                     />
 
                     {/* Op loading overlay */}
@@ -1311,6 +1391,120 @@ export function KoleksiyonEditClient() {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+
+        {/* ── Sağ Panel: Koleksiyon Modu ───────────────────────────────── */}
+        <div style={{ width: 280, flexShrink: 0, borderLeft: "1px solid rgba(255,255,255,0.06)", overflowY: "auto", minHeight: "calc(100vh - 49px)", padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 3, height: 16, background: "rgba(100,160,255,0.7)", borderRadius: 2 }} />
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.35em", textTransform: "uppercase", color: "rgba(100,160,255,0.8)" }}>{ke.panel2Title}</span>
+            <span style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em" }}>— {ke.panel2Sub}</span>
+          </div>
+
+          {/* Analiz sonucu */}
+          {analiz && !analizYukleniyor && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", color: ACCENT }}>{analiz.takiTipi}</span>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", fontWeight: 600 }}>{analiz.konu}</span>
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", lineHeight: 1.5 }}>{analiz.mevcutSahne}</span>
+              </div>
+              {analiz.stilAciklamasi && (
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", lineHeight: 1.6, padding: "6px 8px", background: "rgba(100,160,255,0.05)", borderRadius: 6, borderLeft: "2px solid rgba(100,160,255,0.25)" }}>
+                  {analiz.stilAciklamasi}
+                </div>
+              )}
+              <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: "rgba(255,255,255,0.25)" }}>{ke.suggestionsLabel}</span>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {analiz.oneriler.map((oneri, idx) => (
+                    <button key={idx} type="button" onClick={() => {
+                      setTema(oneri);
+                      const tip = detectTakiTipi(oneri);
+                      if (tip) setTakiTipi(tip);
+                    }}
+                      style={{ textAlign: "left", padding: "6px 10px", borderRadius: 7, fontSize: 10, color: "rgba(255,255,255,0.55)", background: tema === oneri ? "rgba(183,110,121,0.12)" : "rgba(255,255,255,0.02)", border: `1px solid ${tema === oneri ? "rgba(183,110,121,0.35)" : "rgba(255,255,255,0.06)"}`, cursor: "pointer", transition: "all 0.12s" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(183,110,121,0.3)"; e.currentTarget.style.color = "rgba(255,255,255,0.75)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = tema === oneri ? "rgba(183,110,121,0.35)" : "rgba(255,255,255,0.06)"; e.currentTarget.style.color = tema === oneri ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.55)"; }}
+                    >{oneri}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Analiz yükleniyor */}
+          {analizYukleniyor && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0" }}>
+              <Spinner size={12} />
+              <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.2em" }}>{ke.analyzingStyle}</span>
+            </div>
+          )}
+
+          {/* Referans bekleniyor */}
+          {!analiz && !analizYukleniyor && !analizHata && (
+            <div style={{ padding: "12px", background: "rgba(100,160,255,0.04)", border: "1px dashed rgba(100,160,255,0.15)", borderRadius: 8 }}>
+              <p style={{ fontSize: 10, color: "rgba(100,160,255,0.4)", textAlign: "center", letterSpacing: "0.1em" }}>
+                {ke.refUploadHint}
+              </p>
+            </div>
+          )}
+
+          {/* Analiz hata */}
+          {analizHata && !analizYukleniyor && (
+            <div style={{ padding: "10px 12px", background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <span style={{ fontSize: 10, color: "rgba(248,113,113,0.8)" }}>Stil analizi başarısız oldu.</span>
+              <button
+                type="button"
+                onClick={handleAnalizTekrar}
+                style={{ flexShrink: 0, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", padding: "4px 10px", borderRadius: 5, border: "1px solid rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.1)", color: "rgba(248,113,113,0.9)", cursor: "pointer" }}
+              >
+                Tekrar Dene
+              </button>
+            </div>
+          )}
+
+          {/* Hedef harf — ControlNet */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <Label>{ke.letterLabel} <span style={{ textTransform: "none", letterSpacing: "normal", fontWeight: 400, color: "rgba(255,255,255,0.2)" }}>{ke.letterSub}</span></Label>
+            <FieldInput value={harfGirdisi}
+              onChange={(e) => setHarfGirdisi(e.target.value.toUpperCase().charAt(0) || "")}
+              placeholder={ke.letterPlaceholder} maxLength={1}
+              style={{ textAlign: "center", fontSize: 20, fontWeight: 700, letterSpacing: "0.2em" }} />
+          </div>
+
+          {/* KOLEKSİYON ÜRET butonu */}
+          <button type="button"
+            onClick={handleKoleksiyonUret}
+            disabled={load.kind === "generating" || !analiz || analizYukleniyor}
+            style={{ width: "100%", padding: "12px 0", borderRadius: 12, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", border: "1px solid rgba(100,160,255,0.4)", cursor: (load.kind === "generating" || !analiz || analizYukleniyor) ? "not-allowed" : "pointer", opacity: (load.kind === "generating" || !analiz || analizYukleniyor) ? 0.4 : 1, transition: "all 0.15s", background: "rgba(100,160,255,0.08)", color: "rgba(140,190,255,0.8)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            {load.kind === "generating" && <Spinner />}
+            {load.kind === "generating" ? ke.generating
+              : analizYukleniyor ? ke.analyzingStyle
+              : !analiz ? ke.uploadFirst
+              : harfGirdisi ? `${ke.collectionBtn} · ${harfGirdisi}`
+              : ke.collectionBtn}
+          </button>
+
+          {/* Stili Kaydet — sadece üretim sonrası görünür */}
+          {sonStilAnalizi && (
+            <button
+              type="button"
+              onClick={() => setStilKartiModal(true)}
+              style={{
+                width: "100%", marginTop: 8, padding: "9px 0",
+                borderRadius: 8, fontSize: 9, fontWeight: 700,
+                textTransform: "uppercase", letterSpacing: "0.25em",
+                border: "1px solid rgba(100,160,255,0.3)",
+                background: "rgba(100,160,255,0.06)",
+                color: "rgba(100,160,255,0.7)", cursor: "pointer",
+              }}
+            >
+              ✦ Stili Kaydet
+            </button>
           )}
         </div>
       </div>

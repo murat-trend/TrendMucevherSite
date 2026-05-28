@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { isRemauraSuperAdminUserId } from "@/lib/billing/super-admin";
+import { buildRingThreeQuarterBlock } from "@/lib/remaura/internal-visual-rules";
 
 loadEnvConfig(process.cwd());
 
@@ -103,12 +104,25 @@ const TAKI_TIPI_EN: Record<string, string> = {
 };
 
 const KAMERA_ACISI: Record<string, string> = {
-  "Yüzük": "45-degree overhead angle, camera looking down at 45 degrees from above-front, ring band fully visible, top face of ring clearly shown, e-commerce jewelry standard angle",
-  "Kolye": "front-facing view, pendant centered, chain visible on both sides, slight downward angle",
-  "Küpe": "front-facing view, pair of earrings side by side, symmetric composition, slight 3/4 angle",
-  "Bilezik": "45-degree overhead angle, bracelet laid flat or on slight tilt showing inner and outer surface",
-  "Broş": "perfectly flat front-facing view, entire brooch visible, no perspective distortion",
+  // Yüzük: dinamik olarak buildRingThreeQuarterBlock ile hesaplanır (aşağıya bak)
+  "Kolye": "front-facing view, pendant centered, chain visible on both sides, slight downward angle, pure white background",
+  "Küpe": "front-facing view, pair of earrings side by side, symmetric composition, slight 3/4 angle, pure white background",
+  "Bilezik": "three-quarter elevated 3/4 angle, camera at 45 degrees above, bracelet displayed on a slight diagonal tilt showing depth and curvature, inner hollow and outer surface both visible, entire bracelet in frame with margin, e-commerce jewelry standard angle, pure white background",
+  "Broş": "perfectly flat front-facing view, entire brooch visible, no perspective distortion, pure white background",
 };
+
+/** "yüzük" ve dillerdeki çevirilerini tespit eder */
+function temaContainsRing(text: string): boolean {
+  return new RegExp(
+    "(^|[^\\p{L}\\p{N}])(yüzük|yuzuk|alyans|ring|wedding band|eternity ring|signet|trauring|ehering|кольцо)(?=[^\\p{L}\\p{N}]|$)",
+    "iu"
+  ).test(text);
+}
+
+/** "bilezik" ve dillerdeki çevirilerini tespit eder */
+function temaContainsBracelet(text: string): boolean {
+  return /\b(bilezik|bracelet|bangle|armband|armreif)\b/i.test(text);
+}
 
 const METAL_RENGI_EN: Record<string, string> = {
   "Sarı Altın": "yellow gold",
@@ -156,10 +170,23 @@ export async function POST(req: Request) {
 
   const takiTipiEn  = TAKI_TIPI_EN[takiTipi ?? ""] ?? "jewelry";
   const metalEn     = METAL_RENGI_EN[metalRengi ?? ""] ?? "gold";
-  const kameraAcisi = KAMERA_ACISI[takiTipi ?? ""] ?? "professional product photography angle";
   const formStr     = Array.isArray(formKarakterleri) && formKarakterleri.length > 0
     ? formKarakterleri.map(f => FORM_EN[f] ?? f.toLowerCase()).join(", ") : "";
   const temaEn      = tema?.trim() ? await translateToEnglish(tema) : "";
+
+  // ── Kamera açısı: dropdown seçimini öncelikle al; seçim yoksa tema'dan tespit et ──
+  let kameraAcisi: string;
+  const metalSource = [tema, metalRengi].filter(Boolean).join(" ");
+  if (takiTipi === "Yüzük" || (!takiTipi?.trim() && temaContainsRing(tema ?? ""))) {
+    // Ana sayfayla aynı detaylı üç-çeyrek perspektif kuralı
+    kameraAcisi = buildRingThreeQuarterBlock(metalSource || "ring");
+  } else if (takiTipi && KAMERA_ACISI[takiTipi]) {
+    kameraAcisi = KAMERA_ACISI[takiTipi];
+  } else if (!takiTipi?.trim() && temaContainsBracelet(tema ?? "")) {
+    kameraAcisi = KAMERA_ACISI["Bilezik"];
+  } else {
+    kameraAcisi = "professional e-commerce jewelry product photography angle, entire piece visible, pure white background";
+  }
 
   const { fal } = await import("@fal-ai/client");
   fal.config({ credentials: falKey });

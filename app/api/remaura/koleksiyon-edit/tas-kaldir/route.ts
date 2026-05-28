@@ -1,4 +1,5 @@
 import { loadEnvConfig } from "@next/env";
+import { GoogleGenAI } from "@google/genai";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
@@ -14,106 +15,123 @@ async function requireSuperAdmin(): Promise<
 > {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) {
     return { ok: false, response: NextResponse.json({ error: "Oturum gerekli" }, { status: 401 }) };
   }
   const { data: profile } = await supabase
-    .from("profiles").select("role").eq("id", user.id).maybeSingle();
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
   if (!isRemauraSuperAdminUserId(user.id) && profile?.role !== "admin") {
     return { ok: false, response: NextResponse.json({ error: "Yetkisiz" }, { status: 403 }) };
   }
   return { ok: true };
 }
 
-// base64 data URL veya https:// → fal CDN URL
-async function toFalUrl(image: string, falKey: string): Promise<string> {
-  if (image.startsWith("http://") || image.startsWith("https://")) return image;
-  const { fal } = await import("@fal-ai/client");
-  fal.config({ credentials: falKey });
-  const raw = image.includes(",") ? image.split(",")[1] : image;
-  const buf = Buffer.from(raw, "base64");
-  const file = new File([new Uint8Array(buf)], "image.png", { type: "image/png" });
-  return await fal.storage.upload(file);
-}
-
 export async function POST(req: Request) {
   const auth = await requireSuperAdmin();
   if (!auth.ok) return auth.response;
 
-  const falKey = process.env.FAL_KEY;
-  const stabilityKey = process.env.STABILITY_API_KEY;
+  // API anahtarı — BOM ve görünmez karakterleri temizle
+  const rawKey = process.env.GOOGLE_API_KEY ?? "";
+  const googleKey = rawKey
+    .split("")
+    .filter((ch) => ch.charCodeAt(0) > 31 && ch.charCodeAt(0) < 256)
+    .join("")
+    .trim() || undefined;
 
-  if (!falKey) return NextResponse.json({ error: "FAL_KEY yapılandırılmamış." }, { status: 500 });
-  if (!stabilityKey) return NextResponse.json({ error: "STABILITY_API_KEY yapılandırılmamış." }, { status: 500 });
+  if (!googleKey) {
+    return NextResponse.json({ error: "Servis yapılandırılmamış." }, { status: 500 });
+  }
 
-  const { image } = await req.json() as { image: string };
-  if (!image) return NextResponse.json({ error: "Görsel gerekli." }, { status: 400 });
+  let image: string;
+  try {
+    const body = await req.json() as { image?: string };
+    image = body.image ?? "";
+  } catch {
+    return NextResponse.json({ error: "Geçersiz istek." }, { status: 400 });
+  }
+  if (!image) {
+    return NextResponse.json({ error: "Görsel gerekli." }, { status: 400 });
+  }
 
   try {
-    const { fal } = await import("@fal-ai/client");
-    fal.config({ credentials: falKey });
+    // ── Görsel → base64 ──────────────────────────────────────────────────────
+    let base64Data: string;
+    let mimeType: string;
 
-    // 1. Görseli fal CDN'e yükle (gerekirse)
-    const imageUrl = await toFalUrl(image, falKey);
-
-    // 2. EVF-SAM2 ile taş/değerli taş maskesi üret
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const samResult = await fal.subscribe("fal-ai/evf-sam", {
-      input: {
-        image_url: imageUrl,
-        text_prompt: "gemstone, diamond, crystal, prong-set stone, faceted gem, ruby, sapphire, emerald",
-      } as any,
-      logs: false,
-    });
-
-    type FalImage = { url: string };
-    const maskUrl = (samResult.data as { image?: FalImage })?.image?.url;
-    if (!maskUrl) {
-      return NextResponse.json({ error: "Taş maskesi üretilemedi." }, { status: 500 });
+    if (image.startsWith("http://") || image.startsWith("https://")) {
+      const res = await fetch(image);
+      if (!res.ok) throw new Error(`Görsel indirilemedi: ${res.status}`);
+      const buf = Buffer.from(await res.arrayBuffer());
+      mimeType = res.headers.get("content-type") ?? "image/jpeg";
+      base64Data = buf.toString("base64");
+    } else {
+      mimeType = image.match(/data:([^;]+);/)?.[1] ?? "image/jpeg";
+      base64Data = image.includes(",") ? image.split(",")[1] : image;
     }
 
-    // 3. Orijinal görsel + maske buffer'larını paralel çek
-    const [imgRes, maskRes] = await Promise.all([
-      fetch(imageUrl, { cache: "no-store" }),
-      fetch(maskUrl, { cache: "no-store" }),
-    ]);
-    if (!imgRes.ok) throw new Error(`Görsel fetch başarısız: ${imgRes.status}`);
-    if (!maskRes.ok) throw new Error(`Maske fetch başarısız: ${maskRes.status}`);
+    // ── Gemini görsel düzenleme ──────────────────────────────────────────────
+    const ai = new GoogleGenAI({ apiKey: googleKey });
 
-    const imgBuf = Buffer.from(await imgRes.arrayBuffer());
-    const maskBuf = Buffer.from(await maskRes.arrayBuffer());
-
-    // 4. Stability inpaint: maskelenen taş alanlarını metal yüzeyle doldur
-    const form = new FormData();
-    form.append("image", new Blob([new Uint8Array(imgBuf)], { type: "image/png" }), "image.png");
-    form.append("mask", new Blob([new Uint8Array(maskBuf)], { type: "image/png" }), "mask.png");
-    form.append("prompt", "empty bezel setting, smooth polished metal surface, no gemstone, clean metal jewelry");
-    form.append("output_format", "png");
-
-    const stabRes = await fetch("https://api.stability.ai/v2beta/stable-image/edit/inpaint", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${stabilityKey}`, Accept: "image/*" },
-      body: form,
+    const result = await ai.models.generateContent({
+      model: "gemini-3.1-flash-image-preview",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inlineData: { mimeType, data: base64Data } },
+            {
+              text: [
+                "This is a jewelry piece. Perform the following edit precisely:",
+                "",
+                "REMOVE: All gemstones — diamonds, rubies, sapphires, emeralds, amethysts, citrines, topazes, crystals, and any other colored or clear stones.",
+                "",
+                "REPLACE WITH: The empty metal setting that was holding each stone — the bezel cup, prong basket, or claw structure should remain clearly visible and open/empty.",
+                "",
+                "PRESERVE EXACTLY (do NOT change any of these):",
+                "- The overall jewelry design and silhouette",
+                "- Metal color and finish (gold, silver, rose gold — exactly as shown)",
+                "- All filigree, scrollwork, floral motifs, and decorative metalwork",
+                "- The band, shank, or chain as-is",
+                "- Background, lighting, shadows, and photo composition",
+                "",
+                "RESULT: The piece should look like the same exact jewelry but with empty settings — ready to be set with new stones.",
+              ].join("\n"),
+            },
+          ],
+        },
+      ],
+      config: { responseModalities: ["IMAGE", "TEXT"] } as never,
     });
 
-    if (!stabRes.ok) {
-      const txt = await stabRes.text();
-      console.error("[tas-kaldir] stability error:", txt);
-      return NextResponse.json(
-        { error: `Stability hatası (${stabRes.status}): ${txt.slice(0, 200)}` },
-        { status: stabRes.status }
-      );
+    const parts = (result.candidates?.[0]?.content?.parts ?? []) as {
+      thought?: boolean;
+      inlineData?: { mimeType: string; data: string };
+      text?: string;
+    }[];
+
+    const imgPart = parts.find(
+      (p) => !p.thought && p.inlineData?.mimeType?.startsWith("image/")
+    );
+
+    if (!imgPart?.inlineData) {
+      console.error("[tas-kaldir] görsel parçası bulunamadı, parts:", JSON.stringify(parts).slice(0, 300));
+      return NextResponse.json({ error: "Görsel işlenemedi, lütfen tekrar deneyin." }, { status: 500 });
     }
 
-    const resultBuf = Buffer.from(await stabRes.arrayBuffer());
-    const ct = stabRes.headers.get("content-type") ?? "image/png";
     return NextResponse.json({
-      image: `data:${ct};base64,${resultBuf.toString("base64")}`,
+      image: `data:${imgPart.inlineData.mimeType};base64,${imgPart.inlineData.data}`,
     });
   } catch (err: unknown) {
     console.error("[tas-kaldir] error:", err);
-    const e = err as { message?: string };
-    return NextResponse.json({ error: e?.message ?? "İşlem başarısız." }, { status: 500 });
+    return NextResponse.json(
+      { error: "İşlem başarısız oldu, lütfen tekrar deneyin." },
+      { status: 500 }
+    );
   }
 }
