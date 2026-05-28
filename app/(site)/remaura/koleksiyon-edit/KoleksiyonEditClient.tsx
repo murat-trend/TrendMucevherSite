@@ -603,15 +603,25 @@ export function KoleksiyonEditClient() {
     setLoad({ kind: "generating" });
     setImages([]);
     setFilenames([]);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 270_000); // 4.5 dakika
+
     try {
       const res = await fetch("/api/remaura/koleksiyon-edit/uret", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ takiTipi, tema, formKarakterleri, metalRengi, referansGorsel: refBase64, numImages: varyasyonSayisi, referansGucu, stilPrompt: analiz?.stilPrompt }),
+        signal: controller.signal,
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? ke.errGenerating); return; }
-      const imgs: string[] = data.images ?? [];
+
+      let data: Record<string, unknown> = {};
+      try { data = await res.json(); } catch { /* JSON parse hatası — veri yok */ }
+
+      if (!res.ok) { setError((data.error as string) ?? ke.errGenerating); return; }
+      const imgs: string[] = (data.images as string[]) ?? [];
+      if (imgs.length === 0) { setError(ke.errGenerating); return; }
+
       const now = new Date();
       const pad = (n: number) => String(n).padStart(2, "0");
       const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
@@ -622,13 +632,21 @@ export function KoleksiyonEditClient() {
         takiTipi,
         tema: tema || "(referanstan)",
         metalRengi,
-        seed: data.seed,
+        seed: data.seed as number | undefined,
         gorselUrl: imgs[0],
       }, ...prev.slice(0, 9)]);
       setOriginals(imgs);
       setFilenames(imgs.map((_, i) => `remaura-${ts}-${i + 1}.png`));
-    } catch { setError(ke.errConnection); }
-    finally { setLoad({ kind: "idle" }); }
+    } catch (e: unknown) {
+      if ((e as { name?: string })?.name === "AbortError") {
+        setError("Görsel üretimi çok uzun sürdü. Lütfen daha küçük bir varyasyon sayısı seçip tekrar deneyin.");
+      } else {
+        setError(ke.errConnection);
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      setLoad({ kind: "idle" });
+    }
   }
 
   // ─── Stability helper ────────────────────────────────────────────────────────

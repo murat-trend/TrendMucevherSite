@@ -7,7 +7,7 @@ import { isRemauraSuperAdminUserId } from "@/lib/billing/super-admin";
 loadEnvConfig(process.cwd());
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 async function requireSuperAdmin(): Promise<
   { ok: true } | { ok: false; response: NextResponse }
