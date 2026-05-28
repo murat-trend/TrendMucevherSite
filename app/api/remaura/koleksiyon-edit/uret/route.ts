@@ -235,8 +235,7 @@ export async function POST(req: Request) {
         `Pure white background. No model, no hands, no body parts. Single centered jewelry piece. Studio lighting. Ultra detailed.`,
       ].filter(Boolean).join(" ");
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await fal.subscribe("fal-ai/flux-pro/kontext", {
+      const result = await (fal.subscribe as (model: string, opts: { input: Record<string, unknown>; logs: boolean }) => Promise<{ data: unknown }>)("fal-ai/flux-pro/kontext", {
         input: {
           prompt,
           image_url: referansUrl,
@@ -244,7 +243,7 @@ export async function POST(req: Request) {
           aspect_ratio: "1:1",
           output_format: "jpeg",
           safety_tolerance: 3,
-        } as any,
+        },
         logs: false,
       });
 
@@ -267,8 +266,7 @@ export async function POST(req: Request) {
       ].filter(Boolean).join(". ");
 
       const seed = Math.floor(Math.random() * 1_000_000);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await fal.subscribe("fal-ai/flux-pro/v1.1-ultra", {
+      const result = await (fal.subscribe as (model: string, opts: { input: Record<string, unknown>; logs: boolean }) => Promise<{ data: unknown }>)("fal-ai/flux-pro/v1.1-ultra", {
         input: {
           prompt,
           num_images: Math.min(numImages, 4),
@@ -276,7 +274,7 @@ export async function POST(req: Request) {
           aspect_ratio: "1:1",
           output_format: "jpeg",
           safety_tolerance: 3,
-        } as any,
+        },
         logs: false,
       });
 

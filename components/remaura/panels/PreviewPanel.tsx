@@ -282,7 +282,7 @@ export function PreviewPanel() {
                         <path d="M9 3v18" />
                         <path d="m16 15-3-3 3-3" />
                       </svg>
-                      Koleksiyon Edit'te Aç →
+                      Koleksiyon Edit&apos;te Aç →
                     </button>
                   )}
                   {debugPayload && <DebugPromptPanel data={debugPayload} />}
