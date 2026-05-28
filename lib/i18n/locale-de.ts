@@ -729,6 +729,7 @@ export const deMessages = {
     errDownload: "Download fehlgeschlagen.",
     errMask: "Maskenoperation fehlgeschlagen.",
     ringLabel: "Ring",
+    pendantLabel: "Anhänger",
     necklaceLabel: "Halskette",
     earringLabel: "Ohrring",
     braceletLabel: "Armband",
