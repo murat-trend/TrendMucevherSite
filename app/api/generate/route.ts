@@ -304,7 +304,6 @@ export async function POST(req: Request) {
         prompt: editPrompt,
         size: size === "auto" ? "1024x1024" : size,
         quality: "high",
-        input_fidelity: "high",
       });
       imageBase64 = editResult.data?.[0]?.b64_json;
     } else {
