@@ -291,6 +291,7 @@ export function KoleksiyonEditClient() {
   };
   const [analiz, setAnaliz] = useState<AnalizSonucu | null>(null);
   const [analizYukleniyor, setAnalizYukleniyor] = useState(false);
+  const [analizHata, setAnalizHata] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Results
@@ -471,8 +472,8 @@ export function KoleksiyonEditClient() {
       setRefBase64(base64);
       setRefName(file.name);
       setAnaliz(null);
+      setAnalizHata(false);
 
-      // GPT-4o ile otomatik analiz
       setAnalizYukleniyor(true);
       try {
         const res = await fetch("/api/remaura/koleksiyon-edit/analiz", {
@@ -482,11 +483,30 @@ export function KoleksiyonEditClient() {
         });
         const data = await res.json();
         if (res.ok) setAnaliz(data);
-      } catch { /* analiz sessizce başarısız olabilir */ }
+        else setAnalizHata(true);
+      } catch { setAnalizHata(true); }
       finally { setAnalizYukleniyor(false); }
     };
     reader.readAsDataURL(file);
   }, []);
+
+  async function handleAnalizTekrar() {
+    if (!refBase64) return;
+    setAnalizHata(false);
+    setAnaliz(null);
+    setAnalizYukleniyor(true);
+    try {
+      const res = await fetch("/api/remaura/koleksiyon-edit/analiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: refBase64 }),
+      });
+      const data = await res.json();
+      if (res.ok) setAnaliz(data);
+      else setAnalizHata(true);
+    } catch { setAnalizHata(true); }
+    finally { setAnalizYukleniyor(false); }
+  }
 
   // ─── Generate ───────────────────────────────────────────────────────────────
 
@@ -1125,11 +1145,25 @@ export function KoleksiyonEditClient() {
             )}
 
             {/* Referans bekleniyor */}
-            {!analiz && !analizYukleniyor && (
+            {!analiz && !analizYukleniyor && !analizHata && (
               <div style={{ padding: "12px", background: "rgba(100,160,255,0.04)", border: "1px dashed rgba(100,160,255,0.15)", borderRadius: 8 }}>
                 <p style={{ fontSize: 10, color: "rgba(100,160,255,0.4)", textAlign: "center", letterSpacing: "0.1em" }}>
                   {ke.refUploadHint}
                 </p>
+              </div>
+            )}
+
+            {/* Analiz hata */}
+            {analizHata && !analizYukleniyor && (
+              <div style={{ padding: "10px 12px", background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <span style={{ fontSize: 10, color: "rgba(248,113,113,0.8)" }}>Stil analizi başarısız oldu.</span>
+                <button
+                  type="button"
+                  onClick={handleAnalizTekrar}
+                  style={{ flexShrink: 0, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", padding: "4px 10px", borderRadius: 5, border: "1px solid rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.1)", color: "rgba(248,113,113,0.9)", cursor: "pointer" }}
+                >
+                  Tekrar Dene
+                </button>
               </div>
             )}
 
@@ -1145,10 +1179,11 @@ export function KoleksiyonEditClient() {
             {/* KOLEKSİYON ÜRET butonu */}
             <button type="button"
               onClick={handleKoleksiyonUret}
-              disabled={load.kind === "generating" || !analiz}
-              style={{ width: "100%", padding: "12px 0", borderRadius: 12, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", border: "1px solid rgba(100,160,255,0.4)", cursor: (load.kind === "generating" || !analiz) ? "not-allowed" : "pointer", opacity: (load.kind === "generating" || !analiz) ? 0.4 : 1, transition: "all 0.15s", background: "rgba(100,160,255,0.08)", color: "rgba(140,190,255,0.8)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+              disabled={load.kind === "generating" || !analiz || analizYukleniyor}
+              style={{ width: "100%", padding: "12px 0", borderRadius: 12, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", border: "1px solid rgba(100,160,255,0.4)", cursor: (load.kind === "generating" || !analiz || analizYukleniyor) ? "not-allowed" : "pointer", opacity: (load.kind === "generating" || !analiz || analizYukleniyor) ? 0.4 : 1, transition: "all 0.15s", background: "rgba(100,160,255,0.08)", color: "rgba(140,190,255,0.8)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
               {load.kind === "generating" && <Spinner />}
               {load.kind === "generating" ? ke.generating
+                : analizYukleniyor ? ke.analyzingStyle
                 : !analiz ? ke.uploadFirst
                 : harfGirdisi ? `${ke.collectionBtn} · ${harfGirdisi}`
                 : ke.collectionBtn}
