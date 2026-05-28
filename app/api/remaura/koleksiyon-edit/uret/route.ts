@@ -133,7 +133,7 @@ export async function POST(req: Request) {
 
   const falKey = process.env.FAL_KEY;
   if (!falKey) {
-    return NextResponse.json({ error: "FAL_KEY yapılandırılmamış." }, { status: 500 });
+    return NextResponse.json({ error: "Servis yapılandırılmamış, lütfen yöneticiye bildirin." }, { status: 500 });
   }
 
   const body = await req.json() as {

@@ -557,10 +557,12 @@ export function KoleksiyonEditClient() {
     setLoad({ kind: "generating" });
     setImages([]);
     setFilenames([]);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 270_000); // 4.5 dakika
+
     try {
-      // Referans görsel varsa → Gemini (görsel tabanlı stil transferi)
-      const endpoint = "/api/remaura/koleksiyon-edit/gemini-uret";
-      const res = await fetch(endpoint, {
+      const res = await fetch("/api/remaura/koleksiyon-edit/gemini-uret", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -571,15 +573,21 @@ export function KoleksiyonEditClient() {
           referansGorsel: refBase64,
           numImages: varyasyonSayisi,
         }),
+        signal: controller.signal,
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? ke.errGenerating); return; }
-      const imgs: string[] = data.images ?? [];
+
+      let data: Record<string, unknown> = {};
+      try { data = await res.json(); } catch { /* JSON parse hatası */ }
+
+      if (!res.ok) { setError((data.error as string) ?? ke.errGenerating); return; }
+      const imgs: string[] = (data.images as string[]) ?? [];
+      if (imgs.length === 0) { setError(ke.errGenerating); return; }
+
       const now = new Date();
       const pad = (n: number) => String(n).padStart(2, "0");
       const ts = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
       setImages(imgs);
-      if (data.styleAnalysis) setSonStilAnalizi(data.styleAnalysis);
+      if (data.styleAnalysis) setSonStilAnalizi(data.styleAnalysis as string);
       setOriginals(imgs);
       setFilenames(imgs.map((_, i) => `remaura-${ts}-${i+1}.png`));
       setPromptGecmisi(prev => [{
@@ -590,9 +598,14 @@ export function KoleksiyonEditClient() {
         metalRengi,
         gorselUrl: imgs[0],
       }, ...prev.slice(0, 9)]);
-    } catch (e) {
-      setError((e as Error)?.message ?? ke.errConnection);
+    } catch (e: unknown) {
+      if ((e as { name?: string })?.name === "AbortError") {
+        setError("Görsel üretimi çok uzun sürdü. Lütfen daha küçük bir varyasyon sayısı seçip tekrar deneyin.");
+      } else {
+        setError(ke.errConnection);
+      }
     } finally {
+      clearTimeout(timeoutId);
       setLoad({ kind: "idle" });
     }
   }

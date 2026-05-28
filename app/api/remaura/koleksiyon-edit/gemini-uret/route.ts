@@ -67,7 +67,7 @@ export async function POST(req: Request) {
   if (!auth.ok) return auth.response;
 
   const googleKey = process.env.GOOGLE_API_KEY;
-  if (!googleKey) return NextResponse.json({ error: "GOOGLE_API_KEY yapılandırılmamış." }, { status: 500 });
+  if (!googleKey) return NextResponse.json({ error: "Servis yapılandırılmamış, lütfen yöneticiye bildirin." }, { status: 500 });
 
   const body = await req.json() as {
     takiTipi?: string;
