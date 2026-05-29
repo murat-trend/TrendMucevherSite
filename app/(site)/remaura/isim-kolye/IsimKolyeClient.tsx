@@ -1,14 +1,36 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useLanguage } from "@/components/i18n/LanguageProvider";
 
-// Metal ID → Türkçe etiket
-const METAL_LABEL: Record<string, string> = {
-  "yellow-gold": "Sarı Altın",
+// Referans görseli sıkıştır (max 1024px, JPEG 0.88)
+function compressImage(dataUrl: string): Promise<string> {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const max = 1024;
+      const ratio = Math.min(max / img.width, max / img.height, 1);
+      const w = Math.round(img.width * ratio);
+      const h = Math.round(img.height * ratio);
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d")!;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", 0.88));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+// Metal ID → stil kartı prompt özeti (sabit, dil bağımsız)
+const METAL_LABEL_EN: Record<string, string> = {
+  "yellow-gold": "Yellow Gold",
   "rose-gold":   "Rose Gold",
-  "white-gold":  "Beyaz Altın",
-  "silver":      "Gümüş",
+  "white-gold":  "White Gold",
+  "silver":      "Silver",
 };
 
 // Font/metal/deco prompt özeti (stil kartı için)
@@ -30,46 +52,26 @@ const DECO_SHORT: Record<string, string> = {
 const ACCENT = "#b76e79";
 
 const FONT_STYLES = [
-  {
-    id: "cursive-thin",
-    label: "Cursive İnce",
-    sub: "Zarif ince akışkan",
-    preview: "𝒜",
-  },
-  {
-    id: "cursive-bold",
-    label: "Cursive Kalın",
-    sub: "Dramatik kalın",
-    preview: "𝓐",
-  },
-  {
-    id: "block-serif",
-    label: "Blok Serif",
-    sub: "Sağlam klasik",
-    preview: "A",
-  },
-  {
-    id: "wire-minimal",
-    label: "Tel Minimal",
-    sub: "Ultra ince tel",
-    preview: "𝘈",
-  },
+  { id: "cursive-thin",  preview: "𝒜" },
+  { id: "cursive-bold",  preview: "𝓐" },
+  { id: "block-serif",   preview: "A"  },
+  { id: "wire-minimal",  preview: "𝘈" },
 ] as const;
 type FontStyleId = (typeof FONT_STYLES)[number]["id"];
 
 const METALS = [
-  { id: "yellow-gold",  label: "Sarı Altın",   hex: "#D4AF37" },
-  { id: "rose-gold",    label: "Rose Gold",     hex: "#B76E79" },
-  { id: "white-gold",   label: "Beyaz Altın",   hex: "#E8E8E8" },
-  { id: "silver",       label: "Gümüş",         hex: "#C0C0C0" },
+  { id: "yellow-gold",  hex: "#D4AF37" },
+  { id: "rose-gold",    hex: "#B76E79" },
+  { id: "white-gold",   hex: "#E8E8E8" },
+  { id: "silver",       hex: "#C0C0C0" },
 ] as const;
 type MetalId = (typeof METALS)[number]["id"];
 
 const DECORATIONS = [
-  { id: "plain",    label: "Sade",         icon: "◯" },
-  { id: "diamond",  label: "Pırlanta",     icon: "◈" },
-  { id: "floral",   label: "Çiçek",        icon: "✿" },
-  { id: "colorful", label: "Renkli Taş",   icon: "◉" },
+  { id: "plain",    icon: "◯" },
+  { id: "diamond",  icon: "◈" },
+  { id: "floral",   icon: "✿" },
+  { id: "colorful", icon: "◉" },
 ] as const;
 type DecorationId = (typeof DECORATIONS)[number]["id"];
 
@@ -99,6 +101,9 @@ function Spinner() {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function IsimKolyeClient() {
+  const { t } = useLanguage();
+  const ik = t.isimKolye;
+
   // Form state
   const [mode, setMode]             = useState<"letter" | "name">("letter");
   const [text, setText]             = useState("");
@@ -106,6 +111,11 @@ export function IsimKolyeClient() {
   const [metal, setMetal]           = useState<MetalId>("yellow-gold");
   const [decoration, setDecoration] = useState<DecorationId>("plain");
   const [count, setCount]           = useState(1);
+
+  // Referans görsel
+  const [refImage, setRefImage]   = useState<string | null>(null);
+  const [refDragging, setRefDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Output state
   const [images, setImages]   = useState<string[]>([]);
@@ -147,9 +157,21 @@ export function IsimKolyeClient() {
     setImages([]);
   }
 
+  async function handleRefFile(file: File) {
+    if (!file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = async e => {
+      const raw = e.target?.result as string;
+      const compressed = await compressImage(raw);
+      setRefImage(compressed);
+      setImages([]);
+    };
+    reader.readAsDataURL(file);
+  }
+
   async function handleUret() {
     if (!text.trim()) {
-      setError(mode === "letter" ? "Bir harf girin" : "İsim girin");
+      setError(mode === "letter" ? ik.errLetter : ik.errName);
       return;
     }
     setLoading(true);
@@ -160,7 +182,10 @@ export function IsimKolyeClient() {
       const res = await fetch("/api/remaura/isim-kolye/uret", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode, text, fontStyle, metal, decoration, count }),
+        body: JSON.stringify({
+          mode, text, fontStyle, metal, decoration, count,
+          referenceImage: refImage ?? undefined,
+        }),
       });
 
       let data: { images?: string[]; error?: string } = {};
@@ -172,12 +197,12 @@ export function IsimKolyeClient() {
       }
 
       if (!res.ok || !data.images?.length) {
-        setError(data.error ?? `Üretim başarısız (${res.status})`);
+        setError(data.error ?? `${ik.errLetter} (${res.status})`);
       } else {
         setImages(data.images);
       }
     } catch {
-      setError("Bağlantı hatası — tekrar dene");
+      setError(ik.toastConnError);
     } finally {
       setLoading(false);
     }
@@ -221,15 +246,15 @@ export function IsimKolyeClient() {
           koleksiyonAdi: text.trim() || "İsim Kolye",
           tip: "Kolye Ucu",
           tema,
-          metal: METAL_LABEL[metal] ?? metal,
+          metal: ({ "yellow-gold": ik.metalYellowGold, "rose-gold": ik.metalRoseGold, "white-gold": ik.metalWhiteGold, "silver": ik.metalSilver } as Record<string,string>)[metal] ?? METAL_LABEL_EN[metal] ?? metal,
         }),
       });
       const data: { error?: string } = await res.json();
       if (!res.ok) { showToast(`Hata: ${data.error ?? "kaydedilemedi"}`); return; }
       setGaleriKaydedildi(prev => new Set([...prev, idx]));
-      showToast("✓ Galeriye kaydedildi");
+      showToast(ik.toastGaleriSaved);
     } catch {
-      showToast("Bağlantı hatası");
+      showToast(ik.toastConnError);
     } finally {
       setGaleriKaydediliyor(null);
     }
@@ -244,7 +269,7 @@ export function IsimKolyeClient() {
       const stilPrompt = [
         "Initial/name pendant necklace.",
         FONT_STYLE_SHORT[fontStyle] ?? fontStyle,
-        `Metal: ${METAL_LABEL[metal] ?? metal}.`,
+        `Metal: ${METAL_LABEL_EN[metal] ?? metal}.`,
         DECO_SHORT[decoration] ?? decoration,
       ].join(" ");
 
@@ -254,16 +279,16 @@ export function IsimKolyeClient() {
         body: JSON.stringify({
           isim: stilIsim.trim(),
           stil_prompt: stilPrompt,
-          metal: METAL_LABEL[metal] ?? null,
+          metal: METAL_LABEL_EN[metal] ?? null,
         }),
       });
       const data: { error?: string } = await res.json();
       if (!res.ok) { showToast(`Hata: ${data.error ?? "kaydedilemedi"}`); return; }
       setStilModal(false);
       setStilIsim("");
-      showToast("✓ Stil kartı kaydedildi");
+      showToast(ik.toastStilSaved);
     } catch {
-      showToast("Bağlantı hatası");
+      showToast(ik.toastConnError);
     } finally {
       setStilKaydediliyor(false);
     }
@@ -278,13 +303,12 @@ export function IsimKolyeClient() {
   return (
     <div
       style={{
-        height: "calc(100dvh - 5rem)",
+        minHeight: "100vh",
         background: "#080808",
         color: "#fff",
         fontFamily: "'Inter', system-ui, sans-serif",
         display: "flex",
         flexDirection: "column",
-        overflow: "hidden",
       }}
     >
       {/* Keyframe */}
@@ -306,16 +330,16 @@ export function IsimKolyeClient() {
           href="/remaura"
           style={{ color: "rgba(255,255,255,0.3)", fontSize: 12, textDecoration: "none", letterSpacing: "0.05em" }}
         >
-          ← Remaura
+          {ik.back}
         </Link>
         <span style={{ color: "rgba(255,255,255,0.08)" }}>|</span>
         <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)" }}>
-          İsim &amp; Harf Kolye
+          {ik.pageTitle}
         </span>
       </div>
 
       {/* Body */}
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
 
         {/* ── Left Panel ───────────────────────────────────────────────────── */}
         <div
@@ -327,12 +351,13 @@ export function IsimKolyeClient() {
             flexDirection: "column",
             gap: 0,
             overflowY: "auto",
+            minHeight: "calc(100vh - 52px)",
             padding: "20px 16px 24px",
           }}
         >
           {/* Mode toggle */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-            <Label>Mod</Label>
+            <Label>{ik.modeLabel}</Label>
             <div style={{ display: "flex", borderRadius: 10, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)" }}>
               {(["letter", "name"] as const).map(m => (
                 <button
@@ -347,7 +372,7 @@ export function IsimKolyeClient() {
                     transition: "all 0.15s",
                   }}
                 >
-                  {m === "letter" ? "Tek Harf" : "İsim"}
+                  {m === "letter" ? ik.letterMode : ik.nameMode}
                 </button>
               ))}
             </div>
@@ -355,7 +380,7 @@ export function IsimKolyeClient() {
 
           {/* Text input */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-            <Label>{mode === "letter" ? "Harf" : "İsim"}</Label>
+            <Label>{mode === "letter" ? ik.letterLabel : ik.nameLabel}</Label>
             <input
               value={text}
               onChange={e => handleTextChange(e.target.value)}
@@ -383,103 +408,199 @@ export function IsimKolyeClient() {
             )}
           </div>
 
-          {/* Font style */}
+          {/* ── Referans Görsel ─────────────────────────────────────────── */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-            <Label>Font Stili</Label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-              {FONT_STYLES.map(f => (
+            <Label>
+              {ik.refTitle}
+              <span style={{ textTransform: "none", letterSpacing: "normal", fontWeight: 400, color: "rgba(255,255,255,0.2)", marginLeft: 6 }}>
+                {ik.refOptional}
+              </span>
+            </Label>
+
+            {refImage ? (
+              /* Önizleme */
+              <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: "1px solid rgba(183,110,121,0.35)" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={refImage} alt="referans" style={{ width: "100%", height: "auto", display: "block", maxHeight: 140, objectFit: "contain", background: "#1a1a1a" }} />
                 <button
-                  key={f.id}
-                  onClick={() => setFontStyle(f.id)}
+                  onClick={() => { setRefImage(null); setImages([]); }}
                   style={{
-                    padding: "10px 8px",
-                    borderRadius: 8,
-                    border: fontStyle === f.id
-                      ? `1px solid ${ACCENT}`
-                      : "1px solid rgba(255,255,255,0.07)",
-                    background: fontStyle === f.id
-                      ? "rgba(183,110,121,0.12)"
-                      : "rgba(255,255,255,0.03)",
-                    cursor: "pointer",
-                    textAlign: "center",
-                    transition: "all 0.15s",
+                    position: "absolute", top: 6, right: 6,
+                    background: "rgba(0,0,0,0.7)", border: "1px solid rgba(255,255,255,0.15)",
+                    borderRadius: 6, color: "rgba(255,255,255,0.7)", fontSize: 11,
+                    padding: "3px 8px", cursor: "pointer", lineHeight: 1,
                   }}
                 >
-                  <div style={{ fontSize: 22, marginBottom: 4, fontFamily: "serif", color: fontStyle === f.id ? ACCENT : "rgba(255,255,255,0.6)" }}>
-                    {f.preview}
-                  </div>
-                  <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: fontStyle === f.id ? ACCENT : "rgba(255,255,255,0.4)" }}>
-                    {f.label}
-                  </div>
-                  <div style={{ fontSize: 8, color: "rgba(255,255,255,0.2)", marginTop: 2 }}>
-                    {f.sub}
-                  </div>
+                  {ik.refRemove}
                 </button>
-              ))}
+                <div style={{ padding: "6px 10px", background: "rgba(183,110,121,0.1)", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.2em", color: ACCENT }}>
+                  {ik.refStyleHint}
+                </div>
+              </div>
+            ) : (
+              /* Drop zone */
+              <div
+                onDragOver={e => { e.preventDefault(); setRefDragging(true); }}
+                onDragLeave={() => setRefDragging(false)}
+                onDrop={e => {
+                  e.preventDefault(); setRefDragging(false);
+                  const f = e.dataTransfer.files?.[0];
+                  if (f) handleRefFile(f);
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  border: `1px dashed ${refDragging ? ACCENT : "rgba(255,255,255,0.15)"}`,
+                  borderRadius: 10,
+                  padding: "16px 10px",
+                  textAlign: "center",
+                  cursor: "pointer",
+                  background: refDragging ? "rgba(183,110,121,0.07)" : "rgba(255,255,255,0.02)",
+                  transition: "all 0.15s",
+                }}
+              >
+                <div style={{ fontSize: 20, marginBottom: 6, opacity: 0.4 }}>⊕</div>
+                <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.2em", color: "rgba(255,255,255,0.3)" }}>
+                  {ik.refUpload}
+                </div>
+                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.15)", marginTop: 4 }}>
+                  {ik.refUploadSub}
+                </div>
+              </div>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleRefFile(f); e.target.value = ""; }}
+            />
+          </div>
+
+          {/* Font style */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20, opacity: refImage ? 0.35 : 1, pointerEvents: refImage ? "none" : "auto", transition: "opacity 0.2s" }}>
+            <Label>
+              {ik.fontStyleLabel}
+              {refImage && <span style={{ textTransform: "none", letterSpacing: "normal", fontWeight: 400, color: "rgba(255,255,255,0.2)", marginLeft: 6 }}>{ik.fontFromRef}</span>}
+            </Label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              {FONT_STYLES.map(f => {
+                const fontLabels: Record<string, { label: string; sub: string }> = {
+                  "cursive-thin": { label: ik.fontCursiveThin,  sub: ik.fontCursiveThinSub  },
+                  "cursive-bold": { label: ik.fontCursiveBold,  sub: ik.fontCursiveBoldSub  },
+                  "block-serif":  { label: ik.fontBlockSerif,   sub: ik.fontBlockSerifSub   },
+                  "wire-minimal": { label: ik.fontWireMinimal,  sub: ik.fontWireMinimalSub  },
+                };
+                const { label, sub } = fontLabels[f.id] ?? { label: f.id, sub: "" };
+                return (
+                  <button
+                    key={f.id}
+                    onClick={() => setFontStyle(f.id)}
+                    style={{
+                      padding: "10px 8px",
+                      borderRadius: 8,
+                      border: fontStyle === f.id
+                        ? `1px solid ${ACCENT}`
+                        : "1px solid rgba(255,255,255,0.07)",
+                      background: fontStyle === f.id
+                        ? "rgba(183,110,121,0.12)"
+                        : "rgba(255,255,255,0.03)",
+                      cursor: "pointer",
+                      textAlign: "center",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    <div style={{ fontSize: 22, marginBottom: 4, fontFamily: "serif", color: fontStyle === f.id ? ACCENT : "rgba(255,255,255,0.6)" }}>
+                      {f.preview}
+                    </div>
+                    <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: fontStyle === f.id ? ACCENT : "rgba(255,255,255,0.4)" }}>
+                      {label}
+                    </div>
+                    <div style={{ fontSize: 8, color: "rgba(255,255,255,0.2)", marginTop: 2 }}>
+                      {sub}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Metal */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-            <Label>Metal</Label>
+            <Label>{ik.metalLabel}</Label>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {METALS.map(m => (
-                <button
-                  key={m.id}
-                  onClick={() => setMetal(m.id)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 10,
-                    padding: "9px 12px", borderRadius: 8,
-                    border: metal === m.id
-                      ? `1px solid ${ACCENT}`
-                      : "1px solid rgba(255,255,255,0.06)",
-                    background: metal === m.id ? "rgba(183,110,121,0.1)" : "rgba(255,255,255,0.02)",
-                    cursor: "pointer", transition: "all 0.15s",
-                  }}
-                >
-                  <div style={{ width: 14, height: 14, borderRadius: "50%", background: m.hex, flexShrink: 0, boxShadow: "0 0 0 1px rgba(255,255,255,0.1)" }} />
-                  <span style={{ fontSize: 11, fontWeight: 600, color: metal === m.id ? "#fff" : "rgba(255,255,255,0.45)" }}>
-                    {m.label}
-                  </span>
-                </button>
-              ))}
+              {METALS.map(m => {
+                const metalLabels: Record<string, string> = {
+                  "yellow-gold": ik.metalYellowGold,
+                  "rose-gold":   ik.metalRoseGold,
+                  "white-gold":  ik.metalWhiteGold,
+                  "silver":      ik.metalSilver,
+                };
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => setMetal(m.id)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "9px 12px", borderRadius: 8,
+                      border: metal === m.id
+                        ? `1px solid ${ACCENT}`
+                        : "1px solid rgba(255,255,255,0.06)",
+                      background: metal === m.id ? "rgba(183,110,121,0.1)" : "rgba(255,255,255,0.02)",
+                      cursor: "pointer", transition: "all 0.15s",
+                    }}
+                  >
+                    <div style={{ width: 14, height: 14, borderRadius: "50%", background: m.hex, flexShrink: 0, boxShadow: "0 0 0 1px rgba(255,255,255,0.1)" }} />
+                    <span style={{ fontSize: 11, fontWeight: 600, color: metal === m.id ? "#fff" : "rgba(255,255,255,0.45)" }}>
+                      {metalLabels[m.id] ?? m.id}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Decoration */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-            <Label>Süsleme</Label>
+            <Label>{ik.decoLabel}</Label>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-              {DECORATIONS.map(d => (
-                <button
-                  key={d.id}
-                  onClick={() => setDecoration(d.id)}
-                  style={{
-                    padding: "9px 8px",
-                    borderRadius: 8,
-                    border: decoration === d.id
-                      ? `1px solid ${ACCENT}`
-                      : "1px solid rgba(255,255,255,0.07)",
-                    background: decoration === d.id ? "rgba(183,110,121,0.12)" : "rgba(255,255,255,0.03)",
-                    cursor: "pointer",
-                    textAlign: "center",
-                    transition: "all 0.15s",
-                  }}
-                >
-                  <div style={{ fontSize: 18, marginBottom: 3, color: decoration === d.id ? ACCENT : "rgba(255,255,255,0.4)" }}>
-                    {d.icon}
-                  </div>
-                  <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: decoration === d.id ? ACCENT : "rgba(255,255,255,0.35)" }}>
-                    {d.label}
-                  </div>
-                </button>
-              ))}
+              {DECORATIONS.map(d => {
+                const decoLabels: Record<string, string> = {
+                  "plain":    ik.decoPlain,
+                  "diamond":  ik.decoDiamond,
+                  "floral":   ik.decoFloral,
+                  "colorful": ik.decoColorful,
+                };
+                return (
+                  <button
+                    key={d.id}
+                    onClick={() => setDecoration(d.id)}
+                    style={{
+                      padding: "9px 8px",
+                      borderRadius: 8,
+                      border: decoration === d.id
+                        ? `1px solid ${ACCENT}`
+                        : "1px solid rgba(255,255,255,0.07)",
+                      background: decoration === d.id ? "rgba(183,110,121,0.12)" : "rgba(255,255,255,0.03)",
+                      cursor: "pointer",
+                      textAlign: "center",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    <div style={{ fontSize: 18, marginBottom: 3, color: decoration === d.id ? ACCENT : "rgba(255,255,255,0.4)" }}>
+                      {d.icon}
+                    </div>
+                    <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: decoration === d.id ? ACCENT : "rgba(255,255,255,0.35)" }}>
+                      {decoLabels[d.id] ?? d.id}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Varyasyon */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
-            <Label>Varyasyon</Label>
+            <Label>{ik.variationLabel}</Label>
             <div style={{ display: "flex", gap: 6 }}>
               {[1, 2, 3, 4].map(n => (
                 <button
@@ -523,10 +644,10 @@ export function IsimKolyeClient() {
           >
             {loading && <Spinner />}
             {loading
-              ? "Üretiliyor..."
+              ? ik.generating
               : text.trim()
-                ? `Üret · ${text.trim().toUpperCase()}`
-                : "Üret"}
+                ? `${ik.generateBtn} · ${text.trim().toUpperCase()}`
+                : ik.generateBtn}
           </button>
         </div>
 
@@ -535,7 +656,7 @@ export function IsimKolyeClient() {
           {images.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
               <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: "rgba(255,255,255,0.3)" }}>
-                {images.length} sonuç
+                {images.length} {ik.resultCount}
               </span>
               {images.length > 1 && (
                 <button
@@ -546,7 +667,7 @@ export function IsimKolyeClient() {
                     borderRadius: 7, color: "rgba(255,255,255,0.4)", padding: "6px 12px", cursor: "pointer",
                   }}
                 >
-                  Tümünü İndir
+                  {ik.downloadAll}
                 </button>
               )}
             </div>
@@ -600,7 +721,7 @@ export function IsimKolyeClient() {
                         color: ACCENT, cursor: "pointer",
                       }}
                     >
-                      ↓ İndir
+                      {ik.download}
                     </button>
 
                     {/* Galeriye Kayıt */}
@@ -616,7 +737,7 @@ export function IsimKolyeClient() {
                         cursor: galeriKaydedildi.has(i) || galeriKaydediliyor !== null ? "default" : "pointer",
                       }}
                     >
-                      {galeriKaydedildi.has(i) ? "✓ Kaydedildi" : galeriKaydediliyor === i ? "…" : "Galeriye Kayıt"}
+                      {galeriKaydedildi.has(i) ? ik.galeriSaved : galeriKaydediliyor === i ? "…" : ik.galeriSave}
                     </button>
 
                     {/* Edit'te Düzenle */}
@@ -632,7 +753,7 @@ export function IsimKolyeClient() {
                         color: "rgba(255,255,255,0.45)", cursor: "pointer",
                       }}
                     >
-                      ✏ Edit&apos;te Düzenle
+                      {ik.editOpen}
                     </button>
 
                     {/* Stili Kayıt Et */}
@@ -645,7 +766,7 @@ export function IsimKolyeClient() {
                         color: "rgba(255,255,255,0.45)", cursor: "pointer",
                       }}
                     >
-                      ★ Stili Kayıt Et
+                      {ik.stilSave}
                     </button>
                   </div>
                 </div>
@@ -655,17 +776,16 @@ export function IsimKolyeClient() {
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400, gap: 16 }}>
               <Spinner />
               <span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", letterSpacing: "0.1em" }}>
-                {count > 1 ? `${count} varyasyon üretiliyor...` : "Üretiliyor..."}
+                {count > 1 ? `${count} ${ik.loadingMulti}` : ik.loadingSingle}
               </span>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400, gap: 12 }}>
               <div style={{ fontSize: 48, opacity: 0.08 }}>✦</div>
               <p style={{ fontSize: 12, color: "rgba(255,255,255,0.15)", textAlign: "center", lineHeight: 1.7, maxWidth: 280 }}>
-                Sol panelden{" "}
-                {mode === "letter" ? "bir harf seçin" : "isim yazın"}
-                ,<br />
-                stil ve metal belirleyin, ardından Üret&apos;e basın.
+                {mode === "letter" ? ik.emptyHintLetter : ik.emptyHintName}
+                <br />
+                {ik.emptyHintBody}
               </p>
             </div>
           )}
@@ -753,7 +873,7 @@ export function IsimKolyeClient() {
                 color: ACCENT, cursor: "pointer",
               }}
             >
-              İndir
+              {ik.download}
             </button>
 
             {/* Galeriye Kayıt Et */}
@@ -770,7 +890,7 @@ export function IsimKolyeClient() {
                 opacity: galeriKaydediliyor !== null && galeriKaydediliyor !== lightbox ? 0.5 : 1,
               }}
             >
-              {galeriKaydedildi.has(lightbox!) ? "✓ Kaydedildi" : galeriKaydediliyor === lightbox ? "Kaydediliyor…" : "Galeriye Kayıt"}
+              {galeriKaydedildi.has(lightbox!) ? ik.galeriSaved : galeriKaydediliyor === lightbox ? ik.stilSaving : ik.galeriSave}
             </button>
 
             {/* Stili Kayıt Et */}
@@ -783,7 +903,7 @@ export function IsimKolyeClient() {
                 color: "rgba(255,255,255,0.6)", cursor: "pointer",
               }}
             >
-              Stili Kayıt Et
+              {ik.stilSave}
             </button>
 
             {/* Koleksiyon Edit'te Aç */}
@@ -799,7 +919,7 @@ export function IsimKolyeClient() {
                 color: "rgba(255,255,255,0.45)", cursor: "pointer",
               }}
             >
-              Edit&apos;te Düzenle
+              {ik.editOpen}
             </button>
 
             {/* Kapat */}
@@ -812,7 +932,7 @@ export function IsimKolyeClient() {
                 color: "rgba(255,255,255,0.25)", cursor: "pointer",
               }}
             >
-              Kapat
+              {t.koleksiyonEdit.cancel}
             </button>
           </div>
         </div>
@@ -833,16 +953,16 @@ export function IsimKolyeClient() {
             borderRadius: 16, padding: "28px 28px 24px", width: 320, display: "flex", flexDirection: "column", gap: 16,
           }}>
             <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", color: ACCENT }}>
-              Stili Kayıt Et
+              {ik.stilModalTitle}
             </div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", lineHeight: 1.6 }}>
               {FONT_STYLE_SHORT[fontStyle] ?? fontStyle}<br />
-              {METAL_LABEL[metal] ?? metal} · {DECO_SHORT[decoration] ?? decoration}
+              {METAL_LABEL_EN[metal] ?? metal} · {DECO_SHORT[decoration] ?? decoration}
             </div>
             <input
               value={stilIsim}
               onChange={e => setStilIsim(e.target.value)}
-              placeholder="Stil adı (örn. Gold Cursive Sade)"
+              placeholder={ik.stilNamePlaceholder}
               autoFocus
               style={{
                 background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)",
@@ -862,7 +982,7 @@ export function IsimKolyeClient() {
                   cursor: stilIsim.trim() && !stilKaydediliyor ? "pointer" : "not-allowed",
                 }}
               >
-                {stilKaydediliyor ? "Kaydediliyor…" : "Kaydet"}
+                {stilKaydediliyor ? ik.stilSaving : ik.stilSaveBtn}
               </button>
               <button
                 onClick={() => setStilModal(false)}
@@ -873,7 +993,7 @@ export function IsimKolyeClient() {
                   color: "rgba(255,255,255,0.25)", cursor: "pointer",
                 }}
               >
-                İptal
+                {ik.stilCancel}
               </button>
             </div>
           </div>

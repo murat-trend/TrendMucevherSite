@@ -104,7 +104,7 @@ No hands. No model. No props. No text overlays.
 Photorealistic, luxury e-commerce quality, sharp throughout.`;
 }
 
-// ─── Single generation ────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function cleanApiKey(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
@@ -114,6 +114,35 @@ function cleanApiKey(raw: string | undefined): string | undefined {
     .join("")
     .trim() || undefined;
 }
+
+type GenerateResult = {
+  candidates?: Array<{
+    finishReason?: string;
+    content?: { parts?: unknown[] } | null;
+  }> | null;
+};
+
+function extractImageFromResult(result: GenerateResult): string {
+  const candidate = result.candidates?.[0];
+  const finishReason = candidate?.finishReason;
+  const parts = candidate?.content?.parts ?? [];
+
+  const textParts = (parts as Array<{ text?: string; inlineData?: unknown; thought?: boolean }>)
+    .filter(p => !p.thought && p.text)
+    .map(p => p.text)
+    .join(" ");
+  if (textParts) console.log("[isim-kolye] text:", textParts.slice(0, 200));
+
+  const imgPart = (parts as Array<{ thought?: boolean; inlineData?: { mimeType: string; data: string } }>)
+    .find(p => !p.thought && p.inlineData?.mimeType?.startsWith("image/"));
+
+  if (!imgPart?.inlineData) {
+    throw new Error(`no_image | finishReason=${finishReason} | parts=${parts.length} | text=${textParts.slice(0, 100)}`);
+  }
+  return `data:${imgPart.inlineData.mimeType};base64,${imgPart.inlineData.data}`;
+}
+
+// ─── Generation functions ─────────────────────────────────────────────────────
 
 async function generateOne(prompt: string): Promise<string> {
   const apiKey = cleanApiKey(process.env.GOOGLE_API_KEY);
@@ -134,24 +163,68 @@ async function generateOne(prompt: string): Promise<string> {
     timeoutPromise,
   ]);
 
-  const candidate = result.candidates?.[0];
-  const finishReason = candidate?.finishReason;
-  const parts = candidate?.content?.parts ?? [];
+  return extractImageFromResult(result);
+}
 
-  // Log text parts server-side
-  const textParts = (parts as Array<{ text?: string; inlineData?: unknown; thought?: boolean }>)
-    .filter(p => !p.thought && p.text)
-    .map(p => p.text)
-    .join(" ");
-  if (textParts) console.log("[isim-kolye] text:", textParts.slice(0, 200));
+async function generateOneWithReference(
+  text: string,
+  mode: "letter" | "name",
+  referenceDataUrl: string,
+): Promise<string> {
+  const apiKey = cleanApiKey(process.env.GOOGLE_API_KEY);
+  if (!apiKey) throw new Error("GOOGLE_API_KEY missing or invalid");
 
-  const imgPart = (parts as Array<{ thought?: boolean; inlineData?: { mimeType: string; data: string } }>)
-    .find(p => !p.thought && p.inlineData?.mimeType?.startsWith("image/"));
+  // Parse data URL: "data:<mime>;base64,<data>"
+  const mimeMatch = referenceDataUrl.match(/^data:([^;]+);base64,/);
+  const mimeType = mimeMatch?.[1] ?? "image/jpeg";
+  const base64Data = referenceDataUrl.includes(",")
+    ? referenceDataUrl.split(",")[1]
+    : referenceDataUrl;
 
-  if (!imgPart?.inlineData) {
-    throw new Error(`no_image | finishReason=${finishReason} | parts=${parts.length} | text=${textParts.slice(0, 100)}`);
-  }
-  return `data:${imgPart.inlineData.mimeType};base64,${imgPart.inlineData.data}`;
+  const displayText =
+    mode === "letter"
+      ? text.toUpperCase()
+      : text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+
+  const prompt =
+    mode === "letter"
+      ? `You are given a reference jewelry product photograph. Create a NEW pendant necklace showing the letter "${displayText}" in EXACTLY the same visual style as the reference image.
+
+MATCH PRECISELY: metal color and finish, letter/font style and weight, surface decoration (stones, enamel, plain), chain style, lighting, background, photography angle.
+ONLY CHANGE: the letter displayed — it must unmistakably show "${displayText}", perfectly formed and legible.
+
+Professional luxury e-commerce photograph. Pure white background. No hands, no model, no props, no watermarks.`
+      : `You are given a reference jewelry product photograph. Create a NEW name necklace pendant spelling "${displayText}" in EXACTLY the same visual style as the reference image.
+
+MATCH PRECISELY: metal color and finish, script/font style and weight, surface decoration (stones, enamel, plain), chain style, lighting, background, photography angle.
+ONLY CHANGE: the text on the pendant — it must clearly read "${displayText}", every letter legible, correct spelling.
+
+Professional luxury e-commerce photograph. Pure white background. No hands, no model, no props, no watermarks.`;
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("timeout_240s — üretim çok uzun sürdü, tekrar dene")), 240_000)
+  );
+
+  const result = await Promise.race([
+    ai.models.generateContent({
+      model: "gemini-3.1-flash-image-preview",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inlineData: { mimeType, data: base64Data } },
+            { text: prompt },
+          ],
+        },
+      ],
+      config: { responseModalities: ["IMAGE", "TEXT"] } as never,
+    }),
+    timeoutPromise,
+  ]);
+
+  return extractImageFromResult(result);
 }
 
 // ─── Route handler ────────────────────────────────────────────────────────────
@@ -168,6 +241,7 @@ export async function POST(req: Request) {
       metal?: string;
       decoration?: string;
       count?: number;
+      referenceImage?: string; // data URL — stil kopyalama modu
     };
     try {
       body = await req.json();
@@ -175,7 +249,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Geçersiz istek" }, { status: 400 });
     }
 
-    const { mode, text, fontStyle, metal, decoration, count } = body;
+    const { mode, text, fontStyle, metal, decoration, count, referenceImage } = body;
 
     if (!text?.trim()) {
       return NextResponse.json({ error: "Metin gerekli" }, { status: 400 });
@@ -190,16 +264,23 @@ export async function POST(req: Request) {
     const resolvedMode = mode === "name" ? "name" : "letter";
     const resolvedCount = Math.min(Math.max(Number(count) || 1, 1), 4);
 
-    const prompt = buildPrompt({
-      mode: resolvedMode,
-      text: text.trim(),
-      fontStyle: fontStyle ?? "cursive-thin",
-      metal: metal ?? "yellow-gold",
-      decoration: decoration ?? "plain",
-    });
+    // Referans görsel varsa stil-kopyalama modu, yoksa normal prompt modu
+    const hasReference = typeof referenceImage === "string" && referenceImage.startsWith("data:");
 
-    // Paralel üretim
-    const tasks = Array.from({ length: resolvedCount }, () => generateOne(prompt));
+    const tasks = hasReference
+      ? Array.from({ length: resolvedCount }, () =>
+          generateOneWithReference(text.trim(), resolvedMode, referenceImage!)
+        )
+      : (() => {
+          const prompt = buildPrompt({
+            mode: resolvedMode,
+            text: text.trim(),
+            fontStyle: fontStyle ?? "cursive-thin",
+            metal: metal ?? "yellow-gold",
+            decoration: decoration ?? "plain",
+          });
+          return Array.from({ length: resolvedCount }, () => generateOne(prompt));
+        })();
     const results = await Promise.allSettled(tasks);
 
     // Log failures
