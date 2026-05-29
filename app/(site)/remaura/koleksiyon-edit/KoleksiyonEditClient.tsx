@@ -380,6 +380,7 @@ export function KoleksiyonEditClient() {
   const [brushSize, setBrushSize] = useState(30);
   const [maskResult, setMaskResult] = useState<string | null>(null);
   const [maskLoading, setMaskLoading] = useState(false);
+  const [beforeAfter, setBeforeAfter] = useState<{ before: string; after: string; index: number } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const maskImgRef = useRef<HTMLImageElement>(null);
   const isDrawingRef = useRef(false);
@@ -414,6 +415,7 @@ export function KoleksiyonEditClient() {
     setLightbox(null);
     setMaskMode(false);
     setMaskResult(null);
+    setBeforeAfter(null);
     setMaskLoading(false);
     isDrawingRef.current = false;
   }
@@ -855,6 +857,7 @@ export function KoleksiyonEditClient() {
     payload: Record<string, unknown>,
     label: string
   ): Promise<string | null> {
+    const beforeImg = images[index];
     setLoad({ kind: "op", index, label });
     try {
       const res = await fetch("/api/remaura/koleksiyon-edit/stability", {
@@ -864,7 +867,12 @@ export function KoleksiyonEditClient() {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? ke.errGenerating); return null; }
-      return data.image ?? null;
+      const result: string | null = data.image ?? null;
+      if (result) {
+        setBeforeAfter({ before: beforeImg, after: result, index });
+        setLightbox(index);
+      }
+      return result;
     } catch { setError(ke.errConnection); return null; }
     finally { setLoad({ kind: "idle" }); }
   }
@@ -925,7 +933,12 @@ export function KoleksiyonEditClient() {
       let data: Record<string, unknown> = {};
       try { data = await res.json(); } catch { data = { error: `HTTP ${res.status}` }; }
       if (!res.ok) { setError((data.error as string) ?? ke.errGenerating); return; }
-      if (data.image) replaceImg(index, data.image as string);
+      if (data.image) {
+        const beforeImg = images[index];
+        replaceImg(index, data.image as string);
+        setBeforeAfter({ before: beforeImg, after: data.image as string, index });
+        setLightbox(index);
+      }
     } catch (e) { setError((e as Error)?.message ?? ke.errConnection); }
     finally { setLoad({ kind: "idle" }); }
   }
@@ -1524,17 +1537,25 @@ export function KoleksiyonEditClient() {
           </button>
 
           {/* Image area */}
-          {maskResult ? (
+          {(maskResult || beforeAfter) ? (
             <div style={{ display: "flex", gap: 20, maxWidth: "90vw" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
-                <span style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.3)" }}>{ke.original}</span>
+                <span style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.3)" }}>Önce</span>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={images[lightbox]} alt={ke.original} style={{ maxWidth: "42vw", maxHeight: "68vh", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", display: "block" }} />
+                <img
+                  src={maskResult ? images[lightbox] : beforeAfter!.before}
+                  alt="Önce"
+                  style={{ maxWidth: "42vw", maxHeight: "68vh", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", display: "block" }}
+                />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
-                <span style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.3)" }}>{ke.result}</span>
+                <span style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.3)" }}>Sonra</span>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={maskResult} alt={ke.result} style={{ maxWidth: "42vw", maxHeight: "68vh", borderRadius: 10, border: "1px solid rgba(183,110,121,0.3)", display: "block" }} />
+                <img
+                  src={maskResult ?? beforeAfter!.after}
+                  alt="Sonra"
+                  style={{ maxWidth: "42vw", maxHeight: "68vh", borderRadius: 10, border: "1px solid rgba(183,110,121,0.3)", display: "block" }}
+                />
               </div>
             </div>
           ) : (
@@ -1564,23 +1585,29 @@ export function KoleksiyonEditClient() {
 
           {/* Bottom controls */}
           <div style={{ marginTop: 18, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
-            {maskResult ? (
+            {(maskResult || beforeAfter) ? (
               <>
                 <ActionBtn accent onClick={async () => {
                   try {
-                    const blob = await (await fetch(maskResult)).blob();
+                    const src = maskResult ?? beforeAfter!.after;
+                    const blob = await (await fetch(src)).blob();
                     const slug = (koleksiyonAdi.trim() || "koleksiyon").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") || "koleksiyon";
                     const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a"); a.href = url; a.download = `${slug}_mask.png`; a.click();
+                    const a = document.createElement("a"); a.href = url; a.download = `${slug}.png`; a.click();
                     URL.revokeObjectURL(url);
                   } catch { setError(ke.errDownload); }
                 }}>
                   {ke.actionDownload}
                 </ActionBtn>
-                <ActionBtn onClick={() => { replaceImg(lightbox, maskResult); closeLightbox(); }}>
+                <ActionBtn onClick={() => {
+                  const result = maskResult ?? beforeAfter!.after;
+                  replaceImg(lightbox!, result);
+                  setMaskResult(null);
+                  setBeforeAfter(null);
+                }}>
                   {ke.updateImage}
                 </ActionBtn>
-                <ActionBtn onClick={() => setMaskResult(null)}>{ke.back}</ActionBtn>
+                <ActionBtn onClick={() => { setMaskResult(null); setBeforeAfter(null); }}>{ke.back}</ActionBtn>
               </>
             ) : maskMode ? (
               <>
