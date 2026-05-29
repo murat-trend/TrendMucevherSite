@@ -88,27 +88,75 @@ export default async function RemauraPage() {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
   const { data: { user } } = await supabase.auth.getUser();
-  const isSuperAdmin = isRemauraSuperAdminUserId(user?.id);
 
-  const adminNavLink = isSuperAdmin ? (
-    <Link
-      href="/remaura/koleksiyon-edit"
-      style={{
-        borderRadius: "9999px",
-        border: "1px solid rgba(183,110,121,0.5)",
-        background: "rgba(183,110,121,0.1)",
-        padding: "8px 16px",
-        fontSize: 10,
-        fontWeight: 700,
-        textTransform: "uppercase",
-        letterSpacing: "0.2em",
-        color: "#b76e79",
-        textDecoration: "none",
-        whiteSpace: "nowrap",
-      }}
-    >
-      Koleksiyon Edit
-    </Link>
+  // Hem superadmin ID'si hem de profile.role="admin" kontrolü
+  let isAdmin = isRemauraSuperAdminUserId(user?.id);
+  if (!isAdmin && user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+    isAdmin = profile?.role === "admin";
+  }
+
+  const adminNavLink = isAdmin ? (
+    <>
+      <Link
+        href="/remaura/koleksiyon-edit"
+        style={{
+          borderRadius: "9999px",
+          border: "1px solid rgba(183,110,121,0.5)",
+          background: "rgba(183,110,121,0.1)",
+          padding: "8px 16px",
+          fontSize: 10,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: "0.2em",
+          color: "#b76e79",
+          textDecoration: "none",
+          whiteSpace: "nowrap",
+        }}
+      >
+        Koleksiyon Edit
+      </Link>
+      <Link
+        href="/remaura/galeri"
+        style={{
+          borderRadius: "9999px",
+          border: "1px solid rgba(183,110,121,0.5)",
+          background: "rgba(183,110,121,0.1)",
+          padding: "8px 16px",
+          fontSize: 10,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: "0.2em",
+          color: "#b76e79",
+          textDecoration: "none",
+          whiteSpace: "nowrap",
+        }}
+      >
+        Galeri
+      </Link>
+      <Link
+        href="/remaura/isim-kolye"
+        style={{
+          borderRadius: "9999px",
+          border: "1px solid rgba(183,110,121,0.5)",
+          background: "rgba(183,110,121,0.1)",
+          padding: "8px 16px",
+          fontSize: 10,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: "0.2em",
+          color: "#b76e79",
+          textDecoration: "none",
+          whiteSpace: "nowrap",
+        }}
+      >
+        İsim Kolye
+      </Link>
+    </>
   ) : null;
 
   return (
