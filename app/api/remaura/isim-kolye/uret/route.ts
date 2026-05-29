@@ -106,8 +106,19 @@ Photorealistic, luxury e-commerce quality, sharp throughout.`;
 
 // ─── Single generation ────────────────────────────────────────────────────────
 
+function cleanApiKey(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  return raw
+    .split("")
+    .filter((ch) => ch.charCodeAt(0) > 31 && ch.charCodeAt(0) < 256)
+    .join("")
+    .trim() || undefined;
+}
+
 async function generateOne(prompt: string): Promise<string> {
-  const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY! });
+  const apiKey = cleanApiKey(process.env.GOOGLE_API_KEY);
+  if (!apiKey) throw new Error("GOOGLE_API_KEY missing or invalid");
+  const ai = new GoogleGenAI({ apiKey });
   const result = await ai.models.generateContent({
     model: "gemini-3.1-flash-image-preview",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -161,9 +172,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Metin gerekli" }, { status: 400 });
     }
 
-    // API key kontrolü
-    if (!process.env.GOOGLE_API_KEY) {
-      console.error("[isim-kolye] GOOGLE_API_KEY eksik");
+    // API key kontrolü (BOM dahil)
+    if (!cleanApiKey(process.env.GOOGLE_API_KEY)) {
+      console.error("[isim-kolye] GOOGLE_API_KEY eksik veya geçersiz");
       return NextResponse.json({ error: "Yapılandırma hatası" }, { status: 500 });
     }
 
