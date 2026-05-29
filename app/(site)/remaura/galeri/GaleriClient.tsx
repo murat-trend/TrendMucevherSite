@@ -286,7 +286,7 @@ export function GaleriClient({ initialKoleksiyonlar, initialStilKartlari }: Prop
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div style={{
-      minHeight: "100vh", background: BG, color: "white",
+      minHeight: "calc(100vh - 5rem)", background: BG, color: "white",
       display: "flex", flexDirection: "column",
       fontFamily: "var(--font-display, sans-serif)",
     }}>
@@ -322,7 +322,7 @@ export function GaleriClient({ initialKoleksiyonlar, initialStilKartlari }: Prop
       </div>
 
       {/* ── 2 Sütunlu Gövde ────────────────────────────────────────────── */}
-      <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
+      <div style={{ flex: 1, display: "flex", overflow: "visible" }}>
 
         {/* ── SOL: Stil Kartları (260px) ───────────────────────────────── */}
         <div style={{
