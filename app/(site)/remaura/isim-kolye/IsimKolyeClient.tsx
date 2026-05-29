@@ -337,8 +337,7 @@ export function IsimKolyeClient() {
   return (
     <div
       style={{
-        height: "calc(100dvh - 5.125rem - env(safe-area-inset-top))",
-        overflow: "hidden",
+        minHeight: "calc(100vh - 5rem)",
         background: "#080808",
         color: "#fff",
         fontFamily: "'Inter', system-ui, sans-serif",
@@ -374,7 +373,7 @@ export function IsimKolyeClient() {
       </div>
 
       {/* Body */}
-      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+      <div style={{ flex: 1, display: "flex", overflow: "visible" }}>
 
         {/* ── Left Panel ───────────────────────────────────────────────────── */}
         <div
@@ -385,7 +384,6 @@ export function IsimKolyeClient() {
             display: "flex",
             flexDirection: "column",
             gap: 0,
-            overflowY: "auto",
             padding: "20px 16px 24px",
           }}
         >
@@ -725,7 +723,7 @@ export function IsimKolyeClient() {
         </div>
 
         {/* ── Right: Results ──────────────────────────────────────────────── */}
-        <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
+        <div style={{ flex: 1, padding: 24 }}>
           {images.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
               <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: "rgba(255,255,255,0.3)" }}>

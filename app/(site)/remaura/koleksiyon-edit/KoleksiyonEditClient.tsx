@@ -1093,7 +1093,7 @@ export function KoleksiyonEditClient() {
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ height: "calc(100dvh - 5.125rem - env(safe-area-inset-top))", overflow: "hidden", background: "#080808", color: "white", display: "flex", flexDirection: "column", fontFamily: "var(--font-display, sans-serif)" }}>
+    <div style={{ minHeight: "calc(100vh - 5rem)", background: "#080808", color: "white", display: "flex", flexDirection: "column", fontFamily: "var(--font-display, sans-serif)" }}>
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
@@ -1164,9 +1164,9 @@ export function KoleksiyonEditClient() {
         </div>
       )}
 
-      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+      <div style={{ flex: 1, display: "flex", overflow: "visible" }}>
         {/* ── Sol Panel ─────────────────────────────────────────────────── */}
-        <div style={{ width: 300, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.06)", overflowY: "auto", minHeight: "calc(100vh - 49px)" }}>
+        <div style={{ width: 300, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.06)" }}>
 
           {/* ── PANEL 1: HIZLI ÜRETİM ── */}
           <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1304,7 +1304,7 @@ export function KoleksiyonEditClient() {
         </div>
 
         {/* ── Orta: Üretilen görseller ─────────────────────────────────── */}
-        <div style={{ flex: 1, overflowY: "auto", padding: 20, minHeight: "calc(100vh - 49px)" }}>
+        <div style={{ flex: 1, padding: 20 }}>
 
           {load.kind === "generating" && <GridSkeleton />}
 
@@ -1408,7 +1408,7 @@ export function KoleksiyonEditClient() {
         </div>
 
         {/* ── Sağ Panel: Koleksiyon Modu ───────────────────────────────── */}
-        <div style={{ width: 280, flexShrink: 0, borderLeft: "1px solid rgba(255,255,255,0.06)", overflowY: "auto", minHeight: "calc(100vh - 49px)", padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ width: 280, flexShrink: 0, borderLeft: "1px solid rgba(255,255,255,0.06)", padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 3, height: 16, background: "rgba(100,160,255,0.7)", borderRadius: 2 }} />
