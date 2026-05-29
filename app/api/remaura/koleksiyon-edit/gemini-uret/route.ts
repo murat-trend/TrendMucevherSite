@@ -11,6 +11,57 @@ loadEnvConfig(process.cwd());
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
+// ─── Watermark ────────────────────────────────────────────────────────────────
+
+async function applyWatermark(base64: string): Promise<string> {
+  try {
+    const sharp = (await import("sharp")).default;
+    const buf = Buffer.from(base64, "base64");
+    const meta = await sharp(buf).metadata();
+    const w = meta.width ?? 1024;
+    const h = meta.height ?? 1024;
+
+    // Sağ alt köşedeki watermark bölgesini kırp (son %6)
+    const cropH = Math.floor(h * 0.94);
+    const cropped = await sharp(buf)
+      .extract({ left: 0, top: 0, width: w, height: cropH })
+      .toBuffer();
+
+    // SVG overlay — sağ alt köşeye Trend Mücevher watermark
+    const px = Math.round(w * 0.025);
+    const py = Math.round(cropH * 0.025);
+    const s1 = Math.max(18, Math.round(w * 0.026));
+    const s2 = Math.max(12, Math.round(w * 0.016));
+    const s3 = Math.max(11, Math.round(w * 0.014));
+    const rx = w - px;
+    const y3 = cropH - py;
+    const y2 = y3 - Math.round(s3 * 1.6);
+    const y1 = y2 - Math.round(s2 * 1.6);
+
+    const svg = Buffer.from(
+      `<svg width="${w}" height="${cropH}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="sh"><feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="rgba(0,0,0,0.35)"/></filter>
+        </defs>
+        <text x="${rx}" y="${y1}" text-anchor="end" font-family="Georgia,serif" font-size="${s1}" font-weight="bold" fill="#b76e79" filter="url(#sh)">Trend Mücevher</text>
+        <text x="${rx}" y="${y2}" text-anchor="end" font-family="Georgia,serif" font-size="${s2}" fill="rgba(183,110,121,0.85)">by Murat Kaynaroğlu</text>
+        <text x="${rx}" y="${y3}" text-anchor="end" font-family="sans-serif" font-size="${s3}" fill="rgba(183,110,121,0.65)">trendmucevher.com</text>
+      </svg>`
+    );
+
+    const result = await sharp(cropped)
+      .composite([{ input: svg, blend: "over" }])
+      .jpeg({ quality: 92 })
+      .toBuffer();
+
+    return result.toString("base64");
+  } catch {
+    return base64;
+  }
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
 async function requireSuperAdmin(): Promise<
   { ok: true } | { ok: false; response: NextResponse }
 > {
@@ -101,9 +152,10 @@ Create a high-end luxury jewelry studio photograph of: ${new_design_concept}
       return NextResponse.json({ error: "Görsel üretilemedi, lütfen tekrar deneyin." }, { status: 500 });
     }
 
+    const watermarked = await applyWatermark(imageBytes);
     return NextResponse.json({
       success: true,
-      image: `data:image/jpeg;base64,${imageBytes}`,
+      image: `data:image/jpeg;base64,${watermarked}`,
     });
 
   } catch (err: unknown) {
