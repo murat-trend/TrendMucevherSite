@@ -163,7 +163,7 @@ export function IsimKolyeClient() {
         body: JSON.stringify({ mode, text, fontStyle, metal, decoration, count }),
       });
 
-      let data: { images?: string[]; error?: string; _dbg?: string } = {};
+      let data: { images?: string[]; error?: string } = {};
       try {
         data = await res.json();
       } catch {
@@ -172,8 +172,7 @@ export function IsimKolyeClient() {
       }
 
       if (!res.ok || !data.images?.length) {
-        const msg = data._dbg ? `${data.error ?? "Hata"} · ${data._dbg}` : (data.error ?? `Üretim başarısız (${res.status})`);
-        setError(msg);
+        setError(data.error ?? `Üretim başarısız (${res.status})`);
       } else {
         setImages(data.images);
       }
@@ -279,12 +278,13 @@ export function IsimKolyeClient() {
   return (
     <div
       style={{
-        minHeight: "100dvh",
+        height: "calc(100dvh - 5rem)",
         background: "#080808",
         color: "#fff",
         fontFamily: "'Inter', system-ui, sans-serif",
         display: "flex",
         flexDirection: "column",
+        overflow: "hidden",
       }}
     >
       {/* Keyframe */}
@@ -557,39 +557,96 @@ export function IsimKolyeClient() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: images.length === 1 ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))",
-                gap: 12,
+                gridTemplateColumns: images.length === 1 ? "minmax(0,680px)" : "repeat(auto-fill, minmax(300px, 1fr))",
+                gap: 16,
               }}
             >
               {images.map((src, i) => (
                 <div
                   key={i}
-                  onClick={() => setLightbox(i)}
                   style={{
-                    borderRadius: 12,
-                    overflow: "hidden",
-                    border: "1px solid rgba(255,255,255,0.07)",
-                    cursor: "zoom-in",
+                    borderRadius: 14,
+                    border: "1px solid rgba(255,255,255,0.08)",
                     background: "#111",
-                    aspectRatio: "1",
-                    position: "relative",
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
                   }}
                 >
+                  {/* Görsel — tıklayınca lightbox */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={src}
-                    alt={`${text} kolye varyasyon ${i + 1}`}
-                    style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                    alt={`${text} kolye ${i + 1}`}
+                    onClick={() => setLightbox(i)}
+                    style={{ width: "100%", height: "auto", display: "block", cursor: "zoom-in" }}
                   />
-                  <div
-                    style={{
-                      position: "absolute", bottom: 8, right: 8,
-                      background: "rgba(0,0,0,0.55)", borderRadius: 6,
-                      padding: "4px 8px", fontSize: 9, color: "rgba(255,255,255,0.5)",
-                      letterSpacing: "0.1em",
-                    }}
-                  >
-                    #{i + 1}
+
+                  {/* Aksiyon butonları — her zaman görünür */}
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 6,
+                    padding: "10px 10px 10px",
+                    borderTop: "1px solid rgba(255,255,255,0.06)",
+                  }}>
+                    {/* İndir */}
+                    <button
+                      onClick={() => handleDownload(src, i)}
+                      style={{
+                        padding: "8px 0", borderRadius: 8,
+                        fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.18em",
+                        background: "rgba(183,110,121,0.12)", border: `1px solid ${ACCENT}`,
+                        color: ACCENT, cursor: "pointer",
+                      }}
+                    >
+                      ↓ İndir
+                    </button>
+
+                    {/* Galeriye Kayıt */}
+                    <button
+                      onClick={() => handleGaleriKaydet(i)}
+                      disabled={galeriKaydedildi.has(i) || galeriKaydediliyor !== null}
+                      style={{
+                        padding: "8px 0", borderRadius: 8,
+                        fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.18em",
+                        background: galeriKaydedildi.has(i) ? "rgba(74,222,128,0.08)" : "rgba(255,255,255,0.04)",
+                        border: galeriKaydedildi.has(i) ? "1px solid rgba(74,222,128,0.4)" : "1px solid rgba(255,255,255,0.12)",
+                        color: galeriKaydedildi.has(i) ? "rgba(74,222,128,0.9)" : "rgba(255,255,255,0.5)",
+                        cursor: galeriKaydedildi.has(i) || galeriKaydediliyor !== null ? "default" : "pointer",
+                      }}
+                    >
+                      {galeriKaydedildi.has(i) ? "✓ Kaydedildi" : galeriKaydediliyor === i ? "…" : "Galeriye Kayıt"}
+                    </button>
+
+                    {/* Edit'te Düzenle */}
+                    <button
+                      onClick={() => {
+                        try { localStorage.setItem("koleksiyon_edit_gorsel", src); } catch { /* ignore */ }
+                        window.open("/remaura/koleksiyon-edit", "_blank");
+                      }}
+                      style={{
+                        padding: "8px 0", borderRadius: 8,
+                        fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.18em",
+                        background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
+                        color: "rgba(255,255,255,0.45)", cursor: "pointer",
+                      }}
+                    >
+                      ✏ Edit&apos;te Düzenle
+                    </button>
+
+                    {/* Stili Kayıt Et */}
+                    <button
+                      onClick={() => setStilModal(true)}
+                      style={{
+                        padding: "8px 0", borderRadius: 8,
+                        fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.18em",
+                        background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
+                        color: "rgba(255,255,255,0.45)", cursor: "pointer",
+                      }}
+                    >
+                      ★ Stili Kayıt Et
+                    </button>
                   </div>
                 </div>
               ))}

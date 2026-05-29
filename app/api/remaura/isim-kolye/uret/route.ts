@@ -219,8 +219,7 @@ export async function POST(req: Request) {
         ? (firstErr.reason instanceof Error ? firstErr.reason.message : String(firstErr.reason)).slice(0, 200)
         : "no_image_no_rejection";
       console.error("[isim-kolye] tüm görseller başarısız:", hint);
-      // _dbg: geçici tanı — düzeldikten sonra kaldır
-      return NextResponse.json({ error: "Görsel üretilemedi, tekrar dene", _dbg: hint }, { status: 500 });
+      return NextResponse.json({ error: "Görsel üretilemedi, tekrar dene" }, { status: 500 });
     }
 
     return NextResponse.json({ images });
