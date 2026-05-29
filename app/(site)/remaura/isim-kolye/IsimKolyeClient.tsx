@@ -129,6 +129,16 @@ export function IsimKolyeClient() {
   const [galeriKaydediliyor, setGaleriKaydediliyor] = useState<number | null>(null);
   const [galeriKaydedildi, setGaleriKaydedildi]     = useState<Set<number>>(new Set());
 
+  // Referans görsel analiz
+  const [analiz, setAnaliz] = useState<{
+    stilPrompt: string;
+    oneriler: string[];
+    takiTipi: string;
+    konu: string;
+    mevcutSahne: string;
+  } | null>(null);
+  const [analizYukleniyor, setAnalizYukleniyor] = useState(false);
+
   // Stil kartı modal
   const [stilModal, setStilModal]             = useState(false);
   const [stilIsim, setStilIsim]               = useState("");
@@ -165,6 +175,29 @@ export function IsimKolyeClient() {
       const compressed = await compressImage(raw);
       setRefImage(compressed);
       setImages([]);
+
+      // Analiz tetikle
+      setAnaliz(null);
+      setAnalizYukleniyor(true);
+      try {
+        const res = await fetch("/api/remaura/koleksiyon-edit/analiz", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: compressed }),
+        });
+        const data = await res.json() as {
+          stilPrompt?: string; oneriler?: string[];
+          takiTipi?: string; konu?: string; mevcutSahne?: string;
+        };
+        if (res.ok) setAnaliz({
+          stilPrompt:   data.stilPrompt   ?? "",
+          oneriler:     data.oneriler     ?? [],
+          takiTipi:     data.takiTipi     ?? "",
+          konu:         data.konu         ?? "",
+          mevcutSahne:  data.mevcutSahne  ?? "",
+        });
+      } catch { /* sessiz */ }
+      finally { setAnalizYukleniyor(false); }
     };
     reader.readAsDataURL(file);
   }
@@ -185,6 +218,7 @@ export function IsimKolyeClient() {
         body: JSON.stringify({
           mode, text, fontStyle, metal, decoration, count,
           referenceImage: refImage ?? undefined,
+          stilPrompt: analiz?.stilPrompt ?? undefined,
         }),
       });
 
@@ -423,7 +457,7 @@ export function IsimKolyeClient() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={refImage} alt="referans" style={{ width: "100%", height: "auto", display: "block", maxHeight: 140, objectFit: "contain", background: "#1a1a1a" }} />
                 <button
-                  onClick={() => { setRefImage(null); setImages([]); }}
+                  onClick={() => { setRefImage(null); setImages([]); setAnaliz(null); setAnalizYukleniyor(false); }}
                   style={{
                     position: "absolute", top: 6, right: 6,
                     background: "rgba(0,0,0,0.7)", border: "1px solid rgba(255,255,255,0.15)",
@@ -475,6 +509,45 @@ export function IsimKolyeClient() {
               onChange={e => { const f = e.target.files?.[0]; if (f) handleRefFile(f); e.target.value = ""; }}
             />
           </div>
+
+          {/* ── Analiz sonucu ────────────────────────────────────────────── */}
+          {analizYukleniyor && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", marginBottom: 8 }}>
+              <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${ACCENT}`, borderTopColor: "transparent", animation: "spin 0.7s linear infinite", flexShrink: 0 }} />
+              <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.2em" }}>Stil analiz ediliyor…</span>
+            </div>
+          )}
+
+          {analiz && !analizYukleniyor && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "10px 12px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, marginBottom: 16 }}>
+              <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", color: ACCENT }}>{analiz.takiTipi}</span>
+              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", fontWeight: 600 }}>{analiz.konu}</span>
+              {analiz.mevcutSahne ? (
+                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", lineHeight: 1.5 }}>{analiz.mevcutSahne}</span>
+              ) : null}
+              {analiz.oneriler.length > 0 && (
+                <>
+                  <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "2px 0" }} />
+                  <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: "rgba(255,255,255,0.25)" }}>Stil önerileri</span>
+                  {analiz.oneriler.map((oneri, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setText(mode === "letter" ? (text || "") : oneri.slice(0, 18))}
+                      style={{
+                        textAlign: "left", padding: "6px 10px", borderRadius: 7, fontSize: 10,
+                        color: "rgba(255,255,255,0.55)", background: "rgba(255,255,255,0.02)",
+                        border: "1px solid rgba(255,255,255,0.06)", cursor: "pointer",
+                        transition: "border-color 0.15s",
+                      }}
+                    >
+                      {oneri}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
 
           {/* Font style */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20, opacity: refImage ? 0.35 : 1, pointerEvents: refImage ? "none" : "auto", transition: "opacity 0.2s" }}>
