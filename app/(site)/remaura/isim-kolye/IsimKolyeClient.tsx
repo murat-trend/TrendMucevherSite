@@ -303,7 +303,8 @@ export function IsimKolyeClient() {
   return (
     <div
       style={{
-        minHeight: "100vh",
+        height: "calc(100vh - 5rem)",
+        overflow: "hidden",
         background: "#080808",
         color: "#fff",
         fontFamily: "'Inter', system-ui, sans-serif",
@@ -351,7 +352,6 @@ export function IsimKolyeClient() {
             flexDirection: "column",
             gap: 0,
             overflowY: "auto",
-            minHeight: "calc(100vh - 52px)",
             padding: "20px 16px 24px",
           }}
         >
