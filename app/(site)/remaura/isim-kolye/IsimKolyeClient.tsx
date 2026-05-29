@@ -3,6 +3,28 @@
 import Link from "next/link";
 import { useState } from "react";
 
+// Metal ID → Türkçe etiket
+const METAL_LABEL: Record<string, string> = {
+  "yellow-gold": "Sarı Altın",
+  "rose-gold":   "Rose Gold",
+  "white-gold":  "Beyaz Altın",
+  "silver":      "Gümüş",
+};
+
+// Font/metal/deco prompt özeti (stil kartı için)
+const FONT_STYLE_SHORT: Record<string, string> = {
+  "cursive-thin": "elegant thin cursive script, hairline strokes, delicate swirls",
+  "cursive-bold": "bold dramatic cursive script, thick flowing strokes",
+  "block-serif":  "classic bold block serif, solid monogram style",
+  "wire-minimal": "ultra-thin wire script, single-stroke hairline cursive",
+};
+const DECO_SHORT: Record<string, string> = {
+  "plain":     "plain polished metal",
+  "diamond":   "pavé diamond-set",
+  "floral":    "floral enamel with diamond accents",
+  "colorful":  "colorful mixed gemstone pavé",
+};
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const ACCENT = "#b76e79";
@@ -93,6 +115,22 @@ export function IsimKolyeClient() {
   // Lightbox
   const [lightbox, setLightbox] = useState<number | null>(null);
 
+  // Galeri kayıt
+  const [galeriKaydediliyor, setGaleriKaydediliyor] = useState<number | null>(null);
+  const [galeriKaydedildi, setGaleriKaydedildi]     = useState<Set<number>>(new Set());
+
+  // Stil kartı modal
+  const [stilModal, setStilModal]             = useState(false);
+  const [stilIsim, setStilIsim]               = useState("");
+  const [stilKaydediliyor, setStilKaydediliyor] = useState(false);
+
+  // Toast
+  const [toast, setToast] = useState<string | null>(null);
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }
+
   // ─── Handlers ──────────────────────────────────────────────────────────────
 
   function handleTextChange(val: string) {
@@ -161,6 +199,74 @@ export function IsimKolyeClient() {
           resolve();
         }, i * 300);
       });
+    }
+  }
+
+  // ─── Galeri kayıt ─────────────────────────────────────────────────────────
+
+  async function handleGaleriKaydet(idx: number) {
+    if (galeriKaydediliyor !== null) return;
+    setGaleriKaydediliyor(idx);
+    try {
+      const tema = [
+        text.trim(),
+        FONT_STYLE_SHORT[fontStyle] ?? fontStyle,
+        DECO_SHORT[decoration] ?? decoration,
+      ].join(", ");
+
+      const res = await fetch("/api/remaura/koleksiyon-edit/kaydet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gorselUrl: images[idx],
+          koleksiyonAdi: text.trim() || "İsim Kolye",
+          tip: "Kolye Ucu",
+          tema,
+          metal: METAL_LABEL[metal] ?? metal,
+        }),
+      });
+      const data: { error?: string } = await res.json();
+      if (!res.ok) { showToast(`Hata: ${data.error ?? "kaydedilemedi"}`); return; }
+      setGaleriKaydedildi(prev => new Set([...prev, idx]));
+      showToast("✓ Galeriye kaydedildi");
+    } catch {
+      showToast("Bağlantı hatası");
+    } finally {
+      setGaleriKaydediliyor(null);
+    }
+  }
+
+  // ─── Stil kartı kayıt ─────────────────────────────────────────────────────
+
+  async function handleStilKaydet() {
+    if (!stilIsim.trim()) return;
+    setStilKaydediliyor(true);
+    try {
+      const stilPrompt = [
+        "Initial/name pendant necklace.",
+        FONT_STYLE_SHORT[fontStyle] ?? fontStyle,
+        `Metal: ${METAL_LABEL[metal] ?? metal}.`,
+        DECO_SHORT[decoration] ?? decoration,
+      ].join(" ");
+
+      const res = await fetch("/api/remaura/koleksiyon-edit/stil-karti", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          isim: stilIsim.trim(),
+          stil_prompt: stilPrompt,
+          metal: METAL_LABEL[metal] ?? null,
+        }),
+      });
+      const data: { error?: string } = await res.json();
+      if (!res.ok) { showToast(`Hata: ${data.error ?? "kaydedilemedi"}`); return; }
+      setStilModal(false);
+      setStilIsim("");
+      showToast("✓ Stil kartı kaydedildi");
+    } catch {
+      showToast("Bağlantı hatası");
+    } finally {
+      setStilKaydediliyor(false);
     }
   }
 
@@ -579,12 +685,13 @@ export function IsimKolyeClient() {
 
           {/* Actions — sabit, her zaman görünür */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 16, justifyContent: "center" }}>
+
             {/* İndir */}
             <button
               onClick={() => handleDownload(images[lightbox!], lightbox!)}
               style={{
-                padding: "10px 22px", borderRadius: 9,
-                fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.2em",
+                padding: "10px 18px", borderRadius: 9,
+                fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.18em",
                 background: "rgba(183,110,121,0.15)", border: `1px solid ${ACCENT}`,
                 color: ACCENT, cursor: "pointer",
               }}
@@ -592,19 +699,47 @@ export function IsimKolyeClient() {
               İndir
             </button>
 
+            {/* Galeriye Kayıt Et */}
+            <button
+              onClick={() => handleGaleriKaydet(lightbox!)}
+              disabled={galeriKaydedildi.has(lightbox!) || galeriKaydediliyor !== null}
+              style={{
+                padding: "10px 18px", borderRadius: 9,
+                fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.18em",
+                background: galeriKaydedildi.has(lightbox!) ? "rgba(74,222,128,0.1)" : "rgba(255,255,255,0.06)",
+                border: galeriKaydedildi.has(lightbox!) ? "1px solid rgba(74,222,128,0.4)" : "1px solid rgba(255,255,255,0.15)",
+                color: galeriKaydedildi.has(lightbox!) ? "rgba(74,222,128,0.9)" : "rgba(255,255,255,0.6)",
+                cursor: galeriKaydedildi.has(lightbox!) || galeriKaydediliyor !== null ? "default" : "pointer",
+                opacity: galeriKaydediliyor !== null && galeriKaydediliyor !== lightbox ? 0.5 : 1,
+              }}
+            >
+              {galeriKaydedildi.has(lightbox!) ? "✓ Kaydedildi" : galeriKaydediliyor === lightbox ? "Kaydediliyor…" : "Galeriye Kayıt"}
+            </button>
+
+            {/* Stili Kayıt Et */}
+            <button
+              onClick={() => setStilModal(true)}
+              style={{
+                padding: "10px 18px", borderRadius: 9,
+                fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.18em",
+                background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)",
+                color: "rgba(255,255,255,0.6)", cursor: "pointer",
+              }}
+            >
+              Stili Kayıt Et
+            </button>
+
             {/* Koleksiyon Edit'te Aç */}
             <button
               onClick={() => {
-                try {
-                  localStorage.setItem("koleksiyon_edit_gorsel", images[lightbox!]);
-                } catch { /* ignore */ }
+                try { localStorage.setItem("koleksiyon_edit_gorsel", images[lightbox!]); } catch { /* ignore */ }
                 window.open("/remaura/koleksiyon-edit", "_blank");
               }}
               style={{
-                padding: "10px 22px", borderRadius: 9,
-                fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.2em",
-                background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)",
-                color: "rgba(255,255,255,0.6)", cursor: "pointer",
+                padding: "10px 18px", borderRadius: 9,
+                fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.18em",
+                background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
+                color: "rgba(255,255,255,0.45)", cursor: "pointer",
               }}
             >
               Edit&apos;te Düzenle
@@ -614,15 +749,91 @@ export function IsimKolyeClient() {
             <button
               onClick={() => setLightbox(null)}
               style={{
-                padding: "10px 22px", borderRadius: 9,
-                fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.2em",
-                background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
-                color: "rgba(255,255,255,0.3)", cursor: "pointer",
+                padding: "10px 18px", borderRadius: 9,
+                fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.18em",
+                background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)",
+                color: "rgba(255,255,255,0.25)", cursor: "pointer",
               }}
             >
               Kapat
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ── Stil Kartı Modal ─────────────────────────────────────────────────── */}
+      {stilModal && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 70,
+            background: "rgba(0,0,0,0.8)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+          onClick={e => { if (e.target === e.currentTarget) setStilModal(false); }}
+        >
+          <div style={{
+            background: "#141414", border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 16, padding: "28px 28px 24px", width: 320, display: "flex", flexDirection: "column", gap: 16,
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3em", color: ACCENT }}>
+              Stili Kayıt Et
+            </div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", lineHeight: 1.6 }}>
+              {FONT_STYLE_SHORT[fontStyle] ?? fontStyle}<br />
+              {METAL_LABEL[metal] ?? metal} · {DECO_SHORT[decoration] ?? decoration}
+            </div>
+            <input
+              value={stilIsim}
+              onChange={e => setStilIsim(e.target.value)}
+              placeholder="Stil adı (örn. Gold Cursive Sade)"
+              autoFocus
+              style={{
+                background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: 8, color: "#fff", fontSize: 13, padding: "10px 12px", outline: "none",
+              }}
+            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={handleStilKaydet}
+                disabled={!stilIsim.trim() || stilKaydediliyor}
+                style={{
+                  flex: 1, padding: "10px 0", borderRadius: 8,
+                  fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.2em",
+                  background: stilIsim.trim() ? "rgba(183,110,121,0.15)" : "rgba(255,255,255,0.03)",
+                  border: `1px solid ${stilIsim.trim() ? ACCENT : "rgba(255,255,255,0.08)"}`,
+                  color: stilIsim.trim() ? ACCENT : "rgba(255,255,255,0.2)",
+                  cursor: stilIsim.trim() && !stilKaydediliyor ? "pointer" : "not-allowed",
+                }}
+              >
+                {stilKaydediliyor ? "Kaydediliyor…" : "Kaydet"}
+              </button>
+              <button
+                onClick={() => setStilModal(false)}
+                style={{
+                  padding: "10px 16px", borderRadius: 8,
+                  fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.2em",
+                  background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
+                  color: "rgba(255,255,255,0.25)", cursor: "pointer",
+                }}
+              >
+                İptal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Toast ────────────────────────────────────────────────────────────── */}
+      {toast && (
+        <div style={{
+          position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)",
+          zIndex: 80, background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.12)",
+          borderRadius: 10, padding: "10px 22px",
+          fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.8)",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+          pointerEvents: "none",
+        }}>
+          {toast}
         </div>
       )}
     </div>
