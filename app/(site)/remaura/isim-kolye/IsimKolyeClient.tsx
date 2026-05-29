@@ -751,8 +751,11 @@ export function IsimKolyeClient() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: images.length === 1 ? "minmax(0,680px)" : "repeat(auto-fill, minmax(300px, 1fr))",
+                gridTemplateColumns: images.length === 1
+                  ? "minmax(0, 360px)"
+                  : "repeat(auto-fill, minmax(280px, 1fr))",
                 gap: 16,
+                justifyContent: images.length === 1 ? "center" : "start",
               }}
             >
               {images.map((src, i) => (
@@ -773,7 +776,7 @@ export function IsimKolyeClient() {
                     src={src}
                     alt={`${text} kolye ${i + 1}`}
                     onClick={() => setLightbox(i)}
-                    style={{ width: "100%", height: "auto", display: "block", cursor: "zoom-in" }}
+                    style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block", cursor: "zoom-in" }}
                   />
 
                   {/* Aksiyon butonları — her zaman görünür */}
