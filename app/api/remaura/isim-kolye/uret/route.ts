@@ -8,7 +8,7 @@ import { GoogleGenAI } from "@google/genai";
 loadEnvConfig(process.cwd());
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -119,11 +119,20 @@ async function generateOne(prompt: string): Promise<string> {
   const apiKey = cleanApiKey(process.env.GOOGLE_API_KEY);
   if (!apiKey) throw new Error("GOOGLE_API_KEY missing or invalid");
   const ai = new GoogleGenAI({ apiKey });
-  const result = await ai.models.generateContent({
-    model: "gemini-3.1-flash-image-preview",
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-    config: { responseModalities: ["IMAGE", "TEXT"] } as never,
-  });
+
+  // 50sn timeout — Vercel'in 60sn limitinden önce temiz hata ver
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("timeout_50s — üretim çok uzun sürdü, tekrar dene")), 50_000)
+  );
+
+  const result = await Promise.race([
+    ai.models.generateContent({
+      model: "gemini-3.1-flash-image-preview",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { responseModalities: ["IMAGE", "TEXT"] } as never,
+    }),
+    timeoutPromise,
+  ]);
 
   const candidate = result.candidates?.[0];
   const finishReason = candidate?.finishReason;
