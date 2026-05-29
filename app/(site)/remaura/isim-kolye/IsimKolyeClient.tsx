@@ -303,7 +303,7 @@ export function IsimKolyeClient() {
   return (
     <div
       style={{
-        height: "calc(100vh - 5rem)",
+        height: "calc(100dvh - 5.125rem - env(safe-area-inset-top))",
         overflow: "hidden",
         background: "#080808",
         color: "#fff",
