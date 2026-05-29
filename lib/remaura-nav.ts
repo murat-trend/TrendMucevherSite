@@ -11,6 +11,7 @@ export type RemauraNavKey =
   | 'webmToMp4'
   | 'studio'
   | 'kolleksiyonEdit'
+  | 'isimKolye'
 
 export type RemauraCategory = {
   id: string
@@ -114,6 +115,15 @@ export const REMAURA_CATEGORIES: RemauraCategory[] = [
     labelKey: 'kolleksiyonEdit',
     icon: '📁',
     path: '/remaura/koleksiyon-edit',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'isim-kolye',
+    labelKey: 'isimKolye',
+    icon: '✦',
+    path: '/remaura/isim-kolye',
     accessType: 'restricted',
     isSuperAdminOnly: true,
     isActive: true,

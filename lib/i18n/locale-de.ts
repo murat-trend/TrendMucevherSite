@@ -327,6 +327,7 @@ export const deMessages = {
     webmToMp4: "WebM → MP4",
     studio: "Studio",
     kolleksiyonEdit: "Kollektion bearbeiten",
+    isimKolye: "Name & Buchstabe Kette",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",

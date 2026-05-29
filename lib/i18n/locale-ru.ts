@@ -327,6 +327,7 @@ export const ruMessages = {
     webmToMp4: "WebM → MP4",
     studio: "Студия",
     kolleksiyonEdit: "Редактор коллекций",
+    isimKolye: "Подвеска с именем/буквой",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",

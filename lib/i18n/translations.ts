@@ -332,6 +332,7 @@ export const translations = {
       webmToMp4: "WebM → MP4",
       studio: "Studio",
       kolleksiyonEdit: "Koleksiyon Edit",
+      isimKolye: "İsim & Harf Kolye",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",
@@ -1077,6 +1078,7 @@ export const translations = {
       webmToMp4: "WebM → MP4",
       studio: "Studio",
       kolleksiyonEdit: "Collection Edit",
+      isimKolye: "Name & Letter Necklace",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",

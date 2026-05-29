@@ -517,6 +517,7 @@ export function IsimKolyeClient() {
             background: "rgba(0,0,0,0.93)",
             display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center",
+            padding: "60px 24px 24px",
           }}
           onClick={e => { if (e.target === e.currentTarget) setLightbox(null); }}
         >
@@ -536,45 +537,53 @@ export function IsimKolyeClient() {
           {/* Prev / Next */}
           {lightbox > 0 && (
             <button
-              onClick={() => setLightbox(l => (l ?? 0) - 1)}
+              onClick={e => { e.stopPropagation(); setLightbox(l => (l ?? 0) - 1); }}
               style={{
                 position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)",
                 background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
                 borderRadius: 8, color: "rgba(255,255,255,0.55)", fontSize: 18,
                 padding: "10px 14px", cursor: "pointer",
               }}
-            >
-              ‹
-            </button>
+            >‹</button>
           )}
           {lightbox < images.length - 1 && (
             <button
-              onClick={() => setLightbox(l => (l ?? 0) + 1)}
+              onClick={e => { e.stopPropagation(); setLightbox(l => (l ?? 0) + 1); }}
               style={{
                 position: "absolute", right: 16, top: "50%", transform: "translateY(-50%)",
                 background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
                 borderRadius: 8, color: "rgba(255,255,255,0.55)", fontSize: 18,
                 padding: "10px 14px", cursor: "pointer",
               }}
-            >
-              ›
-            </button>
+            >›</button>
           )}
 
-          {/* Image */}
+          {/* Image — kısıtlı boyut, aksiyonlar için yer bırak */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={images[lightbox]}
             alt={`${text} kolye ${lightbox + 1}`}
-            style={{ maxWidth: "85vw", maxHeight: "80vh", objectFit: "contain", borderRadius: 12 }}
+            style={{
+              maxWidth: "min(480px, 80vw)",
+              maxHeight: "min(480px, 55vh)",
+              objectFit: "contain",
+              borderRadius: 12,
+              flexShrink: 0,
+            }}
           />
 
-          {/* Actions */}
-          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+          {/* Counter */}
+          <span style={{ marginTop: 10, fontSize: 10, color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em" }}>
+            {lightbox + 1} / {images.length}
+          </span>
+
+          {/* Actions — sabit, her zaman görünür */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 16, justifyContent: "center" }}>
+            {/* İndir */}
             <button
               onClick={() => handleDownload(images[lightbox!], lightbox!)}
               style={{
-                padding: "9px 20px", borderRadius: 9,
+                padding: "10px 22px", borderRadius: 9,
                 fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.2em",
                 background: "rgba(183,110,121,0.15)", border: `1px solid ${ACCENT}`,
                 color: ACCENT, cursor: "pointer",
@@ -582,23 +591,38 @@ export function IsimKolyeClient() {
             >
               İndir
             </button>
+
+            {/* Koleksiyon Edit'te Aç */}
+            <button
+              onClick={() => {
+                try {
+                  localStorage.setItem("koleksiyon_edit_gorsel", images[lightbox!]);
+                } catch { /* ignore */ }
+                window.open("/remaura/koleksiyon-edit", "_blank");
+              }}
+              style={{
+                padding: "10px 22px", borderRadius: 9,
+                fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.2em",
+                background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)",
+                color: "rgba(255,255,255,0.6)", cursor: "pointer",
+              }}
+            >
+              Edit&apos;te Düzenle
+            </button>
+
+            {/* Kapat */}
             <button
               onClick={() => setLightbox(null)}
               style={{
-                padding: "9px 20px", borderRadius: 9,
+                padding: "10px 22px", borderRadius: 9,
                 fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.2em",
-                background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
-                color: "rgba(255,255,255,0.4)", cursor: "pointer",
+                background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
+                color: "rgba(255,255,255,0.3)", cursor: "pointer",
               }}
             >
               Kapat
             </button>
           </div>
-
-          {/* Counter */}
-          <span style={{ marginTop: 10, fontSize: 10, color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em" }}>
-            {lightbox + 1} / {images.length}
-          </span>
         </div>
       )}
     </div>
