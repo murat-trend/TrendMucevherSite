@@ -106,17 +106,31 @@ Photorealistic, luxury e-commerce quality, sharp throughout.`;
 
 // ─── Single generation ────────────────────────────────────────────────────────
 
-async function generateOne(prompt: string): Promise<string | null> {
+async function generateOne(prompt: string): Promise<string> {
   const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY! });
   const result = await ai.models.generateContent({
     model: "gemini-3.1-flash-image-preview",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: { responseModalities: ["IMAGE", "TEXT"] } as never,
   });
-  const parts = result.candidates?.[0]?.content?.parts ?? [];
+
+  const candidate = result.candidates?.[0];
+  const finishReason = candidate?.finishReason;
+  const parts = candidate?.content?.parts ?? [];
+
+  // Log text parts server-side
+  const textParts = (parts as Array<{ text?: string; inlineData?: unknown; thought?: boolean }>)
+    .filter(p => !p.thought && p.text)
+    .map(p => p.text)
+    .join(" ");
+  if (textParts) console.log("[isim-kolye] text:", textParts.slice(0, 200));
+
   const imgPart = (parts as Array<{ thought?: boolean; inlineData?: { mimeType: string; data: string } }>)
     .find(p => !p.thought && p.inlineData?.mimeType?.startsWith("image/"));
-  if (!imgPart?.inlineData) return null;
+
+  if (!imgPart?.inlineData) {
+    throw new Error(`no_image | finishReason=${finishReason} | parts=${parts.length} | text=${textParts.slice(0, 100)}`);
+  }
   return `data:${imgPart.inlineData.mimeType};base64,${imgPart.inlineData.data}`;
 }
 
@@ -157,15 +171,33 @@ export async function POST(req: Request) {
     decoration: decoration ?? "plain",
   });
 
+  // API key kontrolü
+  if (!process.env.GOOGLE_API_KEY) {
+    console.error("[isim-kolye] GOOGLE_API_KEY yok");
+    return NextResponse.json({ error: "Yapılandırma hatası" }, { status: 500 });
+  }
+
   // Paralel üretim
   const tasks = Array.from({ length: resolvedCount }, () => generateOne(prompt));
   const results = await Promise.allSettled(tasks);
+
+  // Log failures
+  for (const r of results) {
+    if (r.status === "rejected") {
+      console.error("[isim-kolye] rejected:", r.reason instanceof Error ? r.reason.message : String(r.reason));
+    }
+  }
 
   const images = results
     .map(r => (r.status === "fulfilled" ? r.value : null))
     .filter((v): v is string => !!v);
 
   if (images.length === 0) {
+    const firstErr = results.find(r => r.status === "rejected");
+    const hint = firstErr && firstErr.status === "rejected"
+      ? (firstErr.reason instanceof Error ? firstErr.reason.message : String(firstErr.reason)).slice(0, 80)
+      : "unknown";
+    console.error("[isim-kolye] tüm görseller başarısız:", hint);
     return NextResponse.json({ error: "Görsel üretilemedi, tekrar dene" }, { status: 500 });
   }
 
