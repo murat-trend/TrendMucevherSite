@@ -4,6 +4,46 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 
+// ─── Client-side watermark ────────────────────────────────────────────────────
+
+function addWatermark(dataUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+      const paddingX = Math.round(canvas.width * 0.025);
+      const paddingY = Math.round(canvas.height * 0.025);
+      const size1 = Math.max(18, Math.round(canvas.width * 0.026));
+      const size2 = Math.max(12, Math.round(canvas.width * 0.016));
+      const size3 = Math.max(11, Math.round(canvas.width * 0.014));
+      const x  = canvas.width  - paddingX;
+      const y3 = canvas.height - paddingY;
+      const y2 = y3 - size3 * 1.5;
+      const y1 = y2 - size2 * 1.5;
+      ctx.textAlign = "right";
+      ctx.textBaseline = "bottom";
+      ctx.shadowColor = "rgba(183,110,121,0.25)";
+      ctx.shadowBlur = 6;
+      ctx.font = `700 ${size1}px Georgia, serif`;
+      ctx.fillStyle = "#b76e79";
+      ctx.fillText("Trend Mücevher", x, y1);
+      ctx.font = `400 ${size2}px Georgia, serif`;
+      ctx.fillStyle = "rgba(183,110,121,0.8)";
+      ctx.fillText("by Murat Kaynaroğlu", x, y2);
+      ctx.font = `400 ${size3}px sans-serif`;
+      ctx.fillStyle = "rgba(183,110,121,0.65)";
+      ctx.fillText("trendmucevher.com", x, y3);
+      resolve(canvas.toDataURL("image/jpeg", 0.92));
+    };
+    img.onerror = () => resolve(dataUrl); // hata olursa orijinali döndür
+    img.src = dataUrl;
+  });
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const TAKI_TIPI = ["Yüzük", "Kolye Ucu", "Kolye", "Küpe", "Bilezik", "Broş"] as const;
@@ -681,7 +721,8 @@ export function KoleksiyonEditClient() {
       const now = new Date();
       const pad = (n: number) => String(n).padStart(2, "0");
       const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-      setImages(imgs);
+      const watermarkedImgs = await Promise.all(imgs.map(addWatermark));
+      setImages(watermarkedImgs);
       setPromptGecmisi(prev => [{
         id: Date.now().toString(),
         tarih: new Date().toLocaleTimeString("tr-TR"),
@@ -689,10 +730,10 @@ export function KoleksiyonEditClient() {
         tema: tema || "(referanstan)",
         metalRengi,
         seed: data.seed,
-        gorselUrl: imgs[0],
+        gorselUrl: watermarkedImgs[0],
       }, ...prev.slice(0, 9)]);
-      setOriginals(imgs);
-      setFilenames(imgs.map((_, i) => `remaura-cn-${ts}-${i + 1}.png`));
+      setOriginals(watermarkedImgs);
+      setFilenames(watermarkedImgs.map((_, i) => `remaura-cn-${ts}-${i + 1}.png`));
     } catch (e) { setError((e as Error)?.message ?? ke.errConnection); }
     finally { setLoad({ kind: "idle" }); }
   }
@@ -759,9 +800,10 @@ export function KoleksiyonEditClient() {
       const pad = (n: number) => String(n).padStart(2, "0");
       const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 
-      setImages(successImages);
-      setOriginals(successImages);
-      setFilenames(successImages.map((_, i) => `remaura-koleksiyon-${ts}-${i + 1}.jpg`));
+      const watermarkedImgs = await Promise.all(successImages.map(addWatermark));
+      setImages(watermarkedImgs);
+      setOriginals(watermarkedImgs);
+      setFilenames(watermarkedImgs.map((_, i) => `remaura-koleksiyon-${ts}-${i + 1}.jpg`));
       // styleLock'u "stili kaydet" akışı için sakla
       setSonStilAnalizi(JSON.stringify(analiz.styleLock));
       setPromptGecmisi((prev) => [{
@@ -826,7 +868,8 @@ export function KoleksiyonEditClient() {
       const now = new Date();
       const pad = (n: number) => String(n).padStart(2, "0");
       const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-      setImages(imgs);
+      const watermarkedImgs = await Promise.all(imgs.map(addWatermark));
+      setImages(watermarkedImgs);
       setPromptGecmisi(prev => [{
         id: Date.now().toString(),
         tarih: new Date().toLocaleTimeString("tr-TR"),
@@ -834,10 +877,10 @@ export function KoleksiyonEditClient() {
         tema: tema || "(referanstan)",
         metalRengi,
         seed: data.seed as number | undefined,
-        gorselUrl: imgs[0],
+        gorselUrl: watermarkedImgs[0],
       }, ...prev.slice(0, 9)]);
-      setOriginals(imgs);
-      setFilenames(imgs.map((_, i) => `remaura-${ts}-${i + 1}.png`));
+      setOriginals(watermarkedImgs);
+      setFilenames(watermarkedImgs.map((_, i) => `remaura-${ts}-${i + 1}.png`));
     } catch (e: unknown) {
       if ((e as { name?: string })?.name === "AbortError") {
         setError("Görsel üretimi çok uzun sürdü. Lütfen daha küçük bir varyasyon sayısı seçip tekrar deneyin.");
