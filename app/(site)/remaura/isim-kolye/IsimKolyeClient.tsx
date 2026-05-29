@@ -125,7 +125,7 @@ export function IsimKolyeClient() {
         body: JSON.stringify({ mode, text, fontStyle, metal, decoration, count }),
       });
 
-      let data: { images?: string[]; error?: string } = {};
+      let data: { images?: string[]; error?: string; _dbg?: string } = {};
       try {
         data = await res.json();
       } catch {
@@ -134,7 +134,8 @@ export function IsimKolyeClient() {
       }
 
       if (!res.ok || !data.images?.length) {
-        setError(data.error ?? `Üretim başarısız (${res.status})`);
+        const msg = data._dbg ? `${data.error ?? "Hata"} · ${data._dbg}` : (data.error ?? `Üretim başarısız (${res.status})`);
+        setError(msg);
       } else {
         setImages(data.images);
       }

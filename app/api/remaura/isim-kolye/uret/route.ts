@@ -196,10 +196,11 @@ export async function POST(req: Request) {
     if (images.length === 0) {
       const firstErr = results.find(r => r.status === "rejected");
       const hint = firstErr?.status === "rejected"
-        ? (firstErr.reason instanceof Error ? firstErr.reason.message : String(firstErr.reason)).slice(0, 80)
-        : "no_image";
+        ? (firstErr.reason instanceof Error ? firstErr.reason.message : String(firstErr.reason)).slice(0, 200)
+        : "no_image_no_rejection";
       console.error("[isim-kolye] tüm görseller başarısız:", hint);
-      return NextResponse.json({ error: "Görsel üretilemedi, tekrar dene" }, { status: 500 });
+      // _dbg: geçici tanı — düzeldikten sonra kaldır
+      return NextResponse.json({ error: "Görsel üretilemedi, tekrar dene", _dbg: hint }, { status: 500 });
     }
 
     return NextResponse.json({ images });
