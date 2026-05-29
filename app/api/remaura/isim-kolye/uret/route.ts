@@ -8,7 +8,7 @@ import { GoogleGenAI } from "@google/genai";
 loadEnvConfig(process.cwd());
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -120,9 +120,9 @@ async function generateOne(prompt: string): Promise<string> {
   if (!apiKey) throw new Error("GOOGLE_API_KEY missing or invalid");
   const ai = new GoogleGenAI({ apiKey });
 
-  // 50sn timeout — Vercel'in 60sn limitinden önce temiz hata ver
+  // 240sn timeout — Pro plan 300sn limitinden önce temiz hata ver
   const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("timeout_50s — üretim çok uzun sürdü, tekrar dene")), 50_000)
+    setTimeout(() => reject(new Error("timeout_240s — üretim çok uzun sürdü, tekrar dene")), 240_000)
   );
 
   const result = await Promise.race([

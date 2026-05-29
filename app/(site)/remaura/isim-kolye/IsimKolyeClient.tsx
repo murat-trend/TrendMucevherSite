@@ -145,8 +145,6 @@ export function IsimKolyeClient() {
     setMode(m);
     setText("");
     setImages([]);
-    // İsim modunda max 2 varyasyon — count 3-4 ise 1'e düşür
-    if (m === "name") setCount(c => Math.min(c, 1));
   }
 
   async function handleUret() {
@@ -481,16 +479,9 @@ export function IsimKolyeClient() {
 
           {/* Varyasyon */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
-            <Label>
-              Varyasyon
-              {mode === "name" && (
-                <span style={{ textTransform: "none", letterSpacing: "normal", fontWeight: 400, color: "rgba(255,255,255,0.18)", marginLeft: 6 }}>
-                  (isim: max 2)
-                </span>
-              )}
-            </Label>
+            <Label>Varyasyon</Label>
             <div style={{ display: "flex", gap: 6 }}>
-              {(mode === "name" ? [1, 2] : [1, 2, 3, 4]).map(n => (
+              {[1, 2, 3, 4].map(n => (
                 <button
                   key={n}
                   onClick={() => setCount(n)}
