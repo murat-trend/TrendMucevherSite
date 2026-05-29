@@ -17,6 +17,8 @@ export function ModellerStlPreview({ stlUrl }: { stlUrl: string }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const [modelLoaded, setModelLoaded] = useState(false);
+  const [wmFading, setWmFading] = useState(false);
+  const wmVideoRef = useRef<HTMLVideoElement>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);

@@ -139,3 +139,31 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ id: data.id, gorselUrl: r2Url });
 }
+
+// ─── DELETE — koleksiyon kaydını sil ─────────────────────────────────────────
+
+export async function DELETE(req: Request) {
+  const auth = await requireSuperAdmin();
+  if (!auth.ok) return auth.response;
+
+  let id: string;
+  try {
+    const body = await req.json() as { id?: string };
+    id = body.id ?? "";
+  } catch {
+    return NextResponse.json({ error: "Geçersiz istek." }, { status: 400 });
+  }
+
+  if (!id) return NextResponse.json({ error: "id zorunlu." }, { status: 400 });
+
+  const admin = getAdminClient();
+  if (!admin) return NextResponse.json({ error: "Veritabanı bağlantısı kurulamadı." }, { status: 500 });
+
+  const { error } = await admin.from("koleksiyonlar").delete().eq("id", id);
+  if (error) {
+    console.error("[kaydet DELETE] error:", error);
+    return NextResponse.json({ error: "Silme başarısız." }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}

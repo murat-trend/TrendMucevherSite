@@ -274,6 +274,8 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
   const [selectedLicense, setSelectedLicense] = useState<'personal' | 'commercial'>('personal')
   const [viewerReady, setViewerReady] = useState(false)
   const [modelLoaded, setModelLoaded] = useState(false)
+  const [wmFading, setWmFading] = useState(false)
+  const wmVideoRef = useRef<HTMLVideoElement>(null)
   const viewerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -510,15 +512,26 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
               justifyContent: 'center',
             }}>
               <video
+                ref={wmVideoRef}
                 src="/rem-watermark.webm"
                 autoPlay
-                loop
                 muted
                 playsInline
+                onEnded={() => {
+                  setWmFading(true);
+                  setTimeout(() => {
+                    if (wmVideoRef.current) {
+                      wmVideoRef.current.currentTime = 0;
+                      void wmVideoRef.current.play();
+                    }
+                    setWmFading(false);
+                  }, 600);
+                }}
                 style={{
                   width: '70%',
                   maxWidth: '320px',
-                  opacity: 0.55,
+                  opacity: wmFading ? 0 : 0.55,
+                  transition: 'opacity 0.6s ease',
                   mixBlendMode: 'screen',
                   pointerEvents: 'none',
                 }}

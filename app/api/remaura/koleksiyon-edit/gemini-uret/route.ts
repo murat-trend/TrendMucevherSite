@@ -1,194 +1,118 @@
 import { loadEnvConfig } from "@next/env";
+import { GoogleGenAI } from "@google/genai";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { isRemauraSuperAdminUserId } from "@/lib/billing/super-admin";
+import type { AnalizSonucu } from "../analiz/route";
 
 loadEnvConfig(process.cwd());
+
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const MODEL = "gemini-3.1-flash-image-preview";
-
-async function requireAdmin() {
+async function requireSuperAdmin(): Promise<
+  { ok: true } | { ok: false; response: NextResponse }
+> {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false as const, response: NextResponse.json({ error: "Oturum gerekli" }, { status: 401 }) };
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-  if (!isRemauraSuperAdminUserId(user.id) && profile?.role !== "admin")
-    return { ok: false as const, response: NextResponse.json({ error: "Yetkisiz" }, { status: 403 }) };
-  return { ok: true as const };
+  if (!user) {
+    return { ok: false, response: NextResponse.json({ error: "Oturum gerekli" }, { status: 401 }) };
+  }
+  const { data: profile } = await supabase
+    .from("profiles").select("role").eq("id", user.id).maybeSingle();
+  if (!isRemauraSuperAdminUserId(user.id) && profile?.role !== "admin") {
+    return { ok: false, response: NextResponse.json({ error: "Yetkisiz" }, { status: 403 }) };
+  }
+  return { ok: true };
 }
-
-async function translateToEnglish(text: string): Promise<string> {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key || !text.trim()) return text;
-  try {
-    const Anthropic = (await import("@anthropic-ai/sdk")).default;
-    const client = new Anthropic({ apiKey: key });
-    const msg = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 200,
-      system: "Translate jewelry design descriptions from Turkish, German, or Russian to English. Return only the translation.",
-      messages: [{ role: "user", content: text }],
-    });
-    const block = msg.content[0];
-    return block?.type === "text" ? block.text.trim() : text;
-  } catch { return text; }
-}
-
-const TAKI_EN: Record<string, string> = {
-  "Yüzük": "ring",
-  "Kolye": "necklace pendant",
-  "Küpe": "pair of earrings",
-  "Bilezik": "bracelet",
-  "Broş": "brooch",
-};
-
-const METAL_EN: Record<string, string> = {
-  "Sarı Altın": "yellow gold",
-  "Rose Gold": "rose gold",
-  "Beyaz Altın": "white gold",
-  "Gümüş": "silver",
-  "Oksitlenmiş Gümüş": "oxidized antique silver",
-};
-
-const KAMERA: Record<string, string> = {
-  "Yüzük": "45-degree overhead angle, ring band fully visible, top face clearly shown",
-  "Kolye": "front-facing view, pendant centered, chain visible on both sides",
-  "Küpe": "front-facing view, pair of earrings side by side, symmetric composition",
-  "Bilezik": "45-degree overhead angle, bracelet showing both inner and outer surface",
-  "Broş": "perfectly flat front-facing view, entire brooch visible",
-};
 
 export async function POST(req: Request) {
-  const auth = await requireAdmin();
+  const auth = await requireSuperAdmin();
   if (!auth.ok) return auth.response;
 
-  const googleKey = process.env.GOOGLE_API_KEY;
-  if (!googleKey) return NextResponse.json({ error: "Servis yapılandırılmamış, lütfen yöneticiye bildirin." }, { status: 500 });
+  // BOM (charCode 65279) ve diger gorunmez/non-Latin1 karakterleri temizle
+  const rawKey = process.env.GOOGLE_API_KEY ?? "";
+  const googleKey = rawKey
+    .split("")
+    .filter((ch) => ch.charCodeAt(0) > 31 && ch.charCodeAt(0) < 256)
+    .join("")
+    .trim() || undefined;
 
-  const body = await req.json() as {
-    takiTipi?: string;
-    metalRengi?: string;
-    tema?: string;
-    formKarakterleri?: string[];
-    referansGorsel: string;
-    numImages?: number;
-  };
-  const { takiTipi, metalRengi, tema, formKarakterleri, referansGorsel, numImages = 1 } = body;
-  if (!referansGorsel) return NextResponse.json({ error: "Referans görsel zorunlu." }, { status: 400 });
-
-  const takiEn  = TAKI_EN[takiTipi ?? ""] ?? "jewelry piece";
-  const metalEn = METAL_EN[metalRengi ?? ""] ?? "silver";
-  const kamera  = KAMERA[takiTipi ?? ""] ?? "professional jewelry photography angle";
-  const formEn  = Array.isArray(formKarakterleri) && formKarakterleri.length > 0
-    ? await translateToEnglish(formKarakterleri.join(", ")) : "";
-  const temaEn  = tema?.trim() ? await translateToEnglish(tema) : "";
-
-  const raw  = referansGorsel.includes(",") ? referansGorsel.split(",")[1] : referansGorsel;
-  const mime = (referansGorsel.match(/data:([^;]+);/)?.[1] ?? "image/jpeg");
+  if (!googleKey) {
+    return NextResponse.json({ error: "Servis yapılandırılmamış, lütfen yöneticiye bildirin." }, { status: 500 });
+  }
 
   try {
-    const { GoogleGenAI } = await import("@google/genai");
+    const { styleLock, new_design_concept } = await req.json() as {
+      styleLock: AnalizSonucu["styleLock"];
+      new_design_concept: string;
+    };
+
+    if (!styleLock || !new_design_concept) {
+      return NextResponse.json(
+        { error: "Eksik parametre: styleLock ve new_design_concept gerekli." },
+        { status: 400 }
+      );
+    }
+
+    // ── STYLE LOCK prompt — kilitli DNA doğrudan embed ediliyor ─────────────
+    const finalPrompt = `
+**STYLE LOCK — ABSOLUTE PRIORITY:**
+The following design DNA must be replicated with 100% fidelity. All stylistic decisions MUST conform to this locked specification. No creative deviation is permitted.
+
+METAL_FINISH: ${styleLock.metal_finish}
+SURFACE_TECHNIQUE: ${styleLock.surface_technique}
+DECORATIVE_MOTIFS: ${styleLock.decorative_motifs}
+STONE_TREATMENT: ${styleLock.stone_treatment}
+OVERALL_MOOD: ${styleLock.overall_mood}
+**END STYLE LOCK.**
+
+---
+
+**GENERATION TASK:**
+Create a high-end luxury jewelry studio photograph of: ${new_design_concept}
+
+**STRICT APPLICATION RULES:**
+1. REPLICATE THE EXACT STYLE: Every visual characteristic in the STYLE LOCK above (metal finish, surface technique, decorative motifs, stone treatment, mood) MUST be precisely applied to this piece.
+2. NO DEVIATIONS: Do NOT introduce any new stylistic elements, techniques, or interpretations not present in the STYLE LOCK. The piece must look like it belongs to the exact same collection as the reference.
+3. PHOTOGRAPHIC PRESENTATION: ${styleLock.photography_setting}
+4. NEGATIVE: No hands, no model, no body parts, no text overlays, no watermarks, no blurred elements.
+`.trim();
+
     const ai = new GoogleGenAI({ apiKey: googleKey });
 
-    // Her varyasyon için bağımsız multi-turn conversation
-    const results = await Promise.all(
-      Array.from({ length: Math.min(numImages, 4) }, async () => {
+    const response = await ai.models.generateImages({
+      model: "imagen-3.0-generate-002",
+      prompt: finalPrompt,
+      config: {
+        numberOfImages: 1,
+        aspectRatio: "1:1",
+        outputMimeType: "image/jpeg",
+        // @ts-expect-error — compressionQuality is valid but not typed yet in SDK
+        compressionQuality: 95,
+      },
+    });
 
-        // ── TURN 1: Stil analizi (TEXT only) ──────────────────────────────
-        const turn1 = await ai.models.generateContent({
-          model: MODEL,
-          contents: [{
-            role: "user",
-            parts: [
-              { inlineData: { mimeType: mime, data: raw } },
-              {
-                text:
-                  "Analyze ONLY the decorative style of this jewelry. " +
-                  "Describe: metal color and surface finish, craftsmanship technique, " +
-                  "decorative motifs, stone type and placement, overall mood. " +
-                  "Do NOT mention the jewelry type or shape.",
-              },
-            ],
-          }],
-          config: { responseModalities: ["TEXT"] } as any,
-        });
+    const imageBytes = response.generatedImages?.[0]?.image?.imageBytes;
 
-        const styleAnalysis = (turn1.candidates?.[0]?.content?.parts ?? [])
-          .filter((p: any) => !p.thought && p.text)
-          .map((p: any) => p.text as string)
-          .join("") || "elegant metalwork style";
+    if (!imageBytes) {
+      return NextResponse.json({ error: "Görsel üretilemedi, lütfen tekrar deneyin." }, { status: 500 });
+    }
 
-        // ── TURN 3: Yeni takı üretimi (IMAGE + TEXT) ──────────────────────
-        const generatePrompt = [
-          `Using the style described above, design a new ${metalEn} ${takiEn}.`,
-          `The jewelry type must be: ${takiEn}. Do not generate any other jewelry type.`,
-          `Apply the same metal finish, technique, motifs and stones to the ${takiEn} form.`,
-          temaEn ? `Theme accent: ${temaEn}.` : "",
-          formEn ? `Form style: ${formEn}.` : "",
-          `Camera: ${kamera}.`,
-          `White studio background. No hands, no model, no body parts.`,
-          `Single centered ${takiEn}. Professional jewelry photography. Ultra detailed.`,
-        ].filter(Boolean).join(" ");
-
-        const turn3 = await ai.models.generateContent({
-          model: MODEL,
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { inlineData: { mimeType: mime, data: raw } },
-                {
-                  text:
-                    "Analyze ONLY the decorative style. " +
-                    "Describe metal, technique, motifs, stones, mood. " +
-                    "Do NOT mention jewelry type.",
-                },
-              ],
-            },
-            {
-              role: "model",
-              parts: [{ text: styleAnalysis }],
-            },
-            {
-              role: "user",
-              parts: [{ text: generatePrompt }],
-            },
-          ],
-          config: { responseModalities: ["IMAGE", "TEXT"] } as any,
-        });
-
-        // thought olmayan image part'ı bul
-        const parts = (turn3.candidates?.[0]?.content?.parts ?? []) as any[];
-        for (const part of parts) {
-          if (!part.thought && part.inlineData?.mimeType?.startsWith("image/")) {
-            return {
-              image: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`,
-              styleAnalysis,
-            };
-          }
-        }
-        return null;
-      })
-    );
-
-    const validResults = results.filter(Boolean) as { image: string; styleAnalysis: string }[];
-    if (validResults.length === 0)
-      return NextResponse.json({ error: "Görsel üretilemedi." }, { status: 500 });
-
-    const images = validResults.map(r => r.image);
-    const styleAnalysis = validResults[0]?.styleAnalysis ?? null;
-    return NextResponse.json({ images, styleAnalysis });
+    return NextResponse.json({
+      success: true,
+      image: `data:image/jpeg;base64,${imageBytes}`,
+    });
 
   } catch (err: unknown) {
     console.error("[gemini-uret] error:", err);
     const e = err as { status?: number; message?: string };
     const status = e?.status ?? 500;
-    let userMsg = "Koleksiyon görseli üretilemedi, lütfen tekrar deneyin.";
-    if (status === 429) userMsg = "İstek limiti aşıldı, lütfen birkaç dakika sonra tekrar deneyin.";
+    let userMsg = "Görsel üretimi başarısız oldu, lütfen tekrar deneyin.";
+    if (status === 401 || status === 403) userMsg = "Yetkilendirme hatası, lütfen yöneticiye bildirin.";
+    else if (status === 429) userMsg = "İstek limiti aşıldı, lütfen birkaç dakika sonra tekrar deneyin.";
     else if (status === 503 || status === 504) userMsg = "Servis geçici olarak meşgul, lütfen tekrar deneyin.";
     return NextResponse.json({ error: userMsg }, { status: 500 });
   }
