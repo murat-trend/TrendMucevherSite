@@ -137,69 +137,75 @@ async function generateOne(prompt: string): Promise<string> {
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
-  const auth = await requireAdmin();
-  if (!auth.ok) return auth.response;
-
-  let body: {
-    mode?: string;
-    text?: string;
-    fontStyle?: string;
-    metal?: string;
-    decoration?: string;
-    count?: number;
-  };
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Geçersiz istek" }, { status: 400 });
-  }
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth.response;
 
-  const { mode, text, fontStyle, metal, decoration, count } = body;
-
-  if (!text?.trim()) {
-    return NextResponse.json({ error: "Metin gerekli" }, { status: 400 });
-  }
-
-  const resolvedMode = mode === "name" ? "name" : "letter";
-  const resolvedCount = Math.min(Math.max(Number(count) || 1, 1), 4);
-
-  const prompt = buildPrompt({
-    mode: resolvedMode,
-    text: text.trim(),
-    fontStyle: fontStyle ?? "cursive-thin",
-    metal: metal ?? "yellow-gold",
-    decoration: decoration ?? "plain",
-  });
-
-  // API key kontrolü
-  if (!process.env.GOOGLE_API_KEY) {
-    console.error("[isim-kolye] GOOGLE_API_KEY yok");
-    return NextResponse.json({ error: "Yapılandırma hatası" }, { status: 500 });
-  }
-
-  // Paralel üretim
-  const tasks = Array.from({ length: resolvedCount }, () => generateOne(prompt));
-  const results = await Promise.allSettled(tasks);
-
-  // Log failures
-  for (const r of results) {
-    if (r.status === "rejected") {
-      console.error("[isim-kolye] rejected:", r.reason instanceof Error ? r.reason.message : String(r.reason));
+    let body: {
+      mode?: string;
+      text?: string;
+      fontStyle?: string;
+      metal?: string;
+      decoration?: string;
+      count?: number;
+    };
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Geçersiz istek" }, { status: 400 });
     }
+
+    const { mode, text, fontStyle, metal, decoration, count } = body;
+
+    if (!text?.trim()) {
+      return NextResponse.json({ error: "Metin gerekli" }, { status: 400 });
+    }
+
+    // API key kontrolü
+    if (!process.env.GOOGLE_API_KEY) {
+      console.error("[isim-kolye] GOOGLE_API_KEY eksik");
+      return NextResponse.json({ error: "Yapılandırma hatası" }, { status: 500 });
+    }
+
+    const resolvedMode = mode === "name" ? "name" : "letter";
+    const resolvedCount = Math.min(Math.max(Number(count) || 1, 1), 4);
+
+    const prompt = buildPrompt({
+      mode: resolvedMode,
+      text: text.trim(),
+      fontStyle: fontStyle ?? "cursive-thin",
+      metal: metal ?? "yellow-gold",
+      decoration: decoration ?? "plain",
+    });
+
+    // Paralel üretim
+    const tasks = Array.from({ length: resolvedCount }, () => generateOne(prompt));
+    const results = await Promise.allSettled(tasks);
+
+    // Log failures
+    for (const r of results) {
+      if (r.status === "rejected") {
+        console.error("[isim-kolye] rejected:", r.reason instanceof Error ? r.reason.message : String(r.reason));
+      }
+    }
+
+    const images = results
+      .map(r => (r.status === "fulfilled" ? r.value : null))
+      .filter((v): v is string => !!v);
+
+    if (images.length === 0) {
+      const firstErr = results.find(r => r.status === "rejected");
+      const hint = firstErr?.status === "rejected"
+        ? (firstErr.reason instanceof Error ? firstErr.reason.message : String(firstErr.reason)).slice(0, 80)
+        : "no_image";
+      console.error("[isim-kolye] tüm görseller başarısız:", hint);
+      return NextResponse.json({ error: "Görsel üretilemedi, tekrar dene" }, { status: 500 });
+    }
+
+    return NextResponse.json({ images });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[isim-kolye] unhandled POST error:", msg);
+    return NextResponse.json({ error: "Sunucu hatası" }, { status: 500 });
   }
-
-  const images = results
-    .map(r => (r.status === "fulfilled" ? r.value : null))
-    .filter((v): v is string => !!v);
-
-  if (images.length === 0) {
-    const firstErr = results.find(r => r.status === "rejected");
-    const hint = firstErr && firstErr.status === "rejected"
-      ? (firstErr.reason instanceof Error ? firstErr.reason.message : String(firstErr.reason)).slice(0, 80)
-      : "unknown";
-    console.error("[isim-kolye] tüm görseller başarısız:", hint);
-    return NextResponse.json({ error: "Görsel üretilemedi, tekrar dene" }, { status: 500 });
-  }
-
-  return NextResponse.json({ images });
 }

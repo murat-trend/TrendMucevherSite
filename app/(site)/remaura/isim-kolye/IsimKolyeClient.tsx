@@ -124,14 +124,22 @@ export function IsimKolyeClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode, text, fontStyle, metal, decoration, count }),
       });
-      const data: { images?: string[]; error?: string } = await res.json();
+
+      let data: { images?: string[]; error?: string } = {};
+      try {
+        data = await res.json();
+      } catch {
+        setError(`Sunucu hatası (${res.status})`);
+        return;
+      }
+
       if (!res.ok || !data.images?.length) {
-        setError(data.error ?? "Üretim başarısız, tekrar dene");
+        setError(data.error ?? `Üretim başarısız (${res.status})`);
       } else {
         setImages(data.images);
       }
     } catch {
-      setError("Bağlantı hatası");
+      setError("Bağlantı hatası — tekrar dene");
     } finally {
       setLoading(false);
     }
