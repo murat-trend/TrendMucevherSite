@@ -213,15 +213,15 @@ export async function POST(req: Request) {
           referansUrl = data.referans_gorsel_url ?? null;
         }
       }
+    } else if (referansGorsel) {
+      // Referans görsel her zaman öncelikli — stilPrompt'u görmezden gel
+      referansUrl = await toFalUrl(referansGorsel, fal);
+      stilDescription = await analyzeStyleWithVision(referansGorsel);
     } else if (stilPrompt) {
-      // Analiz sonucundan gelen hazır stil açıklaması
+      // Sadece referans görsel yoksa stilPrompt kullan
       stilDescription = stilPrompt
         .replace(/\b(ring|necklace|earring|bracelet|brooch|pendant|bangle|choker)\b/gi, "")
         .replace(/\s+/g, " ").trim();
-    } else if (referansGorsel) {
-      // Referans görsel — CDN URL'e yükle + stil analizi
-      referansUrl = await toFalUrl(referansGorsel, fal);
-      stilDescription = await analyzeStyleWithVision(referansGorsel);
     }
 
     if (referansUrl) {
