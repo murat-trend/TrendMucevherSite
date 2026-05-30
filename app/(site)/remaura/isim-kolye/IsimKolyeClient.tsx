@@ -244,10 +244,53 @@ export function IsimKolyeClient() {
   }
 
   async function handleDownload(src: string, idx: number) {
-    const a = document.createElement("a");
-    a.href = src;
-    a.download = `isim-kolye-${text}-${idx + 1}.png`;
-    a.click();
+    try {
+      const img = new Image();
+      await new Promise<void>((res, rej) => {
+        img.onload = () => res();
+        img.onerror = () => rej(new Error("load"));
+        img.src = src;
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+      const paddingX = Math.round(canvas.width * 0.025);
+      const paddingY = Math.round(canvas.height * 0.025);
+      const size1 = Math.max(18, Math.round(canvas.width * 0.026));
+      const size2 = Math.max(12, Math.round(canvas.width * 0.016));
+      const size3 = Math.max(11, Math.round(canvas.width * 0.014));
+      const x  = canvas.width  - paddingX;
+      const y3 = canvas.height - paddingY;
+      const y2 = y3 - size3 * 1.5;
+      const y1 = y2 - size2 * 1.5;
+      ctx.textAlign = "right";
+      ctx.textBaseline = "bottom";
+      ctx.shadowColor = "rgba(183,110,121,0.25)";
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 1;
+      ctx.font = `700 ${size1}px Georgia, serif`;
+      ctx.fillStyle = "#b76e79";
+      ctx.fillText("Trend Mücevher", x, y1);
+      ctx.font = `400 ${size2}px Georgia, serif`;
+      ctx.fillStyle = "rgba(183,110,121,0.8)";
+      ctx.fillText("by Murat Kaynaroğlu", x, y2);
+      ctx.font = `400 ${size3}px sans-serif`;
+      ctx.fillStyle = "rgba(183,110,121,0.65)";
+      ctx.fillText("trendmucevher.com", x, y3);
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/jpeg", 0.92);
+      a.download = `isim-kolye-${text}-${idx + 1}.jpg`;
+      a.click();
+    } catch {
+      // Watermark başarısız — orijinali indir
+      const a = document.createElement("a");
+      a.href = src;
+      a.download = `isim-kolye-${text}-${idx + 1}.jpg`;
+      a.click();
+    }
   }
 
   async function handleDownloadAll() {

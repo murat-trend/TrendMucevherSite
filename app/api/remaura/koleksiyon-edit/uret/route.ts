@@ -214,11 +214,16 @@ export async function POST(req: Request) {
         }
       }
     } else if (referansGorsel) {
-      // Referans görsel her zaman öncelikli — stilPrompt'u görmezden gel
+      // Referans görsel: hem görsel referans (Kontext için) hem stil kaynağı
       referansUrl = await toFalUrl(referansGorsel, fal);
-      stilDescription = await analyzeStyleWithVision(referansGorsel);
+      // stilPrompt (koleksiyon analiz styleLock) varsa daha zengin — önce onu kullan
+      stilDescription = stilPrompt
+        ? stilPrompt
+            .replace(/\b(ring|necklace|earring|bracelet|brooch|pendant|bangle|choker)\b/gi, "")
+            .replace(/\s+/g, " ").trim()
+        : await analyzeStyleWithVision(referansGorsel);
     } else if (stilPrompt) {
-      // Sadece referans görsel yoksa stilPrompt kullan
+      // Referans görsel yoksa stilPrompt yeterli
       stilDescription = stilPrompt
         .replace(/\b(ring|necklace|earring|bracelet|brooch|pendant|bangle|choker)\b/gi, "")
         .replace(/\s+/g, " ").trim();
@@ -228,7 +233,11 @@ export async function POST(req: Request) {
       // Referans görselli üretim (görsel bazlı stil transferi)
       const prompt = [
         `Generate a new ${metalEn} ${takiTipiEn}.`,
-        `STYLE LOCK: Keep the EXACT same craftsmanship technique, decorative motifs, metal finish and surface texture from the reference. Create a new ${takiTipiEn} — not a copy of the reference piece.`,
+        // stilDescription prompt'a dahil edildi — stil özelliklerini açıkça belirt
+        stilDescription
+          ? `STYLE LOCK — apply ALL of these characteristics to the new ${takiTipiEn}: ${stilDescription}.`
+          : `STYLE LOCK: Keep the EXACT same craftsmanship technique, decorative motifs, metal finish and surface texture from the reference.`,
+        `Create a new ${takiTipiEn} — do NOT copy the shape of the reference piece, only the style DNA.`,
         `CAMERA: ${kameraAcisi}`,
         temaEn,
         formStr,
