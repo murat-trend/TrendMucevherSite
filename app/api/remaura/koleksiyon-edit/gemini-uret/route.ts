@@ -87,6 +87,8 @@ const FORM_EN: Record<string, string> = {
   "Asimetrik":    "asymmetric",
 };
 
+const MODEL = "gemini-3.1-flash-image-preview";
+
 // ─── Gemini multimodal result extractor ──────────────────────────────────────
 
 type GeminiResult = {
@@ -157,7 +159,7 @@ export async function POST(req: Request) {
       setTimeout(() => reject(new Error("timeout_240s — üretim çok uzun sürdü")), 240_000)
     );
 
-    // ── Yeni format: referansGorsel + takiTipi → Gemini multimodal ────────────
+    // ── Yeni format: referansGorsel + takiTipi → Gemini multi-turn ────────────
     if (referansGorsel && takiTipi) {
       const mimeMatch = referansGorsel.match(/^data:([^;]+);base64,/);
       const mimeType = (mimeMatch?.[1] ?? "image/jpeg") as
@@ -166,35 +168,67 @@ export async function POST(req: Request) {
         ? referansGorsel.split(",")[1]
         : referansGorsel;
 
-      const takiEN  = TAKI_EN[takiTipi]       ?? takiTipi.toLowerCase();
-      const metalEN = METAL_EN[metalRengi ?? ""] ?? "gold";
-      const kamera  = KAMERA[takiTipi]         ?? "professional e-commerce jewelry photography, pure white background";
-      const formStr = Array.isArray(formKarakterleri) && formKarakterleri.length > 0
-        ? `Form characteristics: ${formKarakterleri.map(f => FORM_EN[f] ?? f).join(", ")}.`
+      const takiEn  = TAKI_EN[takiTipi]        ?? takiTipi.toLowerCase();
+      const metalEn = METAL_EN[metalRengi ?? ""] ?? "gold";
+      const kamera  = KAMERA[takiTipi]           ?? "professional e-commerce jewelry photography, pure white background";
+      const temaEn  = tema?.trim() ?? "";
+      const formEn  = Array.isArray(formKarakterleri) && formKarakterleri.length > 0
+        ? formKarakterleri.map(f => FORM_EN[f] ?? f).join(", ")
         : "";
-      const temaStr = tema?.trim() ? `Design theme: ${tema.trim()}.` : "";
 
-      const prompt = `You are given a reference jewelry product photograph.
-Generate a new ${metalEN} ${takiEN} in EXACTLY the same visual style as the reference image.
-MATCH PRECISELY: metal color and finish, surface technique, decorative motifs, stone treatment, craftsmanship quality.
-DO NOT copy the shape — only transfer the style DNA to a new ${takiEN}.
-${temaStr}
-${formStr}
-CAMERA: ${kamera}
-No hands. No model. No body parts. No text overlays. No watermarks.
-Pure white background. Professional luxury e-commerce photograph.`.trim();
+      // TURN 1 — Stil analizi (TEXT)
+      const turn1 = await Promise.race([
+        ai.models.generateContent({
+          model: MODEL,
+          contents: [{
+            role: "user",
+            parts: [
+              { inlineData: { mimeType, data: base64Data } },
+              { text: "Analyze ONLY the decorative style of this jewelry. Describe: metal color and surface finish, craftsmanship technique, decorative motifs, stone type and placement, overall mood. Do NOT mention the jewelry type or shape." },
+            ],
+          }],
+          config: { responseModalities: ["TEXT"] } as never,
+        }),
+        timeoutPromise,
+      ]);
 
+      const styleAnalysis = (turn1 as GeminiResult).candidates?.[0]?.content?.parts
+        ?.filter((p: unknown) => !(p as { thought?: boolean }).thought && (p as { text?: string }).text)
+        ?.map((p: unknown) => (p as { text?: string }).text)
+        ?.join("") ?? "elegant metalwork style";
+
+      const generatePrompt = [
+        `Using the exact style described, create a new ${metalEn} ${takiEn}.`,
+        `The jewelry type must be: ${takiEn}. Do not generate any other jewelry type.`,
+        `Apply the same metal finish, technique, motifs and stones to the ${takiEn} form.`,
+        temaEn ? `Theme: ${temaEn}.` : "",
+        formEn ? `Form: ${formEn}.` : "",
+        `Camera: ${kamera}.`,
+        `White studio background. No hands, no model. Single centered piece. Professional jewelry photography.`,
+      ].filter(Boolean).join(" ");
+
+      // TURN 3 — Görsel üretim (IMAGE) — numImages kadar paralel
       const tasks = Array.from({ length: Math.min(numImages, 4) }, () =>
         Promise.race([
           ai.models.generateContent({
-            model: "gemini-3.1-flash-image-preview",
-            contents: [{
-              role: "user",
-              parts: [
-                { inlineData: { mimeType, data: base64Data } },
-                { text: prompt },
-              ],
-            }],
+            model: MODEL,
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  { inlineData: { mimeType, data: base64Data } },
+                  { text: "Analyze ONLY the decorative style. Describe metal, technique, motifs, stones, mood. Do NOT mention jewelry type." },
+                ],
+              },
+              {
+                role: "model",
+                parts: [{ text: styleAnalysis }],
+              },
+              {
+                role: "user",
+                parts: [{ text: generatePrompt }],
+              },
+            ],
             config: { responseModalities: ["IMAGE", "TEXT"] } as never,
           }),
           timeoutPromise,
