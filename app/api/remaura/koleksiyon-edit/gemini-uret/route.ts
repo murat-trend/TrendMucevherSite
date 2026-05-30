@@ -169,6 +169,20 @@ export async function POST(req: Request) {
         ? referansGorsel.split(",")[1]
         : referansGorsel;
 
+      // Görseli küçült — büyük görseller Gemini API'yi yavaşlatıyor
+      let processedBase64 = base64Data;
+      try {
+        const sharp = (await import("sharp")).default;
+        const buf = Buffer.from(base64Data, "base64");
+        const resized = await sharp(buf)
+          .resize(512, 512, { fit: "inside", withoutEnlargement: true })
+          .jpeg({ quality: 80 })
+          .toBuffer();
+        processedBase64 = resized.toString("base64");
+      } catch {
+        processedBase64 = base64Data;
+      }
+
       const takiEn  = TAKI_EN[takiTipi]        ?? takiTipi.toLowerCase();
       const metalEn = METAL_EN[metalRengi ?? ""] ?? "gold";
       const kamera  = KAMERA[takiTipi]           ?? "professional e-commerce jewelry photography, pure white background";
@@ -198,7 +212,7 @@ export async function POST(req: Request) {
               {
                 role: "user",
                 parts: [
-                  { inlineData: { mimeType, data: base64Data } },
+                  { inlineData: { mimeType, data: processedBase64 } },
                   { text: "Analyze ONLY the decorative style. Describe metal, technique, motifs, stones, mood. Do NOT mention jewelry type." },
                 ],
               },
