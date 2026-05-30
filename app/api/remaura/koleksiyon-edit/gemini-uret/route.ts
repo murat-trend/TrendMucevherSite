@@ -187,7 +187,7 @@ Pure white background. Professional luxury e-commerce photograph.`.trim();
       const tasks = Array.from({ length: Math.min(numImages, 4) }, () =>
         Promise.race([
           ai.models.generateContent({
-            model: "gemini-2.0-flash-preview-image-generation",
+            model: "gemini-3.1-flash-image-preview",
             contents: [{
               role: "user",
               parts: [
