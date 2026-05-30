@@ -704,7 +704,7 @@ export function KoleksiyonEditClient() {
     setImages([]);
     setFilenames([]);
 
-    // ── Yeni tasarım konseptini İngilizce inşa et (Imagen 3 için) ────────────
+    // ── Yeni tasarım konseptini İngilizce inşa et ────────────────────────────
     const metalEN = METAL_RENGI_EN[metalRengi] ?? metalRengi;
     const takiEN  = TAKI_TIPI_EN[takiTipi]    ?? takiTipi;
     const conceptParts: string[] = [`a ${metalEN} ${takiEN}`];
@@ -724,6 +724,7 @@ export function KoleksiyonEditClient() {
           body: JSON.stringify({
             styleLock: analiz.styleLock,
             new_design_concept,
+            referansGorsel: refBase64 ?? undefined,
           }),
           signal: controller.signal,
         }).then(async (res) => {
