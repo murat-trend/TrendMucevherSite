@@ -9,7 +9,7 @@ import type { AnalizSonucu } from "../analiz/route";
 loadEnvConfig(process.cwd());
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 // ─── Watermark ────────────────────────────────────────────────────────────────
 
@@ -50,11 +50,76 @@ async function requireSuperAdmin(): Promise<
   return { ok: true };
 }
 
+// ─── Maps ─────────────────────────────────────────────────────────────────────
+
+const TAKI_EN: Record<string, string> = {
+  "Yüzük":     "ring",
+  "Kolye Ucu": "pendant",
+  "Kolye":     "necklace",
+  "Küpe":      "earring",
+  "Bilezik":   "bracelet",
+  "Broş":      "brooch",
+};
+
+const METAL_EN: Record<string, string> = {
+  "Sarı Altın":        "18k yellow gold",
+  "Rose Gold":         "18k rose gold",
+  "Beyaz Altın":       "18k white gold",
+  "Gümüş":             "sterling silver",
+  "Oksitlenmiş Gümüş": "oxidized silver",
+};
+
+const KAMERA: Record<string, string> = {
+  "Yüzük":     "three-quarter elevated angle, ring tilted 45 degrees showing both the band and top face, pure white background",
+  "Kolye Ucu": "front-facing view, pendant perfectly centered, upper chain visible, pure white background",
+  "Kolye":     "front-facing view, pendant centered, chain visible on both sides, slight downward angle, pure white background",
+  "Küpe":      "front-facing view, pair of earrings side by side, symmetric composition, slight 3/4 angle, pure white background",
+  "Bilezik":   "three-quarter elevated 3/4 angle, camera at 45 degrees above, bracelet on slight diagonal tilt showing depth and curvature, pure white background",
+  "Broş":      "perfectly flat front-facing view, entire brooch visible, no perspective distortion, pure white background",
+};
+
+const FORM_EN: Record<string, string> = {
+  "İnce & Zarif": "thin and delicate",
+  "Geometrik":    "geometric",
+  "Organik":      "organic",
+  "Filigran":     "filigree",
+  "Kabartmalı":   "embossed",
+  "Asimetrik":    "asymmetric",
+};
+
+// ─── Gemini multimodal result extractor ──────────────────────────────────────
+
+type GeminiResult = {
+  candidates?: Array<{
+    finishReason?: string;
+    content?: { parts?: unknown[] } | null;
+  }> | null;
+};
+
+function extractImageFromResult(result: GeminiResult): string {
+  const candidate = result.candidates?.[0];
+  const finishReason = candidate?.finishReason;
+  const parts = candidate?.content?.parts ?? [];
+
+  const textParts = (parts as Array<{ text?: string; inlineData?: unknown; thought?: boolean }>)
+    .filter(p => !p.thought && p.text).map(p => p.text).join(" ");
+  if (textParts) console.log("[gemini-uret] text:", textParts.slice(0, 150));
+
+  const imgPart = (parts as Array<{ thought?: boolean; inlineData?: { mimeType: string; data: string } }>)
+    .find(p => !p.thought && p.inlineData?.mimeType?.startsWith("image/"));
+
+  if (!imgPart?.inlineData) {
+    throw new Error(`no_image | finishReason=${finishReason} | parts=${parts.length} | text=${textParts.slice(0, 80)}`);
+  }
+  return `data:${imgPart.inlineData.mimeType};base64,${imgPart.inlineData.data}`;
+}
+
+// ─── Route handler ────────────────────────────────────────────────────────────
+
 export async function POST(req: Request) {
   const auth = await requireSuperAdmin();
   if (!auth.ok) return auth.response;
 
-  // BOM (charCode 65279) ve diger gorunmez/non-Latin1 karakterleri temizle
   const rawKey = process.env.GOOGLE_API_KEY ?? "";
   const googleKey = rawKey
     .split("")
@@ -67,19 +132,106 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { styleLock, new_design_concept } = await req.json() as {
-      styleLock: AnalizSonucu["styleLock"];
-      new_design_concept: string;
+    const body = await req.json() as {
+      // Eski format (geriye dönük uyumluluk)
+      styleLock?: AnalizSonucu["styleLock"];
+      new_design_concept?: string;
+      // Yeni format
+      takiTipi?: string;
+      tema?: string;
+      metalRengi?: string;
+      formKarakterleri?: string[];
+      referansGorsel?: string;
+      numImages?: number;
     };
 
+    const {
+      styleLock, new_design_concept,
+      takiTipi, tema, metalRengi, formKarakterleri, referansGorsel,
+      numImages = 1,
+    } = body;
+
+    const ai = new GoogleGenAI({ apiKey: googleKey });
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout_240s — üretim çok uzun sürdü")), 240_000)
+    );
+
+    // ── Yeni format: referansGorsel + takiTipi → Gemini multimodal ────────────
+    if (referansGorsel && takiTipi) {
+      const mimeMatch = referansGorsel.match(/^data:([^;]+);base64,/);
+      const mimeType = (mimeMatch?.[1] ?? "image/jpeg") as
+        "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+      const base64Data = referansGorsel.includes(",")
+        ? referansGorsel.split(",")[1]
+        : referansGorsel;
+
+      const takiEN  = TAKI_EN[takiTipi]       ?? takiTipi.toLowerCase();
+      const metalEN = METAL_EN[metalRengi ?? ""] ?? "gold";
+      const kamera  = KAMERA[takiTipi]         ?? "professional e-commerce jewelry photography, pure white background";
+      const formStr = Array.isArray(formKarakterleri) && formKarakterleri.length > 0
+        ? `Form characteristics: ${formKarakterleri.map(f => FORM_EN[f] ?? f).join(", ")}.`
+        : "";
+      const temaStr = tema?.trim() ? `Design theme: ${tema.trim()}.` : "";
+
+      const prompt = `You are given a reference jewelry product photograph.
+Generate a new ${metalEN} ${takiEN} in EXACTLY the same visual style as the reference image.
+MATCH PRECISELY: metal color and finish, surface technique, decorative motifs, stone treatment, craftsmanship quality.
+DO NOT copy the shape — only transfer the style DNA to a new ${takiEN}.
+${temaStr}
+${formStr}
+CAMERA: ${kamera}
+No hands. No model. No body parts. No text overlays. No watermarks.
+Pure white background. Professional luxury e-commerce photograph.`.trim();
+
+      const tasks = Array.from({ length: Math.min(numImages, 4) }, () =>
+        Promise.race([
+          ai.models.generateContent({
+            model: "gemini-2.0-flash-preview-image-generation",
+            contents: [{
+              role: "user",
+              parts: [
+                { inlineData: { mimeType, data: base64Data } },
+                { text: prompt },
+              ],
+            }],
+            config: { responseModalities: ["IMAGE", "TEXT"] } as never,
+          }),
+          timeoutPromise,
+        ]).then(async (result) => {
+          const dataUrl = extractImageFromResult(result as GeminiResult);
+          const raw = dataUrl.split(",")[1] ?? dataUrl;
+          const watermarked = await cropGeminiWatermark(raw);
+          return `data:image/jpeg;base64,${watermarked}`;
+        })
+      );
+
+      const results = await Promise.allSettled(tasks);
+
+      for (const r of results) {
+        if (r.status === "rejected") {
+          console.error("[gemini-uret] task rejected:", r.reason instanceof Error ? r.reason.message : String(r.reason));
+        }
+      }
+
+      const images = results
+        .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
+        .map(r => r.value);
+
+      if (images.length === 0) {
+        return NextResponse.json({ error: "Görsel üretilemedi, lütfen tekrar deneyin." }, { status: 500 });
+      }
+      return NextResponse.json({ images });
+    }
+
+    // ── Eski format: styleLock + new_design_concept → Imagen 3 ───────────────
     if (!styleLock || !new_design_concept) {
       return NextResponse.json(
-        { error: "Eksik parametre: styleLock ve new_design_concept gerekli." },
+        { error: "Eksik parametre: styleLock ve new_design_concept ya da takiTipi ve referansGorsel gerekli." },
         { status: 400 }
       );
     }
 
-    // ── STYLE LOCK prompt — kilitli DNA doğrudan embed ediliyor ─────────────
     const finalPrompt = `
 **STYLE LOCK — ABSOLUTE PRIORITY:**
 The following design DNA must be replicated with 100% fidelity. All stylistic decisions MUST conform to this locked specification. No creative deviation is permitted.
@@ -103,31 +255,30 @@ Create a high-end luxury jewelry studio photograph of: ${new_design_concept}
 4. NEGATIVE: No hands, no model, no body parts, no text overlays, no watermarks, no blurred elements.
 `.trim();
 
-    const ai = new GoogleGenAI({ apiKey: googleKey });
+    const response = await Promise.race([
+      ai.models.generateImages({
+        model: "imagen-3.0-generate-002",
+        prompt: finalPrompt,
+        config: {
+          numberOfImages: 1,
+          aspectRatio: "1:1",
+          outputMimeType: "image/jpeg",
+          // @ts-expect-error — compressionQuality is valid but not typed yet in SDK
+          compressionQuality: 95,
+        },
+      }),
+      timeoutPromise,
+    ]);
 
-    const response = await ai.models.generateImages({
-      model: "imagen-3.0-generate-002",
-      prompt: finalPrompt,
-      config: {
-        numberOfImages: 1,
-        aspectRatio: "1:1",
-        outputMimeType: "image/jpeg",
-        // @ts-expect-error — compressionQuality is valid but not typed yet in SDK
-        compressionQuality: 95,
-      },
-    });
-
-    const imageBytes = response.generatedImages?.[0]?.image?.imageBytes;
+    const imageBytes = (response as { generatedImages?: Array<{ image?: { imageBytes?: string } }> })
+      .generatedImages?.[0]?.image?.imageBytes;
 
     if (!imageBytes) {
       return NextResponse.json({ error: "Görsel üretilemedi, lütfen tekrar deneyin." }, { status: 500 });
     }
 
     const watermarked = await cropGeminiWatermark(imageBytes);
-    return NextResponse.json({
-      success: true,
-      image: `data:image/jpeg;base64,${watermarked}`,
-    });
+    return NextResponse.json({ images: [`data:image/jpeg;base64,${watermarked}`] });
 
   } catch (err: unknown) {
     console.error("[gemini-uret] error:", err);
