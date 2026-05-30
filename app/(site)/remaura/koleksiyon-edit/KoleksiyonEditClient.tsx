@@ -8,8 +8,10 @@ import { useLanguage } from "@/components/i18n/LanguageProvider";
 
 function addWatermark(dataUrl: string): Promise<string> {
   return new Promise((resolve) => {
+    const timeout = setTimeout(() => resolve(dataUrl), 10_000); // 10s failsafe
     const img = new Image();
     img.onload = () => {
+      clearTimeout(timeout);
       const canvas = document.createElement("canvas");
       canvas.width = img.naturalWidth;
       canvas.height = img.naturalHeight;
@@ -39,7 +41,7 @@ function addWatermark(dataUrl: string): Promise<string> {
       ctx.fillText("trendmucevher.com", x, y3);
       resolve(canvas.toDataURL("image/jpeg", 0.92));
     };
-    img.onerror = () => resolve(dataUrl); // hata olursa orijinali döndür
+    img.onerror = () => { clearTimeout(timeout); resolve(dataUrl); };
     img.src = dataUrl;
   });
 }
