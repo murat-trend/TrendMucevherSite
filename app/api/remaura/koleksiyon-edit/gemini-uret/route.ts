@@ -225,7 +225,7 @@ export async function POST(req: Request) {
                 parts: [{ text: generatePrompt }],
               },
             ],
-            config: { responseModalities: ["IMAGE", "TEXT"] } as never,
+            config: { responseModalities: ["IMAGE", "TEXT"], thinkingConfig: { thinkingBudget: 0 } } as never,
           }),
           timeoutPromise,
         ]).then(async (result) => {

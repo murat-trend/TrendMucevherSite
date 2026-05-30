@@ -178,7 +178,7 @@ async function generateOne(prompt: string): Promise<string> {
     ai.models.generateContent({
       model: "gemini-3.1-flash-image-preview",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { responseModalities: ["IMAGE", "TEXT"] } as never,
+      config: { responseModalities: ["IMAGE", "TEXT"], thinkingConfig: { thinkingBudget: 0 } } as never,
     }),
     timeoutPromise,
   ]);
@@ -242,7 +242,7 @@ Professional luxury e-commerce photograph. Pure white background. No hands, no m
           ],
         },
       ],
-      config: { responseModalities: ["IMAGE", "TEXT"] } as never,
+      config: { responseModalities: ["IMAGE", "TEXT"], thinkingConfig: { thinkingBudget: 0 } } as never,
     }),
     timeoutPromise,
   ]);
