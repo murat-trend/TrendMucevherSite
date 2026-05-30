@@ -1,5 +1,4 @@
 import { loadEnvConfig } from "@next/env";
-import { GoogleGenAI } from "@google/genai";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
@@ -30,95 +29,7 @@ async function requireSuperAdmin(): Promise<
   return { ok: true };
 }
 
-// ─── Gemini helpers ───────────────────────────────────────────────────────────
-
-function cleanApiKey(raw: string | undefined): string | undefined {
-  if (!raw) return undefined;
-  return raw.split("").filter(ch => ch.charCodeAt(0) > 31 && ch.charCodeAt(0) < 256).join("").trim() || undefined;
-}
-
-async function cropGeminiWatermark(base64: string): Promise<string> {
-  try {
-    const sharp = (await import("sharp")).default;
-    const buf = Buffer.from(base64, "base64");
-    const meta = await sharp(buf).metadata();
-    const w = meta.width ?? 1024;
-    const h = meta.height ?? 1024;
-    const cropH = Math.floor(h * 0.90); // son %10 kırp
-    const result = await sharp(buf)
-      .extract({ left: 0, top: 0, width: w, height: cropH })
-      .jpeg({ quality: 92 })
-      .toBuffer();
-    return result.toString("base64");
-  } catch {
-    return base64;
-  }
-}
-
-type GeminiResult = {
-  candidates?: Array<{
-    finishReason?: string;
-    content?: { parts?: unknown[] } | null;
-  }> | null;
-};
-
-function extractImageFromResult(result: GeminiResult): string {
-  const candidate = result.candidates?.[0];
-  const finishReason = candidate?.finishReason;
-  const parts = candidate?.content?.parts ?? [];
-
-  const textParts = (parts as Array<{ text?: string; inlineData?: unknown; thought?: boolean }>)
-    .filter(p => !p.thought && p.text).map(p => p.text).join(" ");
-  if (textParts) console.log("[uret] gemini text:", textParts.slice(0, 150));
-
-  const imgPart = (parts as Array<{ thought?: boolean; inlineData?: { mimeType: string; data: string } }>)
-    .find(p => !p.thought && p.inlineData?.mimeType?.startsWith("image/"));
-
-  if (!imgPart?.inlineData) {
-    throw new Error(`no_image | finishReason=${finishReason} | parts=${parts.length} | text=${textParts.slice(0, 80)}`);
-  }
-  return `data:${imgPart.inlineData.mimeType};base64,${imgPart.inlineData.data}`;
-}
-
-async function generateOneWithGemini(
-  referenceDataUrl: string,
-  prompt: string,
-  googleApiKey: string,
-): Promise<string> {
-  const ai = new GoogleGenAI({ apiKey: googleApiKey });
-
-  const mimeMatch = referenceDataUrl.match(/^data:([^;]+);base64,/);
-  const mimeType = mimeMatch?.[1] ?? "image/jpeg";
-  const base64Data = referenceDataUrl.includes(",")
-    ? referenceDataUrl.split(",")[1]
-    : referenceDataUrl;
-
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("timeout_240s — üretim çok uzun sürdü")), 240_000)
-  );
-
-  const result = await Promise.race([
-    ai.models.generateContent({
-      model: "gemini-3.1-flash-image-preview",
-      contents: [{
-        role: "user",
-        parts: [
-          { inlineData: { mimeType, data: base64Data } },
-          { text: prompt },
-        ],
-      }],
-      config: { responseModalities: ["IMAGE", "TEXT"] } as never,
-    }),
-    timeoutPromise,
-  ]);
-
-  const dataUrl = extractImageFromResult(result);
-  const raw = dataUrl.split(",")[1] ?? dataUrl;
-  const cropped = await cropGeminiWatermark(raw);
-  return `data:image/jpeg;base64,${cropped}`;
-}
-
-// ─── Çeviri & stil analizi ────────────────────────────────────────────────────
+// ─── Yardımcı fonksiyonlar ────────────────────────────────────────────────────
 
 async function translateToEnglish(text: string): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -190,7 +101,7 @@ const TAKI_TIPI_EN: Record<string, string> = {
 const KAMERA_ACISI: Record<string, string> = {
   "Kolye": "front-facing view, pendant centered, chain visible on both sides, slight downward angle, pure white background",
   "Küpe": "front-facing view, pair of earrings side by side, symmetric composition, slight 3/4 angle, pure white background",
-  "Bilezik": "three-quarter elevated 3/4 angle, camera at 45 degrees above, bracelet displayed on a slight diagonal tilt, inner hollow and outer surface both visible, entire bracelet in frame, pure white background",
+  "Bilezik": "three-quarter elevated 3/4 angle, camera at 45 degrees above, bracelet displayed on a slight diagonal tilt showing depth and curvature, inner hollow and outer surface both visible, entire bracelet in frame with margin, e-commerce jewelry standard angle, pure white background",
   "Broş": "perfectly flat front-facing view, entire brooch visible, no perspective distortion, pure white background",
 };
 
@@ -222,6 +133,11 @@ const FORM_EN: Record<string, string> = {
 export async function POST(req: Request) {
   const auth = await requireSuperAdmin();
   if (!auth.ok) return auth.response;
+
+  const falKey = process.env.FAL_KEY;
+  if (!falKey) {
+    return NextResponse.json({ error: "Servis yapılandırılmamış, lütfen yöneticiye bildirin." }, { status: 500 });
+  }
 
   const body = await req.json() as {
     takiTipi?: string;
@@ -259,63 +175,10 @@ export async function POST(req: Request) {
     kameraAcisi = "professional e-commerce jewelry product photography angle, entire piece visible, pure white background";
   }
 
+  const { fal } = await import("@fal-ai/client");
+  fal.config({ credentials: falKey });
+
   try {
-    // ── PATH 1: Referans görsel var → Gemini multimodal (görseli gerçekten görür) ──
-    if (referansGorsel) {
-      const googleApiKey = cleanApiKey(process.env.GOOGLE_API_KEY);
-      if (!googleApiKey) {
-        return NextResponse.json({ error: "Servis yapılandırılmamış, lütfen yöneticiye bildirin." }, { status: 500 });
-      }
-
-      // Stil açıklaması: stilPrompt (koleksiyon analiz styleLock) varsa kullan, yoksa vision analizi
-      const stilDescription = stilPrompt
-        ? stilPrompt
-            .replace(/\b(ring|necklace|earring|bracelet|brooch|pendant|bangle|choker)\b/gi, "")
-            .replace(/\s+/g, " ").trim()
-        : await analyzeStyleWithVision(referansGorsel);
-
-      const prompt = [
-        `You are given a reference jewelry product photograph.`,
-        `Create a NEW ${metalEn} ${takiTipiEn} in EXACTLY the same visual style as the reference image.`,
-        `MATCH PRECISELY: every decorative motif (flowers, leaves, enamel accents, stone settings, engravings, filigree), metal color and finish, surface technique, stone treatment, overall aesthetic mood.`,
-        `CHANGE ONLY: the jewelry type — it must be a ${takiTipiEn}, not a copy of the reference piece shape or subject.`,
-        stilDescription ? `Additional style keywords: ${stilDescription}.` : "",
-        temaEn,
-        formStr,
-        `CAMERA: ${kameraAcisi}`,
-        `Professional luxury e-commerce photograph. Pure white background. No hands, no model, no props, no watermarks. Sharp focus, studio lighting.`,
-      ].filter(Boolean).join(" ");
-
-      const count = Math.min(Math.max(Number(numImages) || 1, 1), 4);
-      const tasks = Array.from({ length: count }, () =>
-        generateOneWithGemini(referansGorsel, prompt, googleApiKey)
-      );
-      const results = await Promise.allSettled(tasks);
-
-      for (const r of results) {
-        if (r.status === "rejected") {
-          console.error("[uret] gemini rejected:", r.reason instanceof Error ? r.reason.message : String(r.reason));
-        }
-      }
-
-      const images = results
-        .map(r => r.status === "fulfilled" ? r.value : null)
-        .filter((v): v is string => !!v);
-
-      if (images.length === 0) {
-        return NextResponse.json({ error: "Görsel üretilemedi, lütfen tekrar deneyin." }, { status: 500 });
-      }
-      return NextResponse.json({ images, seed: 0, stilDescription });
-    }
-
-    // ── PATH 2: Stil kartı veya sadece metin → FAL ────────────────────────────
-    const falKey = process.env.FAL_KEY;
-    if (!falKey) {
-      return NextResponse.json({ error: "Servis yapılandırılmamış, lütfen yöneticiye bildirin." }, { status: 500 });
-    }
-    const { fal } = await import("@fal-ai/client");
-    fal.config({ credentials: falKey });
-
     let stilDescription = "";
     let referansUrl: string | null = null;
 
@@ -335,6 +198,14 @@ export async function POST(req: Request) {
           referansUrl = data.referans_gorsel_url ?? null;
         }
       }
+    } else if (referansGorsel) {
+      // Referans görsel: CDN'e yükle + stil açıklaması
+      referansUrl = await toFalUrl(referansGorsel, fal);
+      stilDescription = stilPrompt
+        ? stilPrompt
+            .replace(/\b(ring|necklace|earring|bracelet|brooch|pendant|bangle|choker)\b/gi, "")
+            .replace(/\s+/g, " ").trim()
+        : await analyzeStyleWithVision(referansGorsel);
     } else if (stilPrompt) {
       stilDescription = stilPrompt
         .replace(/\b(ring|necklace|earring|bracelet|brooch|pendant|bangle|choker)\b/gi, "")
@@ -342,24 +213,23 @@ export async function POST(req: Request) {
     }
 
     if (referansUrl) {
-      // Stil kartından gelen CDN URL'i ile Flux Kontext
-      const falReferansUrl = await toFalUrl(referansUrl, fal);
+      // Referans görselli üretim — Flux Kontext
       const prompt = [
         `Generate a new ${metalEn} ${takiTipiEn}.`,
         stilDescription
-          ? `STYLE LOCK — apply ALL of these characteristics: ${stilDescription}.`
-          : `STYLE LOCK: Keep the EXACT same craftsmanship technique, decorative motifs, metal finish from the reference.`,
-        `Create a new ${takiTipiEn} — do NOT copy the shape of the reference piece.`,
+          ? `STYLE LOCK — apply ALL of these characteristics to the new ${takiTipiEn}: ${stilDescription}.`
+          : `STYLE LOCK: Keep the EXACT same craftsmanship technique, decorative motifs, metal finish and surface texture from the reference.`,
+        `Create a new ${takiTipiEn} — do NOT copy the shape of the reference piece, only the style DNA.`,
         `CAMERA: ${kameraAcisi}`,
         temaEn,
         formStr,
-        `Pure white background. No model, no hands. Single centered jewelry piece. Studio lighting. Ultra detailed.`,
+        `Pure white background. No model, no hands, no body parts. Single centered jewelry piece. Studio lighting. Ultra detailed.`,
       ].filter(Boolean).join(" ");
 
       const result = await (fal.subscribe as (model: string, opts: { input: Record<string, unknown>; logs: boolean }) => Promise<{ data: unknown }>)("fal-ai/flux-pro/kontext", {
         input: {
           prompt,
-          image_url: falReferansUrl,
+          image_url: referansUrl,
           num_images: Math.min(numImages, 4),
           aspect_ratio: "1:1",
           output_format: "jpeg",
