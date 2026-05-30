@@ -717,61 +717,41 @@ export function KoleksiyonEditClient() {
     const timeoutId = setTimeout(() => controller.abort(), 270_000);
 
     try {
-      const variationRequests = Array.from({ length: varyasyonSayisi }, () =>
-        fetch("/api/remaura/koleksiyon-edit/gemini-uret", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            styleLock: analiz.styleLock,
-            new_design_concept,
-          }),
-          signal: controller.signal,
-        }).then(async (res) => {
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error((data as { error?: string }).error ?? ke.errGenerating);
-          return (data as { image?: string }).image ?? "";
-        })
-      );
+      const res = await fetch("/api/remaura/koleksiyon-edit/gemini-uret", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          takiTipi,
+          tema,
+          metalRengi,
+          formKarakterleri,
+          referansGorsel: refBase64,
+          numImages: varyasyonSayisi,
+        }),
+        signal: controller.signal,
+      });
 
-      // Promise.allSettled — bir varyasyon hata verirse diğerleri çökmez
-      const results = await Promise.allSettled(variationRequests);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? ke.errGenerating);
 
-      const successImages: string[] = [];
-      const failedCount = results.filter((r) => r.status === "rejected").length;
-
-      for (const result of results) {
-        if (result.status === "fulfilled" && result.value) {
-          successImages.push(result.value);
-        }
-      }
-
-      if (successImages.length === 0) {
+      const imgs: string[] = (data as { images?: string[] }).images ?? [];
+      if (imgs.length > 0) {
+        setImages(imgs);
+        setOriginals(imgs);
+        const ts = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+        setFilenames(imgs.map((_, i) => `remaura-koleksiyon-${ts}-${i + 1}.png`));
+        setSonStilAnalizi(JSON.stringify({ takiTipi, metalRengi }));
+        setPromptGecmisi((prev) => [{
+          id: Date.now().toString(),
+          tarih: new Date().toLocaleTimeString("tr-TR"),
+          takiTipi,
+          tema: tema || harfGirdisi || "(koleksiyon)",
+          metalRengi,
+          gorselUrl: imgs[0],
+        }, ...prev.slice(0, 9)]);
+      } else {
         setError(ke.errGenerating);
-        return;
       }
-
-      // Kısmi başarı uyarısı
-      if (failedCount > 0) {
-        setError(`${successImages.length} varyasyon üretildi, ${failedCount} başarısız oldu.`);
-      }
-
-      const now = new Date();
-      const pad = (n: number) => String(n).padStart(2, "0");
-      const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-
-      setImages(successImages);
-      setOriginals(successImages);
-      setFilenames(successImages.map((_, i) => `remaura-koleksiyon-${ts}-${i + 1}.jpg`));
-      // styleLock'u "stili kaydet" akışı için sakla
-      setSonStilAnalizi(JSON.stringify(analiz.styleLock));
-      setPromptGecmisi((prev) => [{
-        id: Date.now().toString(),
-        tarih: new Date().toLocaleTimeString("tr-TR"),
-        takiTipi,
-        tema: tema || harfGirdisi || "(koleksiyon)",
-        metalRengi,
-        gorselUrl: successImages[0],
-      }, ...prev.slice(0, 9)]);
 
     } catch (e: unknown) {
       if ((e as { name?: string })?.name === "AbortError") {
