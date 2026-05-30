@@ -727,6 +727,15 @@ export function KoleksiyonEditClient() {
           formKarakterleri,
           referansGorsel: refBase64,
           numImages: varyasyonSayisi,
+          stilPrompt: analiz?.styleLock
+            ? [
+                analiz.styleLock.metal_finish,
+                analiz.styleLock.surface_technique,
+                analiz.styleLock.decorative_motifs,
+                analiz.styleLock.stone_treatment,
+                analiz.styleLock.overall_mood,
+              ].filter(Boolean).join(", ")
+            : undefined,
         }),
         signal: controller.signal,
       });

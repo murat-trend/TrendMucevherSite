@@ -145,12 +145,13 @@ export async function POST(req: Request) {
       formKarakterleri?: string[];
       referansGorsel?: string;
       numImages?: number;
+      stilPrompt?: string;
     };
 
     const {
       styleLock, new_design_concept,
       takiTipi, tema, metalRengi, formKarakterleri, referansGorsel,
-      numImages = 1,
+      numImages = 1, stilPrompt,
     } = body;
 
     const ai = new GoogleGenAI({ apiKey: googleKey });
@@ -176,26 +177,7 @@ export async function POST(req: Request) {
         ? formKarakterleri.map(f => FORM_EN[f] ?? f).join(", ")
         : "";
 
-      // TURN 1 — Stil analizi (TEXT)
-      const turn1 = await Promise.race([
-        ai.models.generateContent({
-          model: MODEL,
-          contents: [{
-            role: "user",
-            parts: [
-              { inlineData: { mimeType, data: base64Data } },
-              { text: "Analyze ONLY the decorative style of this jewelry. Describe: metal color and surface finish, craftsmanship technique, decorative motifs, stone type and placement, overall mood. Do NOT mention the jewelry type or shape." },
-            ],
-          }],
-          config: { responseModalities: ["TEXT"] } as never,
-        }),
-        timeoutPromise,
-      ]);
-
-      const styleAnalysis = (turn1 as GeminiResult).candidates?.[0]?.content?.parts
-        ?.filter((p: unknown) => !(p as { thought?: boolean }).thought && (p as { text?: string }).text)
-        ?.map((p: unknown) => (p as { text?: string }).text)
-        ?.join("") ?? "elegant metalwork style";
+      const styleAnalysis = stilPrompt ?? "elegant metalwork style";
 
       const generatePrompt = [
         `Using the exact style described, create a new ${metalEn} ${takiEn}.`,
