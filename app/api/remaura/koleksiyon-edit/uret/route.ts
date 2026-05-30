@@ -1,6 +1,6 @@
 import { loadEnvConfig } from "@next/env";
 import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { isRemauraSuperAdminUserId } from "@/lib/billing/super-admin";
 import { buildRingThreeQuarterBlock } from "@/lib/remaura/internal-visual-rules";
@@ -141,7 +141,7 @@ const FORM_EN: Record<string, string> = {
   "Asimetrik": "asymmetric",
 };
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const auth = await requireSuperAdmin();
   if (!auth.ok) return auth.response;
 
@@ -193,8 +193,33 @@ export async function POST(req: Request) {
 
   // ── Stil kaynağını belirle + Üretim ─────────────────────
   try {
+    if (referansGorsel) {
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://trendmucevher.com";
+      const geminiRes = await fetch(
+        `${baseUrl}/api/remaura/koleksiyon-edit/gemini-uret`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            cookie: req.headers.get("cookie") ?? "",
+          },
+          body: JSON.stringify({
+            takiTipi,
+            tema,
+            metalRengi,
+            formKarakterleri,
+            referansGorsel,
+            numImages: numImages ?? 1,
+          }),
+        }
+      );
+      const geminiData = await geminiRes.json();
+      if (!geminiRes.ok) return NextResponse.json({ error: geminiData.error ?? "Üretim başarısız." }, { status: 500 });
+      return NextResponse.json({ images: geminiData.images ?? [] });
+    }
+    // Referans yoksa mevcut Flux akışı devam eder
+
     let stilDescription = "";
-    let referansUrl: string | null = null;
 
     if (stilKartiId) {
       // Kaydedilmiş stil kartından al
@@ -210,7 +235,6 @@ export async function POST(req: Request) {
         const { data } = await admin.from("stil_kartlari").select("*").eq("id", stilKartiId).single();
         if (data) {
           stilDescription = data.stil_prompt;
-          referansUrl = data.referans_gorsel_url ?? null;
         }
       }
     } else if (stilPrompt) {
@@ -218,44 +242,10 @@ export async function POST(req: Request) {
       stilDescription = stilPrompt
         .replace(/\b(ring|necklace|earring|bracelet|brooch|pendant|bangle|choker)\b/gi, "")
         .replace(/\s+/g, " ").trim();
-    } else if (referansGorsel) {
-      // Referans görsel — CDN URL'e yükle + stil analizi
-      referansUrl = await toFalUrl(referansGorsel, fal);
-      stilDescription = await analyzeStyleWithVision(referansGorsel);
     }
 
-    if (referansUrl) {
-      // Referans görselli üretim (görsel bazlı stil transferi)
-      const prompt = [
-        `Generate a new ${metalEn} ${takiTipiEn}.`,
-        `STYLE LOCK: Keep the EXACT same craftsmanship technique, decorative motifs, metal finish and surface texture from the reference. Create a new ${takiTipiEn} — not a copy of the reference piece.`,
-        `CAMERA: ${kameraAcisi}`,
-        temaEn,
-        formStr,
-        `Pure white background. No model, no hands, no body parts. Single centered jewelry piece. Studio lighting. Ultra detailed.`,
-      ].filter(Boolean).join(" ");
-
-      const result = await (fal.subscribe as (model: string, opts: { input: Record<string, unknown>; logs: boolean }) => Promise<{ data: unknown }>)("fal-ai/flux-pro/kontext", {
-        input: {
-          prompt,
-          image_url: referansUrl,
-          num_images: Math.min(numImages, 4),
-          aspect_ratio: "1:1",
-          output_format: "jpeg",
-          safety_tolerance: 3,
-        },
-        logs: false,
-      });
-
-      type FalImage = { url: string };
-      const images = ((result.data as { images?: FalImage[] })?.images ?? []).map(i => i.url);
-      if (images.length === 0) {
-        return NextResponse.json({ error: "Görsel üretilemedi, lütfen tekrar deneyin." }, { status: 500 });
-      }
-      return NextResponse.json({ images, seed: 0, stilDescription });
-
-    } else {
-      // Metin bazlı üretim
+    {
+      // Metin bazlı üretim (Flux Ultra)
       const prompt = [
         `A single ${metalEn} ${takiTipiEn}, luxury jewelry product photography.`,
         kameraAcisi,
