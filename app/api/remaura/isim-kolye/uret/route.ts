@@ -19,7 +19,7 @@ async function cropGeminiWatermark(base64: string): Promise<string> {
     const meta = await sharp(buf).metadata();
     const w = meta.width ?? 1024;
     const h = meta.height ?? 1024;
-    const cropH = Math.floor(h * 0.94); // son %6 kırp
+    const cropH = Math.floor(h * 0.90); // son %10 kırp
     const result = await sharp(buf)
       .extract({ left: 0, top: 0, width: w, height: cropH })
       .jpeg({ quality: 92 })
