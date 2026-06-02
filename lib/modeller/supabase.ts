@@ -30,6 +30,9 @@ export type DbProduct3D = {
   show_on_modeller: boolean;
   created_at: string;
   seller_note: string | null;
+  is_free: boolean;
+  show_on_portfolio: boolean;
+  video_url: string | null;
 };
 
 export type Ui3DModel = {
@@ -61,6 +64,9 @@ export type Ui3DModel = {
   contentSourceLocale?: string | null;
   imageAlts: string[] | null;
   images: string[] | null;
+  isFree: boolean;
+  showOnPortfolio: boolean;
+  videoUrl: string | null;
 };
 
 function normalizeJewelryType(value: string): Ui3DModel["jewelryType"] {
@@ -124,6 +130,9 @@ export function mapDbProductToUi(row: DbProduct3D): Ui3DModel {
     showOnModeller: row.show_on_modeller,
     imageAlts: row.image_alts ?? null,
     images: row.images ?? null,
+    isFree: row.is_free ?? false,
+    showOnPortfolio: row.show_on_portfolio ?? true,
+    videoUrl: row.video_url ?? null,
   };
 }
 

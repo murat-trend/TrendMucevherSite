@@ -25,6 +25,7 @@ type ProductForm = {
   story: string;
   glbFile: File | null;
   stlFile: File | null;
+  videoFile: File | null;
   image1: File | null;
   image2: File | null;
   image3: File | null;
@@ -38,18 +39,21 @@ type ProductForm = {
   licensePersonalPrice: string;
   licenseCommercial: boolean;
   licenseCommercialPrice: string;
+  isFree: boolean;
+  showOnPortfolio: boolean;
 };
 
 const EMPTY_FORM: ProductForm = {
   name: "", contentSourceLang: "tr", jewelryType: "Yüzük", price: "",
   width: "", height: "", depth: "", weight: "",
   story: "",
-  glbFile: null, stlFile: null,
+  glbFile: null, stlFile: null, videoFile: null,
   image1: null, image2: null, image3: null, image4: null,
   alt1: "", alt2: "", alt3: "", alt4: "",
   tags: [],
   licensePersonal: true, licensePersonalPrice: "",
   licenseCommercial: false, licenseCommercialPrice: "",
+  isFree: false, showOnPortfolio: true,
 };
 
 // ── Input bileşeni ────────────────────────────────────────────────────────
@@ -115,12 +119,13 @@ function TagChipInput({ tags, onChange, placeholder }: {
 async function uploadViaPresign(
   slug: string,
   file: File,
-  kind: 'glb' | 'stl' | 'thumbnail',
+  kind: 'glb' | 'stl' | 'thumbnail' | 'video',
   view?: string,
 ): Promise<string> {
   const defaultContentType =
     kind === 'glb' ? 'model/gltf-binary' :
     kind === 'stl' ? 'model/stl' :
+    kind === 'video' ? 'video/webm' :
     'image/jpeg'
   const presignRes = await fetch('/api/create-upload-url', {
     method: 'POST',
@@ -533,6 +538,8 @@ export default function SaticiUrunlerimPage() {
       // PRESIGNED URL — browser → R2 direkt (Vercel 4.5MB bypass)
       if (form.glbFile) glbUrl = await uploadViaPresign(slug, form.glbFile, 'glb')
       if (form.stlFile) stlUrl = await uploadViaPresign(slug, form.stlFile, 'stl')
+      let videoUrl: string | null = null
+      if (form.videoFile) videoUrl = await uploadViaPresign(slug, form.videoFile, 'video')
 
       // ESKİ FormData yöntemi (413 riski — presign için devre dışı):
       // const fd = new FormData();
@@ -636,6 +643,9 @@ export default function SaticiUrunlerimPage() {
         is_published: false,
         show_on_home: false,
         show_on_modeller: true,
+        is_free: form.isFree,
+        show_on_portfolio: form.showOnPortfolio,
+        video_url: videoUrl,
         seller_id: user?.id ?? null,
         seller_email: user?.email ?? null,
       });
@@ -921,6 +931,29 @@ export default function SaticiUrunlerimPage() {
                 <Field label={tp.fieldStl}>
                   <input type="file" accept=".stl" className={fileCls}
                     onChange={(e) => set("stlFile", e.target.files?.[0] ?? null)} />
+                </Field>
+
+                <Field label="Portfolyo Videosu (isteğe bağlı, WebM/MP4, maks 500MB)" span2>
+                  <input type="file" accept="video/webm,video/mp4,.webm,.mp4" className={fileCls}
+                    onChange={(e) => set("videoFile", e.target.files?.[0] ?? null)} />
+                  {form.videoFile && <p className="mt-1 text-[11px] text-muted">{form.videoFile.name}</p>}
+                </Field>
+
+                <Field label="Portfolyo Seçenekleri" span2>
+                  <div className="space-y-2 rounded-xl border border-border/60 bg-surface-alt p-3">
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+                      <input type="checkbox" checked={form.showOnPortfolio}
+                        onChange={(e) => set("showOnPortfolio", e.target.checked)}
+                        className="h-4 w-4 accent-accent" />
+                      Portfolyo sayfasında göster
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+                      <input type="checkbox" checked={form.isFree}
+                        onChange={(e) => set("isFree", e.target.checked)}
+                        className="h-4 w-4 accent-accent" />
+                      Ücretsiz sun (portfolyoda &ldquo;Ücretsiz İndir&rdquo; butonu gösterilir)
+                    </label>
+                  </div>
                 </Field>
 
                 <Field label="Görseller" span2>

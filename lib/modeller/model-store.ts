@@ -59,5 +59,8 @@ export type Stored3DModel = {
   publishTargets: PublishTargets;
   /** Satıcı metin kaynağı: tr | en | de | ru */
   contentSourceLocale?: string | null;
+  isFree?: boolean;
+  showOnPortfolio?: boolean;
+  videoUrl?: string | null;
 };
 

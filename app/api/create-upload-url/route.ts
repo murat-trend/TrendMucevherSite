@@ -11,6 +11,7 @@ export const dynamic = 'force-dynamic'
 const GLB_MAX_SIZE = 50 * 1024 * 1024
 const STL_MAX_SIZE = 100 * 1024 * 1024
 const THUMBNAIL_MAX_SIZE = 10 * 1024 * 1024
+const VIDEO_MAX_SIZE = 500 * 1024 * 1024
 const SIGNED_URL_EXPIRES_SECONDS = 60 * 5
 
 const THUMBNAIL_CONTENT_TYPES = new Set([
@@ -38,7 +39,9 @@ const s3 = new S3Client({
   },
 })
 
-type UploadKind = 'glb' | 'stl' | 'thumbnail'
+const VIDEO_CONTENT_TYPES = new Set(['video/webm', 'video/mp4'])
+
+type UploadKind = 'glb' | 'stl' | 'thumbnail' | 'video'
 
 function errorJson(message: string, status: number) {
   return NextResponse.json({ error: message }, { status })
@@ -112,7 +115,7 @@ export async function POST(req: NextRequest) {
     return errorJson('Geçersiz dosya boyutu', 400)
   }
 
-  if (kind !== 'glb' && kind !== 'stl' && kind !== 'thumbnail') {
+  if (kind !== 'glb' && kind !== 'stl' && kind !== 'thumbnail' && kind !== 'video') {
     return errorJson('Geçersiz yükleme türü', 400)
   }
 
@@ -168,6 +171,18 @@ export async function POST(req: NextRequest) {
       return errorJson('Geçersiz thumbnail uzantısı', 400)
     }
     key = `thumbnails/${slug}-${view}.${ext}`
+  }
+
+  if (kind === 'video') {
+    if (size > VIDEO_MAX_SIZE) {
+      return errorJson('Video en fazla 500 MB olabilir', 413)
+    }
+    if (!VIDEO_CONTENT_TYPES.has(contentType)) {
+      return errorJson('Sadece WebM ve MP4 video formatları desteklenir', 400)
+    }
+    const ext = contentType === 'video/mp4' ? 'mp4' : 'webm'
+    key = `videos/${slug}-portfolio.${ext}`
+    normalizedContentType = contentType
   }
 
   try {

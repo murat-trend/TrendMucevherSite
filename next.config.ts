@@ -2,6 +2,20 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   trailingSlash: true,
+  async redirects() {
+    return [
+      {
+        source: '/modeller',
+        destination: '/portfolyo',
+        permanent: true,
+      },
+      {
+        source: '/modeller/',
+        destination: '/portfolyo/',
+        permanent: true,
+      },
+    ]
+  },
   experimental: {
     proxyClientMaxBodySize: "200mb",
     optimizePackageImports: ["framer-motion"],

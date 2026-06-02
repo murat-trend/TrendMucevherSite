@@ -202,6 +202,9 @@ function toModelRow(row: DbProduct3D): Model3DRow {
       urunler: false,
     },
     contentSourceLocale: ui.contentSourceLocale ?? "tr",
+    isFree: ui.isFree ?? false,
+    showOnPortfolio: ui.showOnPortfolio ?? true,
+    videoUrl: ui.videoUrl ?? null,
   };
 }
 
@@ -429,6 +432,8 @@ export function ProductsModerationPage() {
       urunler: false,
     },
     contentSourceLang: "tr" as ContentSourceLocale,
+    isFree: false,
+    showOnPortfolio: true,
   });
 
   const scrollPageToTop = useCallback(() => {
@@ -501,6 +506,17 @@ export function ProductsModerationPage() {
         id: "rejected-moderation",
         title: "Reddedilen ürünler",
         detail: `${rejectedCount} ürün moderation_status: rejected.`,
+      });
+    }
+    const missingVideo = productSnapshotRows.filter((r) => {
+      const v = (r as DbProduct3D & { video_url?: string | null }).video_url;
+      return r.is_published && (v == null || String(v).trim() === "");
+    }).length;
+    if (missingVideo > 0) {
+      items.push({
+        id: "missing-video",
+        title: "Video eksik",
+        detail: `${missingVideo} yayında üründe portfolyo videosu yüklenmemiş.`,
       });
     }
     return items;
@@ -670,6 +686,8 @@ export function ProductsModerationPage() {
         urunler: false,
       },
       contentSourceLang: "tr",
+      isFree: false,
+      showOnPortfolio: true,
     });
   }, []);
 
@@ -709,6 +727,8 @@ export function ProductsModerationPage() {
         urunler: false,
       },
       contentSourceLang: normalizeContentSourceLocale(row.contentSourceLocale),
+      isFree: row.isFree ?? false,
+      showOnPortfolio: row.showOnPortfolio ?? true,
     });
     setIsModelModalOpen(true);
   }, []);
@@ -921,6 +941,8 @@ export function ProductsModerationPage() {
       is_published: modelRowPayload.isPublished,
       show_on_home: modelRowPayload.publishTargets.homeFeatured,
       show_on_modeller: modelRowPayload.publishTargets.modeller,
+      is_free: modelForm.isFree ?? false,
+      show_on_portfolio: modelForm.showOnPortfolio ?? true,
       ...(translationPatch ?? {}),
       content_source_locale: modelForm.contentSourceLang,
     };
@@ -1367,8 +1389,9 @@ export function ProductsModerationPage() {
                     <th className={`px-3 py-3 font-medium ${ADMIN_TABLE_TH_STICKY}`}>Model Adı</th>
                     <th className={`px-3 py-3 font-medium ${ADMIN_TABLE_TH_STICKY}`}>Slug</th>
                     <th className={`px-3 py-3 font-medium tabular-nums ${ADMIN_TABLE_TH_STICKY}`}>Fiyat</th>
-                    <th className={`px-3 py-3 font-medium ${ADMIN_TABLE_TH_STICKY}`}>GLB</th>
-                    <th className={`px-3 py-3 font-medium ${ADMIN_TABLE_TH_STICKY}`}>STL</th>
+                    <th className={`px-3 py-3 font-medium ${ADMIN_TABLE_TH_STICKY}`}>Video</th>
+                    <th className={`px-3 py-3 font-medium ${ADMIN_TABLE_TH_STICKY}`}>Portföy</th>
+                    <th className={`px-3 py-3 font-medium ${ADMIN_TABLE_TH_STICKY}`}>Ücretsiz</th>
                     <th className={`px-3 py-3 font-medium ${ADMIN_TABLE_TH_STICKY}`}>Yayın</th>
                     <th className={`px-3 py-3 text-right font-medium ${ADMIN_TABLE_TH_STICKY}`}>Aksiyon</th>
                   </tr>
@@ -1381,35 +1404,40 @@ export function ProductsModerationPage() {
                       <td className="px-3 py-3 font-mono text-[12px] text-zinc-400">/{row.slug}</td>
                       <td className="px-3 py-3 tabular-nums text-zinc-200">{tryFmt(row.price)}</td>
                       <td className="px-3 py-3">
-                        <span
-                          className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-                            row.hasGlb
-                              ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-200"
-                              : "border-zinc-500/35 bg-zinc-500/10 text-zinc-400"
-                          }`}
-                        >
-                          {row.hasGlb ? "Var" : "Yok"}
+                        <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${row.videoUrl ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-200" : "border-amber-500/35 bg-amber-500/10 text-amber-300"}`}>
+                          {row.videoUrl ? "✓" : "Eksik"}
                         </span>
                       </td>
                       <td className="px-3 py-3">
-                        <span
-                          className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-                            row.hasStl
-                              ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-200"
-                              : "border-zinc-500/35 bg-zinc-500/10 text-zinc-400"
-                          }`}
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const supabase = createClient();
+                            const next = !(row.showOnPortfolio ?? true);
+                            const { error } = await supabase.from("products_3d").update({ show_on_portfolio: next }).eq("id", row.id);
+                            if (!error) setModelRows((prev) => prev.map((m) => m.id === row.id ? { ...m, showOnPortfolio: next } : m));
+                          }}
+                          className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold transition-colors ${(row.showOnPortfolio ?? true) ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20" : "border-zinc-500/35 bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20"}`}
                         >
-                          {row.hasStl ? "Var" : "Yok"}
-                        </span>
+                          {(row.showOnPortfolio ?? true) ? "Görünür" : "Gizli"}
+                        </button>
                       </td>
                       <td className="px-3 py-3">
-                        <span
-                          className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-                            row.isPublished
-                              ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-200"
-                              : "border-zinc-500/35 bg-zinc-500/10 text-zinc-400"
-                          }`}
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const supabase = createClient();
+                            const next = !(row.isFree ?? false);
+                            const { error } = await supabase.from("products_3d").update({ is_free: next }).eq("id", row.id);
+                            if (!error) setModelRows((prev) => prev.map((m) => m.id === row.id ? { ...m, isFree: next } : m));
+                          }}
+                          className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold transition-colors ${(row.isFree ?? false) ? "border-sky-500/35 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20" : "border-zinc-500/35 bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20"}`}
                         >
+                          {(row.isFree ?? false) ? "Ücretsiz" : "Ücretli"}
+                        </button>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${row.isPublished ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-200" : "border-zinc-500/35 bg-zinc-500/10 text-zinc-400"}`}>
                           {row.isPublished ? "Yayında" : "Gizli"}
                         </span>
                       </td>
@@ -1822,6 +1850,28 @@ export function ProductsModerationPage() {
                   ))}
                 </div>
               </label>
+
+              <div className="sm:col-span-2 rounded-xl border border-white/[0.08] bg-[#07080a] p-3 space-y-3">
+                <span className="block text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1">Portfolyo Seçenekleri</span>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={modelForm.showOnPortfolio}
+                    onChange={(e) => setModelForm((p) => ({ ...p, showOnPortfolio: e.target.checked }))}
+                    className="h-4 w-4 rounded border-white/20 bg-black/30 accent-[#c69575]"
+                  />
+                  <span className="text-sm text-zinc-300">Portfolyo sayfasında göster</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={modelForm.isFree}
+                    onChange={(e) => setModelForm((p) => ({ ...p, isFree: e.target.checked }))}
+                    className="h-4 w-4 rounded border-white/20 bg-black/30 accent-[#c69575]"
+                  />
+                  <span className="text-sm text-zinc-300">Ücretsiz sun (portföyde "Ücretsiz İndir" gösterilir)</span>
+                </label>
+              </div>
 
               <label className="sm:col-span-2">
                 <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-zinc-500">Yayınla</span>
