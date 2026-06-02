@@ -251,6 +251,8 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
     return () => { alive = false }
   }, [glbUrl, stlUrl])
 
+  const productVideoUrl = product.videoUrl ?? null
+
   const viewImageList = (product.images && product.images.length > 0)
     ? product.images
     : [
@@ -551,23 +553,37 @@ export function ModelDetayClient({ product, sellerId, sellerEmail: initialSeller
             </div>
           </div>
 
-          {/* Ürün görselleri */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '8px' }}>
-            {viewImageList.map((src, i) => (
-              <div
-                key={i}
-                onClick={() => setActiveImage(src)}
-                style={{ aspectRatio: '1', background: '#111', border: `1px solid ${activeImage === src ? 'rgba(201,168,76,0.5)' : 'rgba(255,255,255,0.07)'}`, borderRadius: '2px', overflow: 'hidden', cursor: 'pointer', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >
-                <img
-                  src={src}
-                  alt={product.imageAlts?.[i] ?? product.name ?? ''}
-                  style={{ objectFit: 'cover', width: '100%', height: '100%' }}
-                  onError={(e) => { e.currentTarget.style.display = 'none' }}
-                />
-              </div>
-            ))}
-          </div>
+          {/* Video player (varsa) veya statik görseller */}
+          {productVideoUrl ? (
+            <div style={{ marginTop: '8px', borderRadius: '2px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)', aspectRatio: '1' }}>
+              <video
+                src={productVideoUrl}
+                autoPlay
+                loop
+                muted
+                playsInline
+                controls={false}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '8px' }}>
+              {viewImageList.map((src, i) => (
+                <div
+                  key={i}
+                  onClick={() => setActiveImage(src)}
+                  style={{ aspectRatio: '1', background: '#111', border: `1px solid ${activeImage === src ? 'rgba(201,168,76,0.5)' : 'rgba(255,255,255,0.07)'}`, borderRadius: '2px', overflow: 'hidden', cursor: 'pointer', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <img
+                    src={src}
+                    alt={product.imageAlts?.[i] ?? product.name ?? ''}
+                    style={{ objectFit: 'cover', width: '100%', height: '100%' }}
+                    onError={(e) => { e.currentTarget.style.display = 'none' }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Yorumlar */}
           <div className="mt-6">
