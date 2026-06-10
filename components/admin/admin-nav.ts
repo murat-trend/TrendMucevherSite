@@ -25,6 +25,7 @@ import {
   Eye,
   Coins,
   BookOpen,
+  Gem,
 } from "lucide-react";
 
 export type AdminNavItem = {
@@ -289,6 +290,24 @@ export const ADMIN_NAV_ENTRIES: AdminNavEntry[] = [
         labelTr: "Fiyat Yönetimi",
         labelEn: "Price Management",
         icon: Tag,
+      },
+    ],
+  },
+
+  // ── Nextaura B2B ───────────────────────────────────────
+  {
+    type: "group",
+    id: "nextaura",
+    titleTr: "Nextaura",
+    titleEn: "Nextaura",
+    icon: Gem,
+    children: [
+      {
+        id: "nextaura-firms",
+        href: "/admin/nextaura",
+        labelTr: "Firmalar",
+        labelEn: "Firms",
+        icon: Store,
       },
     ],
   },
