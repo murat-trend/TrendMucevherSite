@@ -326,12 +326,24 @@ export function Remaura3DAISection() {
     setMesh3DDownloadUrl(null);
 
     try {
+      const {
+        data: { user },
+      } = await createClient().auth.getUser();
+
       let cleanedBlob = cleanedImageBlobRef.current;
       if (!cleanedBlob) {
-        const { removeBackground } = await import("@imgly/background-removal");
-        const removedBlob = await removeBackground(uploadedImage);
-        const removedDataUrl = await toDataUrl(removedBlob);
-        cleanedBlob = await dataUrlToPngBlob(removedDataUrl);
+        const bgRes = await fetch("/api/remaura/mesh3d/remove-bg", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: uploadedImage, userId: user?.id ?? "" }),
+        });
+        if (!bgRes.ok) {
+          const err = await bgRes.json().catch(() => ({}));
+          throw new Error((err as { error?: string })?.error ?? "Arka plan kaldırılamadı.");
+        }
+        const bgData = await bgRes.json();
+        const resultDataUrl: string = bgData.image;
+        cleanedBlob = await dataUrlToPngBlob(resultDataUrl);
         cleanedImageBlobRef.current = cleanedBlob;
 
         if (cleanedObjectUrlRef.current) URL.revokeObjectURL(cleanedObjectUrlRef.current);
@@ -344,10 +356,6 @@ export function Remaura3DAISection() {
       if (!transparentPngDataUrl.startsWith("data:image/png;base64,")) {
         throw new Error("Meshy gonderimi icin alfa PNG olusturulamadi.");
       }
-
-      const {
-        data: { user },
-      } = await createClient().auth.getUser();
       const res = await fetch("/api/remaura/mesh3d/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
