@@ -5,6 +5,7 @@ export type RemauraNavKey =
   | 'backgroundRemoval'
   | 'photoEdit'
   | 'removeObject'
+  | 'tryOn'
   | 'ai3d'
   | 'convert3d'
   | 'videoOptimize'
@@ -60,6 +61,15 @@ export const REMAURA_CATEGORIES: RemauraCategory[] = [
     labelKey: 'removeObject',
     icon: '✂️',
     path: '/remaura/nesne-kaldir',
+    accessType: 'restricted',
+    isSuperAdminOnly: false,
+    isActive: true,
+  },
+  {
+    id: 'uzerinde-gor',
+    labelKey: 'tryOn',
+    icon: '💍',
+    path: '/remaura/uzerinde-gor',
     accessType: 'restricted',
     isSuperAdminOnly: false,
     isActive: true,

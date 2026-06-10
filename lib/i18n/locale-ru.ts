@@ -321,6 +321,7 @@ export const ruMessages = {
     backgroundRemoval: "Удаление фона",
     photoEdit: "Редактор фото",
     removeObject: "Удалить объект",
+    tryOn: "Примерить 💍",
     ai3d: "Remaura AI 3D",
     convert3d: "3D Конвертер",
     videoOptimize: "Оптимизация видео",

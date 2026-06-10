@@ -321,6 +321,7 @@ export const deMessages = {
     backgroundRemoval: "Hintergrund entfernen",
     photoEdit: "Foto bearbeiten",
     removeObject: "Objekt entfernen",
+    tryOn: "An mir sehen 💍",
     ai3d: "Remaura AI 3D",
     convert3d: "3D-Konverter",
     videoOptimize: "Videooptimierung",
