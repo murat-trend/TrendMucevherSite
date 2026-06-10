@@ -24,7 +24,12 @@ jobs:
       - name: Update platform rules
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: npm run update-platform-rules
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "OPENAI_API_KEY secret ayarlanmamış, adım atlanıyor."
+            exit 0
+          fi
+          npm run update-platform-rules
 
       - name: Commit and push
         run: |
