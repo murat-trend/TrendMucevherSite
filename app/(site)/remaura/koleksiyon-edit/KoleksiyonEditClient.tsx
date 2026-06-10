@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -296,6 +297,7 @@ function compressImage(dataUrl: string, maxPx = 2048, quality = 0.97): Promise<s
 export function KoleksiyonEditClient() {
   const { t } = useLanguage();
   const ke = t.koleksiyonEdit;
+  const router = useRouter();
 
   // Display maps — keep internal state as Turkish keys (backend uses them)
   const takiDisplay: Record<TakiTipi, string> = {
@@ -849,10 +851,43 @@ export function KoleksiyonEditClient() {
     const beforeImg = images[index];
     setLoad({ kind: "op", index, label });
     try {
+      // Görseli API'ye göndermeden önce sıkıştır — Stability AI max ~10MB kabul eder.
+      // Upscale action'ında sıkıştırma yapma; zaten API tarafında işleniyor.
+      const isUpscale = (payload as { action?: string }).action === "upscale";
+      const imageToSend = (!isUpscale && images[index].startsWith("data:"))
+        ? await compressImage(images[index], 2048, 0.92)
+        : images[index];
+
       const res = await fetch("/api/remaura/koleksiyon-edit/stability", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: images[index], ...payload }),
+        body: JSON.stringify({ image: imageToSend, ...payload }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? ke.errGenerating); return null; }
+      const result: string | null = data.image ?? null;
+      if (result) {
+        setBeforeAfter({ before: beforeImg, after: result, index });
+        setLightbox(index);
+      }
+      return result;
+    } catch { setError(ke.errConnection); return null; }
+    finally { setLoad({ kind: "idle" }); }
+  }
+
+  // Gemini görsel editi — takının bütünlüğünü koruyarak hedeflenen motifi değiştirir
+  async function callGeminiEdit(
+    index: number,
+    instruction: string,
+    label: string
+  ): Promise<string | null> {
+    const beforeImg = images[index];
+    setLoad({ kind: "op", index, label });
+    try {
+      const res = await fetch("/api/remaura/koleksiyon-edit/gemini-edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: images[index], instruction }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? ke.errGenerating); return null; }
@@ -884,21 +919,31 @@ export function KoleksiyonEditClient() {
 
   async function handleModalSubmit() {
     if (!modal) return;
+
+    // Boş prompt kontrolü
+    if (modal.type === "replace") {
+      if (!modal.searchPrompt.trim() || !modal.replacePrompt.trim()) {
+        setError("Lütfen 'Ne var' ve 'Ne olsun' alanlarını doldurun.");
+        return;
+      }
+    } else if (modal.type === "recolor") {
+      if (!modal.selectPrompt.trim() || !modal.colorPrompt.trim()) {
+        setError("Lütfen seçim ve renk alanlarını doldurun.");
+        return;
+      }
+    }
+
     setModalLoading(true);
     try {
       let result: string | null = null;
       if (modal.type === "replace") {
-        result = await callStability(
-          modal.index,
-          { action: "search-replace", searchPrompt: modal.searchPrompt, replacePrompt: modal.replacePrompt },
-          ke.actionReplace
-        );
+        // Gemini görsel editi — takının bütünlüğünü koruyarak motif değiştirir
+        const instruction = `${modal.searchPrompt.trim()} kaldır, yerine ${modal.replacePrompt.trim()} koy`;
+        result = await callGeminiEdit(modal.index, instruction, ke.actionReplace);
       } else {
-        result = await callStability(
-          modal.index,
-          { action: "recolor", selectPrompt: modal.selectPrompt, colorPrompt: modal.colorPrompt },
-          ke.actionRecolor
-        );
+        // Renklendirme de Gemini ile — sadece seçilen kısmın rengini/metalini değiştirir
+        const instruction = `${modal.selectPrompt.trim()} kısmının rengini/metalini ${modal.colorPrompt.trim()} yap`;
+        result = await callGeminiEdit(modal.index, instruction, ke.actionRecolor);
       }
       if (result) replaceImg(modal.index, result);
       setModal(null);
@@ -1182,12 +1227,25 @@ export function KoleksiyonEditClient() {
                     <img src={refBase64} alt="ref" style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 8, flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{refName}</p>
-                      <button type="button"
-                        onClick={(e) => { e.stopPropagation(); setRefBase64(null); setRefName(""); setAnaliz(null); if (fileRef.current) fileRef.current.value = ""; }}
-                        style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", background: "none", border: "none", cursor: "pointer", marginTop: 4, padding: 0 }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.6)")}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.3)")}
-                      >{ke.refRemove}</button>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                        <button type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setImages([refBase64]);
+                            setOriginals([refBase64]);
+                            setFilenames([refName || "yuklenen-gorsel.png"]);
+                          }}
+                          style={{ fontSize: 9, fontWeight: 700, color: ACCENT_LIGHT, background: "rgba(183,110,121,0.12)", border: `1px solid rgba(183,110,121,0.35)`, borderRadius: 4, cursor: "pointer", padding: "3px 7px", textTransform: "uppercase", letterSpacing: "0.1em" }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(183,110,121,0.22)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(183,110,121,0.12)")}
+                        >Düzenle →</button>
+                        <button type="button"
+                          onClick={(e) => { e.stopPropagation(); setRefBase64(null); setRefName(""); setAnaliz(null); if (fileRef.current) fileRef.current.value = ""; }}
+                          style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                          onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.6)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.3)")}
+                        >{ke.refRemove}</button>
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -1350,6 +1408,16 @@ export function KoleksiyonEditClient() {
 
                   {/* Action buttons */}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                    <ActionBtn
+                      onClick={() => {
+                        localStorage.setItem("remaura_3d_gorsel", src);
+                        router.push("/remaura?category=mesh3d");
+                      }}
+                      disabled={isOpBusy(i)}
+                      accent
+                    >
+                      3D →
+                    </ActionBtn>
                     <ActionBtn onClick={() => handleRemoveBg(i)} disabled={isOpBusy(i)}>{ke.actionRemoveBg}</ActionBtn>
                     <ActionBtn onClick={() => handleUpscale(i)} disabled={isOpBusy(i)}>{ke.actionUpscale}</ActionBtn>
                     <ActionBtn

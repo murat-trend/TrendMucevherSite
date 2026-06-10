@@ -65,6 +65,16 @@ export function Remaura3DAISection() {
   }, []);
 
   useEffect(() => {
+    const gorsel = localStorage.getItem("remaura_3d_gorsel");
+    if (!gorsel) return;
+    localStorage.removeItem("remaura_3d_gorsel");
+    setUploadedImage(gorsel);
+    cleanedImageBlobRef.current = null;
+    setCleanedPreviewUrl(null);
+    resetMeshState();
+  }, [resetMeshState]);
+
+  useEffect(() => {
     let cancelled = false;
     void (async () => {
       const ok = await checkCredits(1, () => {}, () => {});
