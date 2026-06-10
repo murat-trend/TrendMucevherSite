@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 type Firm = {
   id: string;
+  slug: string;
   name: string;
   logo_url: string | null;
   theme_color: string;
@@ -40,9 +41,51 @@ const TRANSLATIONS = {
   },
 };
 
-export function NextauraTablet({ firm }: { firm: Firm }) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type BeforeInstallPromptEvent = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> };
+
+export function NextauraTablet({ firm, isEmbed = false }: { firm: Firm; isEmbed?: boolean }) {
   const accent = firm.theme_color;
   const [lang, setLang] = useState<Lang>("tr");
+
+  // PWA: service worker kaydı + manifest enjeksiyonu
+  useEffect(() => {
+    // Manifest — firma teması ile dynamic
+    const existing = document.querySelector('link[rel="manifest"]');
+    if (!existing) {
+      const link = document.createElement("link");
+      link.rel = "manifest";
+      link.href = `/api/nextaura/manifest?slug=${firm.slug ?? ""}`;
+      document.head.appendChild(link);
+    }
+
+    // Service worker kaydı
+    if ("serviceWorker" in navigator) {
+      void navigator.serviceWorker.register("/nextaura-sw.js", { scope: "/nextaura/" });
+    }
+  }, [firm.slug]);
+
+  // PWA: "Ana Ekrana Ekle" prompt'u
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installed, setInstalled] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e as BeforeInstallPromptEvent);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    window.addEventListener("appinstalled", () => setInstalled(true));
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === "accepted") setInstalled(true);
+    setInstallPrompt(null);
+  };
   const t = TRANSLATIONS[lang];
 
   const [prompt, setPrompt] = useState("");
@@ -147,6 +190,50 @@ export function NextauraTablet({ firm }: { firm: Firm }) {
             <span style={{ fontSize: 18, fontWeight: 700, color: accent }}>{firm.name}</span>
           )}
         </div>
+
+        {/* Embed modunda "Kapat" butonu — parent iframe'e mesaj gönder */}
+        {isEmbed && (
+          <button
+            type="button"
+            onClick={() => window.parent.postMessage({ type: "nextaura:close" }, "*")}
+            style={{
+              padding: "7px 14px",
+              borderRadius: 20,
+              fontSize: 11,
+              fontWeight: 700,
+              border: "1px solid rgba(255,255,255,0.15)",
+              background: "transparent",
+              color: "rgba(255,255,255,0.5)",
+              cursor: "pointer",
+            }}
+          >
+            ✕ Kapat
+          </button>
+        )}
+
+        {/* PWA Kur butonu — sadece standalone modda */}
+        {!isEmbed && installPrompt && !installed && (
+          <button
+            type="button"
+            onClick={() => void handleInstall()}
+            style={{
+              padding: "7px 14px",
+              borderRadius: 20,
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              border: `1px solid ${accent}`,
+              background: `${accent}22`,
+              color: accent,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            ⬇ Uygulamayı Kur
+          </button>
+        )}
 
         {/* Dil seçici */}
         <div style={{ display: "flex", gap: 6 }}>
