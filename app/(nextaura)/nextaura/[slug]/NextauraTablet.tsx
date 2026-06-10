@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { OrderModal } from "./OrderModal";
 
 type Firm = {
   id: string;
@@ -93,7 +94,9 @@ export function NextauraTablet({ firm, isEmbed = false }: { firm: Firm; isEmbed?
   const [isGenerating, setIsGenerating] = useState(false);
   const [images, setImages] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [optimizedPrompt, setOptimizedPrompt] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [showOrder, setShowOrder] = useState(false);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
@@ -156,6 +159,7 @@ export function NextauraTablet({ firm, isEmbed = false }: { firm: Firm; isEmbed?
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Tasarım oluşturulamadı.");
       setImages(data.images ?? []);
+      setOptimizedPrompt(data.optimizedPrompt ?? prompt);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Bağlantı hatası.");
     } finally {
@@ -416,6 +420,7 @@ export function NextauraTablet({ firm, isEmbed = false }: { firm: Firm; isEmbed?
                 </button>
                 <button
                   type="button"
+                  onClick={() => setShowOrder(true)}
                   style={btnStyle(`${accent}`, "white")}
                 >
                   {t.orderBtn}
@@ -425,6 +430,23 @@ export function NextauraTablet({ firm, isEmbed = false }: { firm: Firm; isEmbed?
           </div>
         )}
       </div>
+
+      {/* Sipariş Modal */}
+      {showOrder && selectedImage && (
+        <OrderModal
+          firm={firm}
+          selectedImage={selectedImage}
+          optimizedPrompt={optimizedPrompt}
+          lang={lang}
+          onClose={() => setShowOrder(false)}
+          onSuccess={() => {
+            setShowOrder(false);
+            setImages([]);
+            setSelectedImage(null);
+            setPrompt("");
+          }}
+        />
+      )}
 
       {/* Footer */}
       <div style={{ padding: "12px 24px", textAlign: "center" }}>
