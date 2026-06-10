@@ -31,7 +31,7 @@ export async function POST(req: Request, { params }: Ctx) {
   const supabase = createServiceClient(url, serviceKey);
   const { id } = await params;
 
-  let body: { amount?: number; type?: "add" | "deduct" };
+  let body: { amount?: number; type?: "add" | "deduct"; description?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Geçersiz JSON" }, { status: 400 }); }
 
   const amount = Math.floor(Number(body.amount));
@@ -39,8 +39,8 @@ export async function POST(req: Request, { params }: Ctx) {
     return NextResponse.json({ error: "amount pozitif tam sayı olmalı" }, { status: 400 });
   }
   const type = body.type === "deduct" ? "deduct" : "add";
+  const description = body.description?.trim() || (type === "add" ? "Admin kredi yüklemesi" : "Admin kredi düşümü");
 
-  // Atomic credit update using RPC or read-modify-write
   const { data: firm, error: fetchErr } = await supabase
     .from("nextaura_firms")
     .select("id, credits")
@@ -49,9 +49,8 @@ export async function POST(req: Request, { params }: Ctx) {
 
   if (fetchErr || !firm) return NextResponse.json({ error: "Firma bulunamadı" }, { status: 404 });
 
-  const newCredits = type === "add"
-    ? firm.credits + amount
-    : Math.max(0, firm.credits - amount);
+  const delta = type === "add" ? amount : -amount;
+  const newCredits = Math.max(0, firm.credits + delta);
 
   const { data: updated, error: updateErr } = await supabase
     .from("nextaura_firms")
@@ -61,5 +60,16 @@ export async function POST(req: Request, { params }: Ctx) {
     .single();
 
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
+
+  // Ledger kaydı
+  await supabase.from("nextaura_credit_ledger").insert({
+    firm_id: id,
+    amount: delta,
+    type: type === "add" ? "load" : "adjust",
+    description,
+    balance_after: updated.credits,
+    actor: user.id,
+  });
+
   return NextResponse.json({ ok: true, credits: updated.credits });
 }

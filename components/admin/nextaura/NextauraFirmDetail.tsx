@@ -27,6 +27,16 @@ type Session = {
   created_at: string;
 };
 
+type LedgerEntry = {
+  id: string;
+  amount: number;
+  type: string;
+  description: string | null;
+  balance_after: number;
+  actor: string | null;
+  created_at: string;
+};
+
 const STATUS_LABEL: Record<string, string> = {
   active: "Aktif",
   ordered: "Sipariş",
@@ -45,6 +55,7 @@ export function NextauraFirmDetail({ firmId }: { firmId: string }) {
   const router = useRouter();
   const [firm, setFirm] = useState<Firm | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,10 +72,11 @@ export function NextauraFirmDetail({ firmId }: { firmId: string }) {
   const load = useCallback(async () => {
     setError(null);
     const res = await fetch(`/api/admin/nextaura/${firmId}`, { credentials: "include" });
-    const json = await res.json() as { firm?: Firm; sessions?: Session[]; error?: string };
+    const json = await res.json() as { firm?: Firm; sessions?: Session[]; ledger?: LedgerEntry[]; error?: string };
     if (!res.ok) { setError(json.error ?? `HTTP ${res.status}`); return; }
     setFirm(json.firm ?? null);
     setSessions(json.sessions ?? []);
+    setLedger(json.ledger ?? []);
     if (json.firm) {
       setEditName(json.firm.name);
       setEditColor(json.firm.theme_color);
@@ -261,6 +273,54 @@ export function NextauraFirmDetail({ firmId }: { firmId: string }) {
                       {s.deposit_amount != null ? `₺${s.deposit_amount}` : "—"}
                     </td>
                     <td className="py-2 text-zinc-500 text-xs">{dateFmt(s.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Kredi Geçmişi */}
+      <div className="rounded-xl border border-zinc-700 bg-zinc-900 p-5 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-white">Kredi Geçmişi</h2>
+          <span className="text-xs text-zinc-500">{ledger.length} kayıt</span>
+        </div>
+
+        {ledger.length === 0 ? (
+          <p className="text-xs text-zinc-500">Henüz hareket yok.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-zinc-500 border-b border-zinc-800">
+                  <th className="pb-2 pr-4">Tür</th>
+                  <th className="pb-2 pr-4">Miktar</th>
+                  <th className="pb-2 pr-4">Bakiye</th>
+                  <th className="pb-2 pr-4">Açıklama</th>
+                  <th className="pb-2">Tarih</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ledger.map((e) => (
+                  <tr key={e.id} className="border-b border-zinc-800/60">
+                    <td className="py-2 pr-4">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                        e.type === "load" ? "bg-emerald-900 text-emerald-300" :
+                        e.type === "spend" ? "bg-zinc-800 text-zinc-400" :
+                        e.type === "refund" ? "bg-blue-900 text-blue-300" :
+                        "bg-amber-900 text-amber-300"
+                      }`}>
+                        {e.type === "load" ? "Yükleme" : e.type === "spend" ? "Harcama" : e.type === "refund" ? "İade" : "Düzeltme"}
+                      </span>
+                    </td>
+                    <td className={`py-2 pr-4 font-mono font-bold ${e.amount > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                      {e.amount > 0 ? `+${e.amount}` : e.amount}
+                    </td>
+                    <td className="py-2 pr-4 text-zinc-300 font-mono text-xs">{e.balance_after}</td>
+                    <td className="py-2 pr-4 text-zinc-400 text-xs max-w-xs truncate">{e.description ?? "—"}</td>
+                    <td className="py-2 text-zinc-500 text-xs whitespace-nowrap">{dateFmt(e.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
