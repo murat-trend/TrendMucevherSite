@@ -119,11 +119,7 @@ export async function POST(req: Request) {
 
     const meshyData = await meshyRes.json().catch(() => ({}));
     if (!meshyRes.ok) {
-      const message =
-        (meshyData as { message?: string; error?: string })?.message ||
-        (meshyData as { message?: string; error?: string })?.error ||
-        "Meshy gorevi olusturulamadi.";
-      return NextResponse.json({ error: message }, { status: meshyRes.status || 500 });
+      return NextResponse.json({ error: "3D model oluşturulamadı. Lütfen daha sonra tekrar deneyin." }, { status: 503 });
     }
 
     const normalized = meshyData as {
