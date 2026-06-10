@@ -32,6 +32,7 @@
     "@gltf-transform/functions": "^4.3.0",
     "@google/genai": "^2.6.0",
     "@imgly/background-removal": "^1.7.0",
+    "@mediapipe/tasks-vision": "^0.10.9",
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.101.0",
     "@tiptap/extension-image": "^3.23.2",
