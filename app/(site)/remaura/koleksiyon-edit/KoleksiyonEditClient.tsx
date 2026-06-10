@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getOrPickDir } from "@/lib/remaura/dir-handle";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -984,17 +985,8 @@ export function KoleksiyonEditClient() {
 
       const filename = filenames[index] ?? `remaura-${index + 1}.png`;
 
-      // showDirectoryPicker kullanıcı tıklamasından hemen sonra çağrılmalı (browser güvenlik kuralı)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let dirHandle: any = null;
-      if (typeof window !== "undefined" && "showDirectoryPicker" in window) {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          dirHandle = await (window as any).showDirectoryPicker();
-        } catch (e) {
-          if ((e as { name?: string })?.name === "AbortError") return;
-        }
-      }
+      const dirHandle = await getOrPickDir("remaura-images-dir");
+      if (dirHandle === null && typeof window !== "undefined" && "showDirectoryPicker" in window) return;
 
       // Klasör seçildikten sonra fetch + canvas + watermark
       const fetchRes = await fetch(src);

@@ -9,6 +9,7 @@ import {
   useRemauraBillingModal,
 } from "@/components/remaura/RemauraBillingModalProvider";
 import { useRemauraCreditsCheck } from "@/hooks/useRemauraCreditsCheck";
+import { getOrPickDir } from "@/lib/remaura/dir-handle";
 
 type DownloadModelFormat = "glb" | "stl";
 type MeshGenerationMode = "production" | "visual";
@@ -65,16 +66,6 @@ export function Remaura3DAISection() {
   }, []);
 
   useEffect(() => {
-    const gorsel = localStorage.getItem("remaura_3d_gorsel");
-    if (!gorsel) return;
-    localStorage.removeItem("remaura_3d_gorsel");
-    setUploadedImage(gorsel);
-    cleanedImageBlobRef.current = null;
-    setCleanedPreviewUrl(null);
-    resetMeshState();
-  }, [resetMeshState]);
-
-  useEffect(() => {
     let cancelled = false;
     void (async () => {
       const ok = await checkCredits(1, () => {}, () => {});
@@ -93,6 +84,16 @@ export function Remaura3DAISection() {
     setDownloadFormat("glb");
     setMeshFileCode(null);
   }, []);
+
+  useEffect(() => {
+    const gorsel = localStorage.getItem("remaura_3d_gorsel");
+    if (!gorsel) return;
+    localStorage.removeItem("remaura_3d_gorsel");
+    setUploadedImage(gorsel);
+    cleanedImageBlobRef.current = null;
+    setCleanedPreviewUrl(null);
+    resetMeshState();
+  }, [resetMeshState]);
 
   const handleFile = useCallback((file: File) => {
     if (!file?.type.startsWith("image/")) return;
@@ -241,15 +242,25 @@ export function Remaura3DAISection() {
           setMesh3DError("Model dosyası indirilemedi veya geçersiz.");
           return;
         }
-        const objectUrl = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = objectUrl;
         const code = meshFileCode ?? generateMeshFileCode();
-        anchor.download = `remaura-ai-${code}.${downloadFormat}`;
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+        const filename = `remaura-ai-${code}.${downloadFormat}`;
+
+        const dirHandle = await getOrPickDir("remaura-3d-dir");
+        if (dirHandle) {
+          const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+        } else {
+          const objectUrl = URL.createObjectURL(blob);
+          const anchor = document.createElement("a");
+          anchor.href = objectUrl;
+          anchor.download = filename;
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+        }
       } catch (e) {
         setMesh3DError(e instanceof Error ? e.message : "İndirme başarısız.");
       } finally {
