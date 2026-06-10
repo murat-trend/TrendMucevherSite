@@ -50,7 +50,14 @@ export async function GET(_req: Request, { params }: Ctx) {
     .order("created_at", { ascending: false })
     .limit(50);
 
-  return NextResponse.json({ firm, sessions: sessions ?? [] });
+  const { data: ledger } = await result.supabase
+    .from("nextaura_credit_ledger")
+    .select("id, amount, type, description, balance_after, actor, created_at")
+    .eq("firm_id", id)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  return NextResponse.json({ firm, sessions: sessions ?? [], ledger: ledger ?? [] });
 }
 
 export async function PATCH(req: Request, { params }: Ctx) {

@@ -1,6 +1,7 @@
 import { loadEnvConfig } from "@next/env";
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 loadEnvConfig(process.cwd());
@@ -73,11 +74,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Görsel üretilemedi." }, { status: 502 });
     }
 
-    // Kredi düş
-    await supabase
-      .from("nextaura_firms")
-      .update({ credits: firm.credits - 1 })
-      .eq("id", firmId);
+    // Kredi düş + ledger kaydı (service role ile — RLS bypass)
+    const svcUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+    const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+    const newCredits = firm.credits - 1;
+
+    if (svcUrl && svcKey) {
+      const svc = createServiceClient(svcUrl, svcKey);
+      await svc.from("nextaura_firms").update({ credits: newCredits }).eq("id", firmId);
+      await svc.from("nextaura_credit_ledger").insert({
+        firm_id: firmId,
+        amount: -1,
+        type: "spend",
+        description: `Tasarım üretimi — "${prompt.slice(0, 60)}${prompt.length > 60 ? "…" : ""}"`,
+        balance_after: newCredits,
+        actor: "system",
+      });
+    } else {
+      await supabase.from("nextaura_firms").update({ credits: newCredits }).eq("id", firmId);
+    }
 
     return NextResponse.json({ images, optimizedPrompt });
   } catch (e: unknown) {
