@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useMemo } from "react";
 import type { Koleksiyon, StilKarti } from "./page";
+import { applyWatermark } from "@/lib/remaura/apply-rem-watermark";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -96,8 +97,18 @@ function EmptyState({ icon, title, sub }: { icon: string; title: string; sub: st
 
 async function handleIndir(gorselUrl: string, adi: string | null) {
   try {
-    const res = await fetch(gorselUrl);
-    const blob = await res.blob();
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; img.src = gorselUrl; });
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(img, 0, 0);
+    applyWatermark(canvas);
+    const blob = await new Promise<Blob>((res, rej) =>
+      canvas.toBlob((b) => b ? res(b) : rej(new Error("toBlob")), "image/png"),
+    );
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

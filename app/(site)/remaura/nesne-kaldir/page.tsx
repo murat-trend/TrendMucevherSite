@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { applyWatermark } from "@/lib/remaura/apply-rem-watermark";
 import { createClient } from "@/utils/supabase/client";
 import {
   RemauraBillingModalProvider,
@@ -426,12 +427,21 @@ function NesneKaldirPageContent() {
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!result) return;
-    const a = document.createElement("a");
-    a.href = result;
-    a.download = "nesne-kaldirildi.png";
-    a.click();
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; img.src = result; });
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+    canvas.getContext("2d")!.drawImage(img, 0, 0);
+    applyWatermark(canvas);
+    const blob = await new Promise<Blob>((res, rej) =>
+      canvas.toBlob((b) => b ? res(b) : rej(new Error("toBlob")), "image/png"),
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "nesne-kaldirildi.png"; a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleNetlestir = async () => {
@@ -476,12 +486,21 @@ function NesneKaldirPageContent() {
     }
   };
 
-  const handleSharpDownload = () => {
+  const handleSharpDownload = async () => {
     if (!sharpResult) return;
-    const a = document.createElement("a");
-    a.href = sharpResult;
-    a.download = "netlestirildi.png";
-    a.click();
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; img.src = sharpResult; });
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+    canvas.getContext("2d")!.drawImage(img, 0, 0);
+    applyWatermark(canvas);
+    const blob = await new Promise<Blob>((res, rej) =>
+      canvas.toBlob((b) => b ? res(b) : rej(new Error("toBlob")), "image/png"),
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "netlestirildi.png"; a.click();
+    URL.revokeObjectURL(url);
   };
 
   const cursorClass = tool === "eraser" ? "cursor-alias" : "cursor-crosshair";

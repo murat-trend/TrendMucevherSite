@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
+import { applyWatermark } from "@/lib/remaura/apply-rem-watermark";
 
 // Referans görseli sıkıştır (max 1024px, JPEG 0.88)
 function compressImage(dataUrl: string): Promise<string> {
@@ -243,10 +244,24 @@ export function IsimKolyeClient() {
   }
 
   async function handleDownload(src: string, idx: number) {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; img.src = src; });
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(img, 0, 0);
+    applyWatermark(canvas);
+    const blob = await new Promise<Blob>((res, rej) =>
+      canvas.toBlob((b) => b ? res(b) : rej(new Error("toBlob")), "image/png"),
+    );
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = src;
+    a.href = url;
     a.download = `isim-kolye-${text}-${idx + 1}.png`;
     a.click();
+    URL.revokeObjectURL(url);
   }
 
   async function handleDownloadAll() {

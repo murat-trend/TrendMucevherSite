@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, Suspense } from "react";
+import { applyWatermark } from "@/lib/remaura/apply-rem-watermark";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import {
@@ -262,18 +263,46 @@ function ShareButtons({ resultBlob, resultUrl, t }: {
   resultBlob: Blob | null; resultUrl: string; t: typeof T["tr"];
 }) {
   const hasNativeShare = typeof navigator !== "undefined" && "share" in navigator;
+  // Watermark eklenmiş blob üretir (paylaşım ve indirme için ortak)
+  const buildWatermarkedBlob = async (): Promise<Blob | null> => {
+    if (!resultBlob) return null;
+    const objectUrl = URL.createObjectURL(resultBlob);
+    const img = new Image();
+    await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; img.src = objectUrl; });
+    URL.revokeObjectURL(objectUrl);
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+    canvas.getContext("2d")!.drawImage(img, 0, 0);
+    applyWatermark(canvas);
+    return new Promise<Blob>((res, rej) =>
+      canvas.toBlob((b) => b ? res(b) : rej(new Error("toBlob")), "image/jpeg", 0.92),
+    );
+  };
+
   const handleNativeShare = async () => {
     if (!resultBlob) return;
     try {
-      const file = new File([resultBlob], "uzerimde-gor.png", { type: "image/png" });
+      const blob = await buildWatermarkedBlob();
+      if (!blob) return;
+      const file = new File([blob], "uzerimde-gor.jpg", { type: "image/jpeg" });
       await navigator.share({ title: "Yüzüğü parmağımda denedim — Remaura", text: "Bu yüzüğü parmağımda nasıl görüneceğini gördüm! 💍", files: [file] });
     } catch { /* iptal */ }
   };
-  const handleWhatsApp = () => {
-    const a = document.createElement("a"); a.href = resultUrl; a.download = "uzerimde-gor.png"; a.click();
+  const handleWhatsApp = async () => {
+    const blob = await buildWatermarkedBlob();
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "uzerimde-gor.jpg"; a.click();
+    URL.revokeObjectURL(url);
     setTimeout(() => window.open("https://wa.me/?text=" + encodeURIComponent("Bu yüzüğü parmağımda denedim! 💍 trendmucevher.com"), "_blank"), 800);
   };
-  const handleDownload = () => { const a = document.createElement("a"); a.href = resultUrl; a.download = "uzerimde-gor.png"; a.click(); };
+  const handleDownload = async () => {
+    const blob = await buildWatermarkedBlob();
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "uzerimde-gor.jpg"; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="flex flex-wrap gap-2 mt-4">
