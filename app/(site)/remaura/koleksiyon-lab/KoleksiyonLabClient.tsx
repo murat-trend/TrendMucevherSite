@@ -21,7 +21,27 @@ const MODLAR = [
 
 type Mode = (typeof MODLAR)[number]["id"];
 
-type ResultMeta = { mode: string; refCount: number; refMaxPx: number; refQuality: number; model: string };
+// Yaratıcılık seviyeleri (0-4) — DNA sabit, form/kompozisyon serbestleşir
+const YARATICILIK = ["Birebir", "Hafif", "Dengeli", "Cesur", "Editöryel"] as const;
+// İlham dili (opsiyonel) — yalnızca form/kompozisyona uygulanır
+const ILHAM_SECENEKLERI = [
+  "Art Nouveau",
+  "Art Deco",
+  "Barok",
+  "Osmanlı / Klasik",
+  "Modern Minimal",
+  "Organik Doğa",
+  "Geometrik Avangart",
+] as const;
+
+type ResultMeta = {
+  mode: string;
+  refCount: number;
+  refMaxPx: number;
+  refQuality: number;
+  creativity?: number;
+  model: string;
+};
 type ResultBlock = { label: string; images: string[]; meta?: ResultMeta };
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -43,6 +63,8 @@ export function KoleksiyonLabClient() {
   const [mode, setMode] = useState<Mode>("direct");
   const [refMaxPx, setRefMaxPx] = useState<number>(1024);
   const [refQuality, setRefQuality] = useState<number>(90);
+  const [creativity, setCreativity] = useState<number>(0);
+  const [ilham, setIlham] = useState<string>("");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +99,8 @@ export function KoleksiyonLabClient() {
           mode: apiMode,
           refMaxPx,
           refQuality,
+          creativity,
+          ilham,
         }),
       });
       const data = (await res.json()) as { images?: string[]; meta?: ResultMeta; error?: string };
@@ -84,7 +108,7 @@ export function KoleksiyonLabClient() {
       const label = apiMode === "direct" ? "Doğrudan (yeni)" : "Multi-turn (eski)";
       return { label, images: data.images, meta: data.meta };
     },
-    [refs, takiTipi, metalRengi, tema, formKarakterleri, numImages, refMaxPx, refQuality],
+    [refs, takiTipi, metalRengi, tema, formKarakterleri, numImages, refMaxPx, refQuality, creativity, ilham],
   );
 
   const onGenerate = useCallback(async () => {
@@ -288,6 +312,41 @@ export function KoleksiyonLabClient() {
             </div>
           </div>
 
+          {/* ── Yaratıcılık paneli ── */}
+          <div className="space-y-3 rounded-lg border border-fuchsia-700/50 bg-fuchsia-900/10 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-fuchsia-300/80">Yaratıcılık</p>
+            <p className="text-xs text-zinc-500">
+              DNA (metal · teknik · motif · taş) sabit kalır; yalnızca <strong>silüet ve kompozisyon</strong> serbestleşir.
+            </p>
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                Seviye: <span className="text-fuchsia-300">{YARATICILIK[creativity]}</span>
+              </label>
+              <input type="range" min={0} max={4} value={creativity}
+                onChange={(e) => setCreativity(Number(e.target.value))}
+                className="w-full accent-fuchsia-400" />
+              <div className="mt-1 flex justify-between text-[10px] text-zinc-600">
+                {YARATICILIK.map((y) => (<span key={y}>{y}</span>))}
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">İlham dili (opsiyonel)</label>
+              <div className="flex flex-wrap gap-1.5">
+                {ILHAM_SECENEKLERI.map((opt) => (
+                  <button key={opt}
+                    onClick={() => setIlham((prev) => (prev === opt ? "" : opt))}
+                    className={`rounded-full border px-2.5 py-1 text-xs ${
+                      ilham === opt
+                        ? "border-fuchsia-400 bg-fuchsia-400/20 text-fuchsia-200"
+                        : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                    }`}>
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           <button
             onClick={onGenerate}
             disabled={loading || refs.length === 0}
@@ -318,7 +377,7 @@ export function KoleksiyonLabClient() {
                   <span className="text-sm font-semibold">{block.label}</span>
                   {block.meta && (
                     <span className="text-xs text-zinc-500">
-                      {block.meta.refCount} ref · {block.meta.refMaxPx}px · q{block.meta.refQuality}
+                      {block.meta.refCount} ref · {block.meta.refMaxPx}px · q{block.meta.refQuality}{typeof block.meta.creativity === "number" ? ` · ${YARATICILIK[block.meta.creativity]}` : ""}
                     </span>
                   )}
                 </div>

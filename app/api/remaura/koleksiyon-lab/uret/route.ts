@@ -56,13 +56,23 @@ const KAMERA: Record<string, string> = {
 };
 
 const FORM_EN: Record<string, string> = {
-  "İnce & Zarif": "thin and delicate",
-  "Geometrik": "geometric",
-  "Organik": "organic",
-  "Filigran": "filigree",
-  "Kabartmalı": "embossed",
-  "Asimetrik": "asymmetric",
+  "İnce & Zarif": "thin, delicate and refined lines",
+  "Geometrik": "geometric with clean architectural lines",
+  "Organik": "organic, flowing nature-inspired forms",
+  "Filigran": "intricate filigree wirework",
+  "Kabartmalı": "sculptural embossed relief",
+  "Asimetrik": "bold asymmetric composition",
 };
+
+// ─── Yaratıcılık (İYİLEŞTİRME 4: form/kompozisyona hayal gücü) ──────────────────
+// DNA kilitli kalır (metal/teknik/motif/taş); yalnızca silüet ve kompozisyon serbestleşir.
+const CREATIVITY_CLAUSES: string[] = [
+  "", // 0 — Birebir: ek yaratıcılık yok
+  "Allow subtle, tasteful variation in the silhouette while staying close to the reference.",
+  "Reinterpret the form with balanced creative freedom — vary silhouette, proportions and composition — while keeping the exact metal, technique, motifs and stones of the reference.",
+  "Be boldly creative and original with the form, silhouette and composition. Surprise with a fresh design, but keep the EXACT decorative DNA (metal finish, surface technique, motifs, stone treatment) unchanged.",
+  "Push this into an imaginative, editorial, high-jewelry concept — dramatic silhouette and unexpected composition — while strictly preserving the reference's metal, technique, motifs and stone treatment.",
+];
 
 // ─── Watermark kırpma (production ile aynı) ─────────────────────────────────────
 
@@ -192,6 +202,9 @@ export async function POST(req: Request) {
       // İYİLEŞTİRME 1: ayarlanabilir referans çözünürlüğü (A/B için)
       refMaxPx?: number;
       refQuality?: number;
+      // İYİLEŞTİRME 4: yaratıcılık seviyesi (0-4) + ilham dili (ops.)
+      creativity?: number;
+      ilham?: string;
     };
 
     const {
@@ -206,6 +219,8 @@ export async function POST(req: Request) {
       mode = "direct",
       refMaxPx = DEFAULT_REF_MAX_PX,
       refQuality = DEFAULT_REF_QUALITY,
+      creativity = 0,
+      ilham,
     } = body;
 
     // Referansları topla (çoklu öncelikli, tek görsel geriye dönük destek)
@@ -253,12 +268,20 @@ export async function POST(req: Request) {
         ? `You are given ${refs.length} reference images of the SAME jewelry design from different views.`
         : `You are given a reference image of a jewelry design.`;
 
+    // Yaratıcılık: DNA kilidini bozmadan forma hayal gücü
+    const creativityClause = CREATIVITY_CLAUSES[Math.max(0, Math.min(Math.round(creativity), 4))] ?? "";
+    const ilhamEn = typeof ilham === "string" ? ilham.trim() : "";
+
     const generatePrompt = [
       `${refClause} Replicate the EXACT decorative style shown — metal finish, surface technique, motifs and stones — onto a brand new ${metalEn} ${takiEn}.`,
       `The jewelry type must be: ${takiEn}. Do not generate any other jewelry type.`,
       `The new piece must look like it belongs to the exact same collection as the reference.`,
       temaEn ? `Theme: ${temaEn}.` : "",
       formEn ? `Form: ${formEn}.` : "",
+      creativityClause,
+      ilhamEn
+        ? `Draw creative inspiration from a ${ilhamEn} design language, applied to form and composition only — never altering the locked metal, technique, motifs or stones.`
+        : "",
       `Camera: ${kamera}.`,
       `White studio background. No hands, no model. Single centered piece. Professional jewelry photography.`,
     ]
@@ -329,7 +352,14 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       images,
-      meta: { mode, refCount: refs.length, refMaxPx: safeMaxPx, refQuality: safeQuality, model: MODEL },
+      meta: {
+        mode,
+        refCount: refs.length,
+        refMaxPx: safeMaxPx,
+        refQuality: safeQuality,
+        creativity: Math.max(0, Math.min(Math.round(creativity), 4)),
+        model: MODEL,
+      },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Bilinmeyen hata";
