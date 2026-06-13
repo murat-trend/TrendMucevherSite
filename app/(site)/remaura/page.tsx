@@ -156,6 +156,24 @@ export default async function RemauraPage() {
       >
         İsim Kolye
       </Link>
+      <Link
+        href="/remaura/koleksiyon-lab"
+        style={{
+          borderRadius: "9999px",
+          border: "1px solid rgba(251,191,36,0.5)",
+          background: "rgba(251,191,36,0.1)",
+          padding: "8px 16px",
+          fontSize: 10,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: "0.2em",
+          color: "#fbbf24",
+          textDecoration: "none",
+          whiteSpace: "nowrap",
+        }}
+      >
+        Koleksiyon Lab
+      </Link>
     </>
   ) : null;
 
