@@ -1105,24 +1105,42 @@ export function KoleksiyonEditClient() {
         <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.4em", color: ACCENT }}>Remaura</span>
         <span style={{ color: "rgba(255,255,255,0.2)" }}>/</span>
         <span style={{ fontSize: 10, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.35)" }}>{ke.breadcrumb}</span>
-        <Link
-          href="/remaura/galeri"
-          style={{
-            marginLeft: "auto",
-            fontSize: 9,
-            fontWeight: 700,
-            textTransform: "uppercase",
-            letterSpacing: "0.25em",
-            color: ACCENT_LIGHT,
-            textDecoration: "none",
-            padding: "5px 14px",
-            border: `1px solid ${ACCENT}`,
-            borderRadius: 5,
-            background: "rgba(183,110,121,0.1)",
-          }}
-        >
-          Galeri →
-        </Link>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <Link
+            href="/remaura/koleksiyon-lab"
+            style={{
+              fontSize: 9,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.25em",
+              color: "#fbbf24",
+              textDecoration: "none",
+              padding: "5px 14px",
+              border: "1px solid rgba(251,191,36,0.5)",
+              borderRadius: 5,
+              background: "rgba(251,191,36,0.1)",
+            }}
+          >
+            Lab →
+          </Link>
+          <Link
+            href="/remaura/galeri"
+            style={{
+              fontSize: 9,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.25em",
+              color: ACCENT_LIGHT,
+              textDecoration: "none",
+              padding: "5px 14px",
+              border: `1px solid ${ACCENT}`,
+              borderRadius: 5,
+              background: "rgba(183,110,121,0.1)",
+            }}
+          >
+            Galeri →
+          </Link>
+        </div>
       </div>
 
       {/* Geçmiş paneli */}
