@@ -329,6 +329,7 @@ export const ruMessages = {
     studio: "Студия",
     kolleksiyonEdit: "Редактор коллекций",
     isimKolye: "Подвеска с именем/буквой",
+    koleksiyonLab: "Лаборатория коллекций",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",

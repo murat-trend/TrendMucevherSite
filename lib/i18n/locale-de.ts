@@ -329,6 +329,7 @@ export const deMessages = {
     studio: "Studio",
     kolleksiyonEdit: "Kollektion bearbeiten",
     isimKolye: "Name & Buchstabe Kette",
+    koleksiyonLab: "Kollektion Lab",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",
