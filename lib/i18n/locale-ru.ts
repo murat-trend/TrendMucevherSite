@@ -330,6 +330,7 @@ export const ruMessages = {
     kolleksiyonEdit: "Редактор коллекций",
     isimKolye: "Подвеска с именем/буквой",
     koleksiyonLab: "Лаборатория коллекций",
+    sosyalBoyut: "Соцсети размер",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",

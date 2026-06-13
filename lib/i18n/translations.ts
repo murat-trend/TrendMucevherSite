@@ -335,6 +335,7 @@ export const translations = {
       kolleksiyonEdit: "Koleksiyon Edit",
       isimKolye: "İsim & Harf Kolye",
       koleksiyonLab: "Koleksiyon Lab",
+      sosyalBoyut: "Sosyal Boyutlayıcı",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",
@@ -1143,6 +1144,7 @@ export const translations = {
       kolleksiyonEdit: "Collection Edit",
       isimKolye: "Name & Letter Necklace",
       koleksiyonLab: "Collection Lab",
+      sosyalBoyut: "Social Resizer",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",

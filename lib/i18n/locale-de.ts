@@ -330,6 +330,7 @@ export const deMessages = {
     kolleksiyonEdit: "Kollektion bearbeiten",
     isimKolye: "Name & Buchstabe Kette",
     koleksiyonLab: "Kollektion Lab",
+    sosyalBoyut: "Social Bildgröße",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",
