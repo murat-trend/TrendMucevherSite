@@ -44,6 +44,28 @@ Kullanım: `bg-background`, `text-foreground`, `text-muted`, `bg-accent`,
 4. Kartlar `rounded-xl`/`rounded-2xl`. Neon/teknoloji estetiğinden kaçın; dil
    **sıcak lüks** (fildişi + antika altın + kömür).
 
+## Remaura araçları renk paleti
+
+Remaura sayfaları site genelinin altın `accent` token'ını değil, aşağıdaki
+**gül/pembe** renk ailesini hardcode kullanır. Yeni Remaura sayfası/bileşeni
+yazarken bu renklere uyu:
+
+| Rol | Hex | Kullanım |
+|---|---|---|
+| Rose gold — birincil vurgu | `#b76e79` | badge, icon bg, border |
+| Terracotta — sıcak ton | `#c69575` | border, icon, subtle bg |
+| Şeftali — hafif ton | `#c8956c` | gradient, alt vurgu |
+| Derin gül — CTA | `#c4838b` → `#a65f69` | buton gradient |
+| Koyu pembe — güçlü vurgu | `#b85070` | link, etiket |
+| Krem bej — metin üzeri | `#c9a88a` | açıklama metni, ikon tonu |
+
+Zemin: Remaura sayfaları `bg-background` yerine `#07080a` / `#0a0b0e`
+(derin siyah) ve `border-white/[0.06]` gibi düşük-opacity beyaz kenarlıklar
+kullanır — `border-border` token'ından daha koyu.
+
+**Kural:** Remaura araç sayfası = gül/pembe palette + derin siyah zemin.
+Ana site sayfası = altın `accent` token + `--background` zemin.
+
 ## Remaura araçları (süper-admin, izole)
 - `/remaura/koleksiyon-lab` — koleksiyon tutarlılığı deney alanı (Gemini).
 - `/remaura/sosyal-boyut` — sosyal medya format motoru. Motor:
