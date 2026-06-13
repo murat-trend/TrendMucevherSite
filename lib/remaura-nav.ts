@@ -13,6 +13,7 @@ export type RemauraNavKey =
   | 'studio'
   | 'kolleksiyonEdit'
   | 'isimKolye'
+  | 'koleksiyonLab'
 
 export type RemauraCategory = {
   id: string
@@ -134,6 +135,15 @@ export const REMAURA_CATEGORIES: RemauraCategory[] = [
     labelKey: 'isimKolye',
     icon: '✦',
     path: '/remaura/isim-kolye',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'koleksiyon-lab',
+    labelKey: 'koleksiyonLab',
+    icon: '🧪',
+    path: '/remaura/koleksiyon-lab',
     accessType: 'restricted',
     isSuperAdminOnly: true,
     isActive: true,
