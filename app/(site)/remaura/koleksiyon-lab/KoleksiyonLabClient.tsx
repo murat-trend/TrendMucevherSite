@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { applyWatermark } from "@/lib/remaura/apply-rem-watermark";
 
 /**
  * KOLEKSİYON LAB — izole deney arayüzü.
@@ -51,6 +52,24 @@ function readFileAsDataUrl(file: File): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+function downloadWithWatermark(src: string, filename: string) {
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(img, 0, 0);
+    applyWatermark(canvas);
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL("image/jpeg", 0.92);
+    a.download = filename;
+    a.click();
+  };
+  img.src = src;
 }
 
 export function KoleksiyonLabClient() {
@@ -383,14 +402,18 @@ export function KoleksiyonLabClient() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {block.images.map((img, ii) => (
-                    <a key={ii} href={img} download={`koleksiyon-lab-${bi}-${ii}.jpg`} className="block">
+                    <button
+                      key={ii}
+                      onClick={() => downloadWithWatermark(img, `koleksiyon-lab-${bi}-${ii}.jpg`)}
+                      className="block w-full"
+                    >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={img}
                         alt={`sonuç-${bi}-${ii}`}
                         className="aspect-square w-full rounded-lg border border-zinc-700 object-cover"
                       />
-                    </a>
+                    </button>
                   ))}
                 </div>
               </div>
