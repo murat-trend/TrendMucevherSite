@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import { applyWatermark } from "@/lib/remaura/apply-rem-watermark";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * KOLEKSİYON LAB — izole deney arayüzü.
@@ -54,24 +53,6 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-function downloadWithWatermark(src: string, filename: string) {
-  const img = new Image();
-  img.onload = () => {
-    const canvas = document.createElement("canvas");
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.drawImage(img, 0, 0);
-    applyWatermark(canvas);
-    const a = document.createElement("a");
-    a.href = canvas.toDataURL("image/jpeg", 0.92);
-    a.download = filename;
-    a.click();
-  };
-  img.src = src;
-}
-
 export function KoleksiyonLabClient() {
   const [refs, setRefs] = useState<string[]>([]);
   const [takiTipi, setTakiTipi] = useState<string>("Yüzük");
@@ -84,6 +65,11 @@ export function KoleksiyonLabClient() {
   const [refQuality, setRefQuality] = useState<number>(90);
   const [creativity, setCreativity] = useState<number>(0);
   const [ilham, setIlham] = useState<string>("");
+  const [vivid, setVivid] = useState<boolean>(false);
+  // Kaydetme durumu (blok-görsel anahtarıyla): idle/saving/done/error
+  const [saved, setSaved] = useState<Record<string, "saving" | "done" | "error">>({});
+  const [upscaling, setUpscaling] = useState<Record<string, boolean>>({});
+  const [lightbox, setLightbox] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,6 +106,7 @@ export function KoleksiyonLabClient() {
           refQuality,
           creativity,
           ilham,
+          vivid,
         }),
       });
       const data = (await res.json()) as { images?: string[]; meta?: ResultMeta; error?: string };
@@ -127,8 +114,70 @@ export function KoleksiyonLabClient() {
       const label = apiMode === "direct" ? "Doğrudan (yeni)" : "Multi-turn (eski)";
       return { label, images: data.images, meta: data.meta };
     },
-    [refs, takiTipi, metalRengi, tema, formKarakterleri, numImages, refMaxPx, refQuality, creativity, ilham],
+    [refs, takiTipi, metalRengi, tema, formKarakterleri, numImages, refMaxPx, refQuality, creativity, ilham, vivid],
   );
+
+  // Galeriye kaydet — mevcut koleksiyon-edit/kaydet endpoint'ini kullanır (R2 + koleksiyonlar tablosu)
+  const saveToGallery = useCallback(
+    async (image: string, key: string) => {
+      setSaved((p) => ({ ...p, [key]: "saving" }));
+      try {
+        const res = await fetch("/api/remaura/koleksiyon-edit/kaydet", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ gorselUrl: image, tip: takiTipi, tema, metal: metalRengi }),
+        });
+        if (!res.ok) throw new Error("save_failed");
+        setSaved((p) => ({ ...p, [key]: "done" }));
+      } catch {
+        setSaved((p) => ({ ...p, [key]: "error" }));
+      }
+    },
+    [takiTipi, tema, metalRengi],
+  );
+
+  // Koleksiyon Edit'te aç — mevcut localStorage köprüsünü kullanır (kalite/arka plan/stil kaydı için)
+  const openInEdit = useCallback((image: string) => {
+    try {
+      localStorage.setItem("koleksiyon_edit_gorsel", image);
+    } catch {
+      /* yok say */
+    }
+    window.location.assign("/remaura/koleksiyon-edit");
+  }, []);
+
+  // Kaliteyi yükselt — SADIK (conservative upscale, detay uydurmaz). Görseli yerinde değiştirir.
+  const upscaleImage = useCallback(async (bi: number, ii: number, image: string) => {
+    const key = `${bi}-${ii}`;
+    setUpscaling((p) => ({ ...p, [key]: true }));
+    try {
+      const res = await fetch("/api/remaura/koleksiyon-edit/stability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "upscale", image }),
+      });
+      const data = (await res.json()) as { image?: string; error?: string };
+      if (!res.ok || !data.image) throw new Error(data.error ?? "upscale başarısız");
+      setResults((prev) =>
+        prev.map((blk, b) =>
+          b === bi ? { ...blk, images: blk.images.map((im, i) => (i === ii ? data.image! : im)) } : blk,
+        ),
+      );
+    } catch {
+      /* sessiz — kullanıcı tekrar deneyebilir */
+    } finally {
+      setUpscaling((p) => ({ ...p, [key]: false }));
+    }
+  }, []);
+
+  // Lightbox: Esc ile kapat
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightbox(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const onGenerate = useCallback(async () => {
     if (refs.length === 0) {
@@ -337,33 +386,58 @@ export function KoleksiyonLabClient() {
             <p className="text-xs text-zinc-500">
               DNA (metal · teknik · motif · taş) sabit kalır; yalnızca <strong>silüet ve kompozisyon</strong> serbestleşir.
             </p>
+
             <div>
               <label className="mb-1 block text-sm font-medium">
                 Seviye: <span className="text-fuchsia-300">{YARATICILIK[creativity]}</span>
               </label>
-              <input type="range" min={0} max={4} value={creativity}
+              <input
+                type="range"
+                min={0}
+                max={4}
+                value={creativity}
                 onChange={(e) => setCreativity(Number(e.target.value))}
-                className="w-full accent-fuchsia-400" />
+                className="w-full accent-fuchsia-400"
+              />
               <div className="mt-1 flex justify-between text-[10px] text-zinc-600">
-                {YARATICILIK.map((y) => (<span key={y}>{y}</span>))}
+                {YARATICILIK.map((y) => (
+                  <span key={y}>{y}</span>
+                ))}
               </div>
             </div>
+
             <div>
               <label className="mb-1 block text-sm font-medium">İlham dili (opsiyonel)</label>
               <div className="flex flex-wrap gap-1.5">
                 {ILHAM_SECENEKLERI.map((opt) => (
-                  <button key={opt}
+                  <button
+                    key={opt}
                     onClick={() => setIlham((prev) => (prev === opt ? "" : opt))}
                     className={`rounded-full border px-2.5 py-1 text-xs ${
                       ilham === opt
                         ? "border-fuchsia-400 bg-fuchsia-400/20 text-fuchsia-200"
                         : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
-                    }`}>
+                    }`}
+                  >
                     {opt}
                   </button>
                 ))}
               </div>
+              <input
+                value={ilham}
+                onChange={(e) => setIlham(e.target.value)}
+                placeholder="veya kendi ilham cümleniz…"
+                className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
+              />
             </div>
+
+            <label className="flex cursor-pointer items-start gap-2 text-sm">
+              <input type="checkbox" checked={vivid} onChange={(e) => setVivid(e.target.checked)} className="mt-1" />
+              <span>
+                <span className="font-medium">Canlı renk (sosyal)</span>
+                <span className="block text-xs text-zinc-500">Taş renklerini canlandırır, sosyal paylaşıma uygun doygunluk</span>
+              </span>
+            </label>
           </div>
 
           <button
@@ -396,31 +470,95 @@ export function KoleksiyonLabClient() {
                   <span className="text-sm font-semibold">{block.label}</span>
                   {block.meta && (
                     <span className="text-xs text-zinc-500">
-                      {block.meta.refCount} ref · {block.meta.refMaxPx}px · q{block.meta.refQuality}{typeof block.meta.creativity === "number" ? ` · ${YARATICILIK[block.meta.creativity]}` : ""}
+                      {block.meta.refCount} ref · {block.meta.refMaxPx}px · q{block.meta.refQuality}
+                      {typeof block.meta.creativity === "number" ? ` · ${YARATICILIK[block.meta.creativity]}` : ""}
                     </span>
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  {block.images.map((img, ii) => (
-                    <button
-                      key={ii}
-                      onClick={() => downloadWithWatermark(img, `koleksiyon-lab-${bi}-${ii}.jpg`)}
-                      className="block w-full"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={img}
-                        alt={`sonuç-${bi}-${ii}`}
-                        className="aspect-square w-full rounded-lg border border-zinc-700 object-cover"
-                      />
-                    </button>
-                  ))}
+                  {block.images.map((img, ii) => {
+                    const key = `${bi}-${ii}`;
+                    const st = saved[key];
+                    return (
+                      <div key={ii} className="space-y-1.5">
+                        {/* Tıkla → büyüt (zoom); indirme ayrı butonda */}
+                        <button
+                          type="button"
+                          onClick={() => setLightbox(img)}
+                          className="relative block w-full cursor-zoom-in overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900"
+                          title="Büyütmek için tıkla"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={img} alt={`sonuç-${bi}-${ii}`} className="aspect-square w-full object-contain" />
+                          {upscaling[key] && (
+                            <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-xs text-white">
+                              Kalite yükseltiliyor…
+                            </span>
+                          )}
+                        </button>
+                        <div className="grid grid-cols-2 gap-1 text-[11px]">
+                          <a
+                            href={img}
+                            download={`koleksiyon-lab-${bi}-${ii}.jpg`}
+                            className="rounded border border-zinc-700 py-1 text-center text-zinc-300 hover:border-zinc-500"
+                          >
+                            İndir
+                          </a>
+                          <button
+                            onClick={() => upscaleImage(bi, ii, img)}
+                            disabled={upscaling[key]}
+                            className="rounded border border-amber-600/60 bg-amber-900/20 py-1 text-amber-300 disabled:opacity-60"
+                            title="Sadık kalite yükseltme (detay uydurmaz)"
+                          >
+                            {upscaling[key] ? "…" : "⤴ Kalite"}
+                          </button>
+                          <button
+                            onClick={() => saveToGallery(img, key)}
+                            disabled={st === "saving" || st === "done"}
+                            className="rounded border border-emerald-700/60 bg-emerald-900/20 py-1 text-emerald-300 disabled:opacity-60"
+                          >
+                            {st === "saving" ? "…" : st === "done" ? "✓ Kayıtlı" : st === "error" ? "Hata" : "Kaydet"}
+                          </button>
+                          <button
+                            onClick={() => openInEdit(img)}
+                            className="rounded border border-sky-700/60 bg-sky-900/20 py-1 text-sky-300 hover:border-sky-500"
+                          >
+                            Edit&apos;te aç
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
           </div>
         </div>
       </div>
+
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/90 p-6"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setLightbox(null);
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightbox}
+            alt="büyük görsel"
+            className="max-h-[82vh] max-w-[92vw] rounded-lg border border-zinc-700 bg-zinc-900 object-contain"
+          />
+          <div className="flex items-center gap-3 text-sm">
+            <a href={lightbox} download="koleksiyon-lab.jpg" className="rounded-lg bg-amber-500 px-5 py-2 font-semibold text-black">
+              ⬇ İndir
+            </a>
+            <button onClick={() => setLightbox(null)} className="rounded-lg border border-zinc-600 px-4 py-2 text-zinc-200">
+              Kapat · Esc
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -76,18 +76,24 @@ const CREATIVITY_CLAUSES: string[] = [
 
 // ─── Watermark kırpma (production ile aynı) ─────────────────────────────────────
 
-async function cropGeminiWatermark(base64: string): Promise<string> {
+async function cropGeminiWatermark(base64: string, vivid = false): Promise<string> {
   try {
     const sharp = (await import("sharp")).default;
     const buf = Buffer.from(base64, "base64");
     const meta = await sharp(buf).metadata();
     const w = meta.width ?? 1024;
     const h = meta.height ?? 1024;
-    const cropH = Math.floor(h * 0.94); // son %6 kırp
-    const result = await sharp(buf)
+    const cropH = Math.floor(h * 0.94); // son %6 kırp (watermark)
+    const STD = 1024; // standart kare çıktı — tüm görseller aynı boyut
+    let pipeline = sharp(buf)
       .extract({ left: 0, top: 0, width: w, height: cropH })
-      .jpeg({ quality: 92 })
-      .toBuffer();
+      // Beyaz dolgu ile 1024×1024'e sığdır: hiçbir şey kesilmez, boyut sabitlenir
+      .resize(STD, STD, { fit: "contain", background: { r: 255, g: 255, b: 255, alpha: 1 } });
+    if (vivid) {
+      // Sosyal paylaşım için canlı renk — taşların soluk çıkışını telafi eder
+      pipeline = pipeline.modulate({ saturation: 1.18, brightness: 1.02 }).sharpen();
+    }
+    const result = await pipeline.jpeg({ quality: 95 }).toBuffer();
     return result.toString("base64");
   } catch {
     return base64;
@@ -205,6 +211,8 @@ export async function POST(req: Request) {
       // İYİLEŞTİRME 4: yaratıcılık seviyesi (0-4) + ilham dili (ops.)
       creativity?: number;
       ilham?: string;
+      // İYİLEŞTİRME 5: sosyal paylaşım için canlı renk (taş solukluğu telafisi)
+      vivid?: boolean;
     };
 
     const {
@@ -221,6 +229,7 @@ export async function POST(req: Request) {
       refQuality = DEFAULT_REF_QUALITY,
       creativity = 0,
       ilham,
+      vivid = false,
     } = body;
 
     // Referansları topla (çoklu öncelikli, tek görsel geriye dönük destek)
@@ -282,6 +291,7 @@ export async function POST(req: Request) {
       ilhamEn
         ? `Draw creative inspiration from a ${ilhamEn} design language, applied to form and composition only — never altering the locked metal, technique, motifs or stones.`
         : "",
+      `If the design contains gemstones, render them with rich, saturated, true-to-life color and brilliant sparkle — never washed-out or pale.`,
       `Camera: ${kamera}.`,
       `White studio background. No hands, no model. Single centered piece. Professional jewelry photography.`,
     ]
@@ -326,7 +336,7 @@ export async function POST(req: Request) {
       ]).then(async (result) => {
         const dataUrl = extractImageFromResult(result as GeminiResult);
         const raw = dataUrl.split(",")[1] ?? dataUrl;
-        const watermarked = await cropGeminiWatermark(raw);
+        const watermarked = await cropGeminiWatermark(raw, vivid);
         return `data:image/jpeg;base64,${watermarked}`;
       }),
     );
