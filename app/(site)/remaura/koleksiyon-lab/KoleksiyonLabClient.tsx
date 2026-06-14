@@ -522,8 +522,9 @@ export function KoleksiyonLabClient() {
                           <button
                             onClick={() => openInEdit(img)}
                             className="rounded border border-sky-700/60 bg-sky-900/20 py-1 text-sky-300 hover:border-sky-500"
+                            title="Koleksiyon Edit'te aç: arka plan / taş kaldır, upscale, düzenle"
                           >
-                            Edit&apos;te aç
+                            ✎ Düzenle
                           </button>
                         </div>
                       </div>
