@@ -4,7 +4,6 @@ import {
   getTripoApiKey,
   tripoUploadImage,
   TRIPO_BASE,
-  TRIPO_MODEL_VERSION,
 } from "@/lib/api/tripo";
 import { requireSuperAdmin } from "@/lib/remaura/uretim-3d/auth";
 
@@ -49,8 +48,6 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         type: "image_to_model",
         file: { type, file_token: fileToken },
-        model_version: TRIPO_MODEL_VERSION,
-        orientation: "align_image",
       }),
     });
 
