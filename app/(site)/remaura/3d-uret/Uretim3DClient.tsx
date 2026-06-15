@@ -25,6 +25,7 @@ type EngineState = {
   busy: boolean;
   status: string | null;
   progress: number | null;
+  taskId: string | null;
   modelUrl: string | null;
   error: string | null;
 };
@@ -33,6 +34,7 @@ const initialEngineState: EngineState = {
   busy: false,
   status: null,
   progress: null,
+  taskId: null,
   modelUrl: null,
   error: null,
 };
@@ -188,8 +190,9 @@ export function Uretim3DClient() {
           engine === "meshy" ? { image: payloadImage, mode: "production" } : { image: payloadImage }
         );
         if (!created.taskId) throw new Error("Görev başlatılamadı.");
-        set((s) => ({ ...s, status: created.status ?? "PENDING" }));
-        await pollStatus(engine, created.taskId);
+        const startedTaskId = created.taskId;
+        set((s) => ({ ...s, status: created.status ?? "PENDING", taskId: startedTaskId }));
+        await pollStatus(engine, startedTaskId);
       } catch (e) {
         set((s) => ({ ...s, error: e instanceof Error ? e.message : "3D üretimi başarısız." }));
       } finally {
@@ -340,6 +343,7 @@ export function Uretim3DClient() {
 
 function EngineWindow({
   title,
+  engine,
   state,
   disabled,
   onUret,
@@ -350,14 +354,19 @@ function EngineWindow({
   disabled: boolean;
   onUret: () => void;
 }) {
+  // Önizleme same-origin proxy'den (CDN CORS riskini sıfırlar)
+  const previewSrc =
+    state.modelUrl && state.taskId
+      ? `/api/remaura/uretim-3d/model?engine=${engine}&taskId=${encodeURIComponent(state.taskId)}`
+      : null;
   return (
     <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
       <h2 className="mb-3 text-sm font-medium text-white/70">{title}</h2>
 
       <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-lg border border-white/[0.06] bg-black/40">
-        {state.modelUrl ? (
+        {previewSrc ? (
           <ModelViewer
-            src={state.modelUrl}
+            src={previewSrc}
             camera-controls
             auto-rotate
             exposure="1.0"
