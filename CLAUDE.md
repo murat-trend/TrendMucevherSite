@@ -77,6 +77,9 @@ Gemini vb.) **ticari sırdır** — hiçbir kullanıcıya görünmeyecek.
    ile iletişime geçin."` gibi genel mesajlar kullanılır.
 3. **Env değişken adları:** `MESHY_API_KEY`, `TRIPO3D_API_KEY` gibi isimler console
    log'larında veya client'a dönen response'larda görünmez.
+4. **İç süreç açıklamaları:** "açı + işçilik", "arka planda hazırlama", "Gemini ile
+   düzenleme" gibi teknik/süreç bilgisi UI'da **asla yazılmaz**. Kullanıcı sadece
+   sonucu görür, nasıl çalıştığını değil.
 4. **Bu kural tüm Remaura araçları için geçerlidir** — mevcut ve yeni tüm sayfalar.
 
 ## Remaura araçları (süper-admin, izole)

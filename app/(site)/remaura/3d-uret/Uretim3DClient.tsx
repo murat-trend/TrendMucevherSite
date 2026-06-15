@@ -108,7 +108,7 @@ export function Uretim3DClient() {
       });
       setWorkingImage(data.image);
       setPreparedImage(null); // taş değişti → yeniden hazırlanmalı
-      setNotice("Taşlar kaldırıldı.");
+      setNotice("İşlem tamamlandı.");
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "Taş kaldırma başarısız.");
     } finally {
@@ -128,7 +128,7 @@ export function Uretim3DClient() {
         metalRengi: metal,
       });
       setPreparedImage(data.image);
-      setNotice("Görsel 3D için hazır.");
+      setNotice("Görsel hazır.");
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "Hazırlama başarısız.");
     } finally {
@@ -218,7 +218,7 @@ export function Uretim3DClient() {
             Remaura 3D Üret
           </h1>
           <p className="mt-1 text-sm text-white/50">
-            Tek görsel yükle → arka planda hazırla (açı + işçilik) → V1 veya V2 ile 3D.
+            Mücevher görselinizi yükleyin, V1 veya V2 ile 3D modele dönüştürün.
           </p>
         </header>
 
@@ -301,7 +301,7 @@ export function Uretim3DClient() {
                 disabled={!workingImage || tasBusy}
                 className="rounded-lg border border-white/10 px-2 py-2 text-xs text-white/70 transition hover:border-white/30 disabled:opacity-40"
               >
-                {tasBusy ? "Kaldırılıyor…" : "Taşı Kaldır"}
+                {tasBusy ? "İşleniyor…" : "Taşı Kaldır"}
               </button>
               <button
                 type="button"
@@ -310,12 +310,12 @@ export function Uretim3DClient() {
                 className="rounded-lg px-2 py-2 text-xs font-medium text-[#1c1917] transition disabled:opacity-40"
                 style={{ background: ROSE }}
               >
-                {hazirlaBusy ? "Hazırlanıyor…" : "Hazırla"}
+                {hazirlaBusy ? "İşleniyor…" : "Optimize Et"}
               </button>
             </div>
             {preparedImage && (
               <p className="mt-2 text-[11px] text-white/40">
-                ✓ Hazırlandı — kategori: {kategori}. Üret penceresinden 3D al.
+                ✓ Görsel hazır. 3D model oluşturmak için V1 veya V2 seçin.
               </p>
             )}
           </section>

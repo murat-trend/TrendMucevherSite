@@ -7,7 +7,7 @@ const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://trendmucevher.com"
 export const metadata: Metadata = {
   title: "Remaura 3D Üret",
   description:
-    "Tek görselden 3D model: arka planda hazırlama (açı + işçilik), ardından V1 (Meshy) veya V2 (Tripo) ile STL.",
+    "Mücevher görselinizi yükleyin, yapay zeka ile 3D modele dönüştürün.",
   alternates: { canonical: "/remaura/3d-uret" },
   robots: { index: false, follow: false },
   openGraph: {
