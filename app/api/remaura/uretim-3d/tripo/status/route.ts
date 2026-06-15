@@ -36,7 +36,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const res = await fetch(`${TRIPO_BASE}/task/${encodeURIComponent(taskId)}`, {
+    const res = await fetch(`${TRIPO_BASE}/tasks/${encodeURIComponent(taskId)}`, {
       method: "GET",
       headers: { Authorization: `Bearer ${apiKey}` },
       cache: "no-store",

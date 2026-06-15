@@ -38,15 +38,14 @@ export async function POST(req: Request) {
     // 1) Görseli Tripo'ya yükle → file_token
     const { fileToken, type } = await tripoUploadImage(apiKey, image);
 
-    // 2) image_to_model görevi oluştur
-    const taskRes = await fetch(`${TRIPO_BASE}/task`, {
+    // 2) image_to_model görevi oluştur (V3 endpoint)
+    const taskRes = await fetch(`${TRIPO_BASE}/generation/image-to-model`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        type: "image_to_model",
         file: { type, file_token: fileToken },
       }),
     });

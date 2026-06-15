@@ -23,7 +23,7 @@ export function getTripoApiKey(): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-export const TRIPO_BASE = "https://api.tripo3d.ai/v2/openapi";
+export const TRIPO_BASE = "https://openapi.tripo3d.ai/v3";
 
 function dataUrlToBuffer(dataUrl: string): { buf: Buffer; mime: string } {
   const mime = dataUrl.match(/data:([^;]+);/)?.[1] ?? "image/png";
@@ -53,7 +53,7 @@ export async function tripoUploadImage(
   const form = new FormData();
   form.append("file", new Blob([new Uint8Array(buf)], { type: mime }), `image.${ext}`);
 
-  const res = await fetch(`${TRIPO_BASE}/upload`, {
+  const res = await fetch(`${TRIPO_BASE}/files`, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}` },
     body: form,
