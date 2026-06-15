@@ -1,0 +1,81 @@
+import { loadEnvConfig } from "@next/env";
+import { NextResponse } from "next/server";
+import { getMeshyApiKey } from "@/lib/api/meshy";
+
+loadEnvConfig(process.cwd());
+
+const MESHY_IMAGE_TO_3D_URL = "https://api.meshy.ai/openapi/v1/image-to-3d";
+
+/** V1 (Meshy) durum — KOPYA (kaynak: mesh3d/status). */
+function firstString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return null;
+}
+
+export async function GET(req: Request) {
+  try {
+    const apiKey = getMeshyApiKey();
+    if (!apiKey) {
+      return NextResponse.json({ error: "Meshy API anahtarı yapılandırılmamış." }, { status: 500 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const taskId = searchParams.get("taskId")?.trim();
+    if (!taskId) {
+      return NextResponse.json({ error: "taskId parametresi gerekli." }, { status: 400 });
+    }
+
+    const meshyRes = await fetch(`${MESHY_IMAGE_TO_3D_URL}/${encodeURIComponent(taskId)}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      cache: "no-store",
+    });
+
+    const meshyData = await meshyRes.json().catch(() => ({}));
+    if (!meshyRes.ok) {
+      return NextResponse.json(
+        { error: "3D model durumu alınamadı. Lütfen daha sonra tekrar deneyin." },
+        { status: 503 }
+      );
+    }
+
+    const normalized = meshyData as {
+      id?: string;
+      status?: string;
+      progress?: number | string;
+      thumbnail_url?: string;
+      preview_url?: string;
+      model_url?: string;
+      model_urls?: { glb?: string; gltf?: string; usdz?: string; stl?: string };
+    };
+
+    const previewUrl = firstString(normalized.preview_url, normalized.thumbnail_url);
+    const modelUrl = firstString(
+      normalized.model_url,
+      normalized.model_urls?.glb,
+      normalized.model_urls?.gltf
+    );
+    const stlUrl = firstString(normalized.model_urls?.stl);
+    const progressValue =
+      typeof normalized.progress === "number"
+        ? normalized.progress
+        : typeof normalized.progress === "string"
+          ? Number(normalized.progress)
+          : undefined;
+
+    return NextResponse.json({
+      engine: "meshy",
+      taskId: firstString(normalized.id, taskId),
+      status: normalized.status ?? "PENDING",
+      progress: Number.isFinite(progressValue) ? progressValue : undefined,
+      previewUrl,
+      modelUrl,
+      stlUrl,
+    });
+  } catch (error: unknown) {
+    const err = error as { message?: string };
+    return NextResponse.json({ error: err?.message ?? "Durum sorgusu başarısız." }, { status: 500 });
+  }
+}
