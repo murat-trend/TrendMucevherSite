@@ -17,7 +17,7 @@ function ensureTripoEnv(): void {
 
 export function getTripoApiKey(): string | undefined {
   ensureTripoEnv();
-  const raw = process.env.TRIPO_API_KEY;
+  const raw = process.env.TRIPO3D_API_KEY ?? process.env.TRIPO_API_KEY;
   if (typeof raw !== "string") return undefined;
   const trimmed = raw.trim();
   return trimmed.length > 0 ? trimmed : undefined;
