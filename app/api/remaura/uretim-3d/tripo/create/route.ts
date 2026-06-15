@@ -46,6 +46,7 @@ export async function POST(req: Request) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        model: "v3.1-20260211",
         file: { type, file_token: fileToken },
       }),
     });
