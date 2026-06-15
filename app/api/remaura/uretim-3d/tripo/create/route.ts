@@ -48,6 +48,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         type: "image_to_model",
         file: { type, file_token: fileToken },
+        model_version: "v3.1",
       }),
     });
 
