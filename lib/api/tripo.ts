@@ -25,9 +25,6 @@ export function getTripoApiKey(): string | undefined {
 
 export const TRIPO_BASE = "https://api.tripo3d.ai/v2/openapi";
 
-/** Güncel image-to-model sürümü — gerekirse tek yerden güncellenir. */
-export const TRIPO_MODEL_VERSION = "v3.1";
-
 function dataUrlToBuffer(dataUrl: string): { buf: Buffer; mime: string } {
   const mime = dataUrl.match(/data:([^;]+);/)?.[1] ?? "image/png";
   const base64 = dataUrl.replace(/^data:[^;]+;base64,/, "");
