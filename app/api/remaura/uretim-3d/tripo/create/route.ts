@@ -12,10 +12,6 @@ loadEnvConfig(process.cwd());
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-/**
- * V2 (Tripo) — image-to-model. Görsel açısı KORUNUR (orientation: align_image),
- * bu yüzden hazırla adımındaki doğru üretim açısı 3D'ye birebir yansır.
- */
 export async function POST(req: Request) {
   const auth = await requireSuperAdmin();
   if (!auth.ok) return auth.response;
@@ -37,28 +33,50 @@ export async function POST(req: Request) {
 
     // 1) Görseli Tripo'ya yükle → file_token
     const { fileToken, type } = await tripoUploadImage(apiKey, image);
+    console.log("[uretim-3d/tripo/create] upload ok, token:", fileToken.slice(0, 12), "type:", type);
 
-    // 2) image_to_model görevi oluştur (V3 endpoint)
-    const taskRes = await fetch(`${TRIPO_BASE}/generation/image-to-model`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "v3.1-20260211",
-        file: { type, file_token: fileToken },
-      }),
-    });
+    // 2) image_to_model görevi oluştur (V3 endpoint, 90s timeout)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 90_000);
+    let taskRes: Response;
+    try {
+      taskRes = await fetch(`${TRIPO_BASE}/generation/image-to-model`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          model: "v3.1-20260211",
+          file: { type, file_token: fileToken },
+        }),
+        signal: controller.signal,
+      });
+    } catch (e) {
+      const aborted = (e as { name?: string })?.name === "AbortError";
+      console.error("[uretim-3d/tripo/create] fetch failed:", aborted ? "timeout(90s)" : e);
+      return NextResponse.json(
+        { error: aborted ? "3D servisi zaman aşımına uğradı, tekrar deneyin." : "3D servisine ulaşılamadı." },
+        { status: 504 }
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
 
-    const taskData = (await taskRes.json().catch(() => ({}))) as {
-      code?: number;
-      data?: { task_id?: string };
-      message?: string;
-    };
+    // Ham yanıtı oku — 504/HTML olsa bile gerçek içeriği görelim
+    const rawText = await taskRes.text();
+    let taskData: { code?: number; data?: { task_id?: string }; message?: string } = {};
+    try { taskData = JSON.parse(rawText); } catch { /* HTML gate yanıtı */ }
 
     if (!taskRes.ok || taskData.code !== 0 || !taskData.data?.task_id) {
-      console.error("[uretim-3d/tripo/create] task error:", taskRes.status, taskData);
+      console.error(
+        "[uretim-3d/tripo/create] task error:",
+        taskRes.status,
+        "code:", taskData.code,
+        "msg:", taskData.message,
+        "raw:", rawText.slice(0, 400)
+      );
       return NextResponse.json(
         { error: "3D model oluşturulamadı. Lütfen daha sonra tekrar deneyin." },
         { status: 503 }
@@ -72,7 +90,7 @@ export async function POST(req: Request) {
     });
   } catch (error: unknown) {
     const err = error as { message?: string };
-    console.error("[uretim-3d/tripo/create] error:", err);
+    console.error("[uretim-3d/tripo/create] error:", err?.message ?? error);
     return NextResponse.json(
       { error: err?.message ?? "3D oluşturma isteği başarısız." },
       { status: 500 }
