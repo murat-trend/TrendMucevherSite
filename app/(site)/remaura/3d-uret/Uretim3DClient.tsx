@@ -322,14 +322,14 @@ export function Uretim3DClient() {
 
           {/* ── 2) Sonuç pencereleri ── */}
           <EngineWindow
-            title="V1 · Meshy"
+            title="V1"
             engine="meshy"
             state={meshy}
             disabled={!workingImage}
             onUret={() => void handleUret("meshy")}
           />
           <EngineWindow
-            title="V2 · Tripo"
+            title="V2"
             engine="tripo"
             state={tripo}
             disabled={!workingImage}

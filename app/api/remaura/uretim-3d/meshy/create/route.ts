@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     const apiKey = getMeshyApiKey();
     if (!apiKey) {
       return NextResponse.json(
-        { error: "Meshy API anahtarı yapılandırılmamış (MESHY_API_KEY)." },
+        { error: "3D servisi yapılandırılmamış. Lütfen yönetici ile iletişime geçin." },
         { status: 500 }
       );
     }
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
 
     if (!imageUrl?.startsWith("data:image/png;base64,")) {
       return NextResponse.json(
-        { error: "Meshy için alfa kanallı PNG gerekli. Önce arka plan temizliği yapılmalıdır." },
+        { error: "3D üretimi için arka planı temizlenmiş görsel gerekli." },
         { status: 400 }
       );
     }

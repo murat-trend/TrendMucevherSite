@@ -66,9 +66,23 @@ kullanır — `border-border` token'ından daha koyu.
 **Kural:** Remaura araç sayfası = gül/pembe palette + derin siyah zemin.
 Ana site sayfası = altın `accent` token + `--background` zemin.
 
+## Ticari sır kuralı (KESİNLİKLE UYGULANACAK)
+
+Kullandığımız AI ve 3D servis sağlayıcıları (Meshy, Tripo, Stability, OpenAI,
+Gemini vb.) **ticari sırdır** — hiçbir kullanıcıya görünmeyecek.
+
+1. **UI etiketleri:** Servis adı asla yazılmaz. `V1`, `V2` gibi nötr isimler kullanılır.
+2. **Hata mesajları:** `"Meshy API anahtarı..."`, `"TRIPO_API_KEY..."` gibi ifadeler
+   **kesinlikle yasak**. Bunun yerine: `"3D servisi yapılandırılmamış. Lütfen yönetici
+   ile iletişime geçin."` gibi genel mesajlar kullanılır.
+3. **Env değişken adları:** `MESHY_API_KEY`, `TRIPO3D_API_KEY` gibi isimler console
+   log'larında veya client'a dönen response'larda görünmez.
+4. **Bu kural tüm Remaura araçları için geçerlidir** — mevcut ve yeni tüm sayfalar.
+
 ## Remaura araçları (süper-admin, izole)
 - `/remaura/koleksiyon-lab` — koleksiyon tutarlılığı deney alanı (Gemini).
 - `/remaura/sosyal-boyut` — sosyal medya format motoru. Motor:
   `lib/remaura/sosyal-boyut/engine.ts` (çerçeveden bağımsız; ileride mini-Canva
   paylaşır). PRO arka plan/upscale → `/api/remaura/koleksiyon-edit/stability`.
+- `/remaura/3d-uret` — izole 3D üretim paneli. V1 ve V2 motoru, süper-admin geçitli.
 - Mevcut çalışan akışları **bozma**; yeni özellik = izole sayfa, olgunlaşınca taşı.

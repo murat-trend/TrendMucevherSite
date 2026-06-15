@@ -18,7 +18,7 @@ export async function GET(req: Request) {
   try {
     const apiKey = getMeshyApiKey();
     if (!apiKey) {
-      return NextResponse.json({ error: "Meshy API anahtarı yapılandırılmamış." }, { status: 500 });
+      return NextResponse.json({ error: "3D servisi yapılandırılmamış. Lütfen yönetici ile iletişime geçin." }, { status: 500 });
     }
 
     const { searchParams } = new URL(req.url);

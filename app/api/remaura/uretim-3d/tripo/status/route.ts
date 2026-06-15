@@ -26,7 +26,7 @@ function firstString(...values: unknown[]): string | null {
 export async function GET(req: Request) {
   const apiKey = getTripoApiKey();
   if (!apiKey) {
-    return NextResponse.json({ error: "Tripo API anahtarı yapılandırılmamış." }, { status: 500 });
+    return NextResponse.json({ error: "3D servisi yapılandırılmamış. Lütfen yönetici ile iletişime geçin." }, { status: 500 });
   }
 
   const { searchParams } = new URL(req.url);

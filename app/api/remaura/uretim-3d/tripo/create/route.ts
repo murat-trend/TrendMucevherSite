@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   const apiKey = getTripoApiKey();
   if (!apiKey) {
     return NextResponse.json(
-      { error: "Tripo API anahtarı yapılandırılmamış (TRIPO_API_KEY)." },
+      { error: "3D servisi yapılandırılmamış. Lütfen yönetici ile iletişime geçin." },
       { status: 500 }
     );
   }
