@@ -60,11 +60,13 @@ export async function tripoUploadImage(
   });
   const data = (await res.json().catch(() => ({}))) as {
     code?: number;
-    data?: { image_token?: string };
+    data?: { image_token?: string; file_token?: string };
     message?: string;
   };
-  if (!res.ok || data.code !== 0 || !data.data?.image_token) {
+  const token = data.data?.file_token ?? data.data?.image_token;
+  console.log("[tripo/upload] status:", res.status, "code:", data.code, "token:", token ? token.slice(0,12) + "…" : null, "keys:", Object.keys(data.data ?? {}));
+  if (!res.ok || data.code !== 0 || !token) {
     throw new Error(data.message ?? `Tripo yükleme başarısız (${res.status}).`);
   }
-  return { fileToken: data.data.image_token, type: ext };
+  return { fileToken: token, type: ext };
 }
