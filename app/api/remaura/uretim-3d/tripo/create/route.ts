@@ -48,7 +48,7 @@ export async function POST(req: Request) {
           Accept: "application/json",
         },
         body: JSON.stringify({
-          model: "v3.1-20260211",
+          model: "v2.5-20250123",
           file: { type, file_token: fileToken },
         }),
         signal: controller.signal,
