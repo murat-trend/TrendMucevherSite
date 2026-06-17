@@ -66,6 +66,36 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+// PRO (stability) çağrısından önce görseli güvenli boyuta indir.
+// İki limit: Vercel ~4.5MB istek gövdesi (413) + Stability ~4.19M piksel (400).
+async function shrinkForUpload(dataUrl: string, maxBytes = 3_200_000, maxPixels = 4_000_000): Promise<string> {
+  const approxBytes = (s: string) => Math.ceil((s.length - s.indexOf(",") - 1) * 0.75);
+  const img = await new Promise<HTMLImageElement>((res, rej) => {
+    const i = new window.Image();
+    i.onload = () => res(i);
+    i.onerror = rej;
+    i.src = dataUrl;
+  });
+  const pixels = img.width * img.height;
+  if (approxBytes(dataUrl) <= maxBytes && pixels <= maxPixels) return dataUrl;
+
+  const pxScale = pixels > maxPixels ? Math.sqrt(maxPixels / pixels) : 1;
+  let out = dataUrl;
+  for (const mul of [1, 0.85, 0.7, 0.55]) {
+    const scale = pxScale * mul;
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const x = c.getContext("2d");
+    if (!x) return out;
+    x.drawImage(img, 0, 0, w, h);
+    out = c.toDataURL("image/jpeg", 0.85);
+    if (approxBytes(out) <= maxBytes && w * h <= maxPixels) return out;
+  }
+  return out;
+}
+
 const POS_OPTS: { v: Pos; l: string }[] = [
   { v: "br", l: "Sağ alt" },
   { v: "bl", l: "Sol alt" },
@@ -198,12 +228,21 @@ export function SosyalBoyutClient() {
     const settings = buildSettings();
 
     const callStability = async (action: string, image: string): Promise<string> => {
+      const safeImage = await shrinkForUpload(image);
       const res = await fetch("/api/remaura/koleksiyon-edit/stability", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, image }),
+        body: JSON.stringify({ action, image: safeImage }),
       });
-      const data = (await res.json()) as { image?: string; error?: string };
-      if (!res.ok || !data.image) throw new Error(data.error ?? `${action} başarısız`);
+      // 413 gibi durumlarda gövde JSON değil (düz metin) → güvenli parse
+      const txt = await res.text();
+      let data: { image?: string; error?: string } = {};
+      try { data = JSON.parse(txt); } catch { /* JSON değil */ }
+      if (!res.ok || !data.image) {
+        const msg = res.status === 413
+          ? "Görsel çok büyük — lütfen daha küçük bir görsel yükleyin."
+          : (data.error ?? `${action} başarısız (${res.status})`);
+        throw new Error(msg);
+      }
       return data.image;
     };
 
@@ -258,7 +297,7 @@ export function SosyalBoyutClient() {
   const saveToGallery = useCallback(async (o: Output, key: string) => {
     setSaved((p) => ({ ...p, [key]: "saving" }));
     try {
-      const dataUrl = await blobToDataUrl(o.blob);
+      const dataUrl = await shrinkForUpload(await blobToDataUrl(o.blob));
       const res = await fetch("/api/remaura/koleksiyon-edit/kaydet", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ gorselUrl: dataUrl, koleksiyonAdi: o.label, tip: "sosyal" }),

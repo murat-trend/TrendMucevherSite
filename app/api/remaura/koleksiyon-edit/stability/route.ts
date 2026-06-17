@@ -153,13 +153,33 @@ async function buildContextualReplacePrompt(
  * R2, fal CDN veya herhangi bir https:// URL çalışır.
  */
 async function resolveImageBuffer(input: string): Promise<Buffer> {
+  let buf: Buffer;
   if (input.startsWith("http://") || input.startsWith("https://")) {
     const res = await fetch(input, { cache: "no-store" });
     if (!res.ok) throw new Error(`Görsel fetch başarısız: ${res.status} — ${input}`);
-    return Buffer.from(await res.arrayBuffer());
+    buf = Buffer.from(await res.arrayBuffer());
+  } else {
+    const raw = input.includes(",") ? input.split(",")[1] : input;
+    buf = Buffer.from(raw, "base64");
   }
-  const raw = input.includes(",") ? input.split(",")[1] : input;
-  return Buffer.from(raw, "base64");
+  return capImagePixels(buf);
+}
+
+// Stability girdi limiti: en fazla 4,194,304 piksel (≈2048²). Aşan görseli
+// küçülterek "unsupported dimensions" 400 hatasını önler.
+async function capImagePixels(buf: Buffer, maxPixels = 4_000_000): Promise<Buffer> {
+  try {
+    const sharp = (await import("sharp")).default;
+    const meta = await sharp(buf).metadata();
+    const w = meta.width ?? 0, h = meta.height ?? 0;
+    if (!w || !h || w * h <= maxPixels) return buf;
+    const scale = Math.sqrt(maxPixels / (w * h));
+    const nw = Math.max(1, Math.floor(w * scale));
+    const nh = Math.max(1, Math.floor(h * scale));
+    return await sharp(buf).resize(nw, nh, { fit: "inside" }).png().toBuffer();
+  } catch {
+    return buf;
+  }
 }
 
 function bufferToBlob(buf: Buffer, mime = "image/png"): Blob {
