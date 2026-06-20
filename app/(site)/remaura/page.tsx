@@ -174,6 +174,24 @@ export default async function RemauraPage() {
       >
         Koleksiyon Lab
       </Link>
+      <Link
+        href="/remaura/etsy-boyut"
+        style={{
+          borderRadius: "9999px",
+          border: "1px solid rgba(183,110,121,0.5)",
+          background: "rgba(183,110,121,0.1)",
+          padding: "8px 16px",
+          fontSize: 10,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: "0.2em",
+          color: "#b76e79",
+          textDecoration: "none",
+          whiteSpace: "nowrap",
+        }}
+      >
+        Etsy Boyut
+      </Link>
     </>
   ) : null;
 
