@@ -71,6 +71,40 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+function downloadWithWatermark(dataUrl: string, filename: string) {
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(img, 0, 0);
+
+    const fontSize = Math.max(14, Math.round(img.width * 0.022));
+    ctx.font = `italic ${fontSize}px Georgia, serif`;
+    ctx.textAlign = "right";
+    ctx.textBaseline = "bottom";
+
+    const text = "Trend Mücevher by Murat Kay";
+    const pad = Math.round(img.width * 0.022);
+    const x = img.width - pad;
+    const y = img.height - pad;
+
+    // gölge
+    ctx.shadowColor = "rgba(0,0,0,0.45)";
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = "#c49aa0"; // gül kurusu
+    ctx.fillText(text, x, y);
+    ctx.shadowBlur = 0;
+
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL("image/jpeg", 0.93);
+    a.download = filename;
+    a.click();
+  };
+  img.src = dataUrl;
+}
+
 export function KoleksiyonLabClient() {
   const [refs, setRefs] = useState<string[]>([]);
   const [takiTipi, setTakiTipi] = useState<string>("Yüzük");
@@ -515,13 +549,12 @@ export function KoleksiyonLabClient() {
                           )}
                         </button>
                         <div className="grid grid-cols-2 gap-1 text-[11px]">
-                          <a
-                            href={img}
-                            download={`koleksiyon-lab-${bi}-${ii}.jpg`}
+                          <button
+                            onClick={() => downloadWithWatermark(img, `koleksiyon-lab-${bi}-${ii}.jpg`)}
                             className="rounded border border-zinc-700 py-1 text-center text-zinc-300 hover:border-zinc-500"
                           >
                             İndir
-                          </a>
+                          </button>
                           <button
                             onClick={() => upscaleImage(bi, ii, img)}
                             disabled={upscaling[key]}
@@ -569,9 +602,9 @@ export function KoleksiyonLabClient() {
             className="max-h-[82vh] max-w-[92vw] rounded-lg border border-zinc-700 bg-zinc-900 object-contain"
           />
           <div className="flex items-center gap-3 text-sm">
-            <a href={lightbox} download="koleksiyon-lab.jpg" className="rounded-lg bg-amber-500 px-5 py-2 font-semibold text-black">
+            <button onClick={() => lightbox && downloadWithWatermark(lightbox, "koleksiyon-lab.jpg")} className="rounded-lg bg-amber-500 px-5 py-2 font-semibold text-black">
               ⬇ İndir
-            </a>
+            </button>
             <button onClick={() => setLightbox(null)} className="rounded-lg border border-zinc-600 px-4 py-2 text-zinc-200">
               Kapat · Esc
             </button>
