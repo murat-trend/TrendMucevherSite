@@ -47,8 +47,26 @@ type ResultBlock = { label: string; images: string[]; meta?: ResultMeta };
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
     reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const MAX = 1536;
+        let { width, height } = img;
+        if (width > MAX || height > MAX) {
+          const ratio = Math.min(MAX / width, MAX / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.88));
+      };
+      img.src = reader.result as string;
+    };
     reader.readAsDataURL(file);
   });
 }
@@ -460,7 +478,7 @@ export function KoleksiyonLabClient() {
           )}
           {loading && (
             <div className="flex h-full min-h-[300px] items-center justify-center rounded-xl border border-zinc-800 text-sm text-zinc-400">
-              Üretiliyor… (Gemini 3.1 — birkaç saniye)
+              REMAURA ÜRETİYOR…
             </div>
           )}
           <div className={`grid gap-4 ${results.length > 1 ? "md:grid-cols-2" : "grid-cols-1"}`}>
