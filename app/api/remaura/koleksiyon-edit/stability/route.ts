@@ -324,11 +324,54 @@ async function opErase(imgBuf: Buffer, maskBuf: Buffer, apiKey: string): Promise
   return stabilityPost("/v2beta/stable-image/edit/erase", form, apiKey);
 }
 
+/**
+ * Takının stilini analiz edip inpaint prompt'u üretir.
+ * Kullanıcı bir alanı silip "Doldur" dediğinde, etraftaki desene uygun
+ * bir dolgu istiyordur — kör bir metal yüzey değil.
+ */
+async function buildInpaintPrompt(imgBuf: Buffer): Promise<string> {
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  if (!anthropicKey) return "matching decorative metal surface, seamlessly continuing the surrounding jewelry pattern";
+  try {
+    const Anthropic = (await import("@anthropic-ai/sdk")).default;
+    const client = new Anthropic({ apiKey: anthropicKey });
+    const msg = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 80,
+      system:
+        "You are a jewelry inpainting prompt writer. " +
+        "A small area of this jewelry photo has been masked out. " +
+        "Analyze the surrounding design: metal color, surface finish, texture, decorative motifs, relief style. " +
+        "Write a SHORT English prompt (max 20 words) describing what should fill the masked area " +
+        "so it blends seamlessly with the rest of the piece. " +
+        "Focus on: exact metal color, surface texture, and how the surrounding decorative pattern should continue. " +
+        "Return ONLY the prompt, nothing else.",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: "image/png", data: imgBuf.toString("base64") } },
+            { type: "text", text: "Write the inpainting prompt to fill the masked area matching the surrounding jewelry design." },
+          ],
+        },
+      ],
+    });
+    const block = msg.content[0];
+    const prompt = block?.type === "text" ? block.text.trim() : "";
+    console.log("[stability] inpaint contextual prompt:", prompt);
+    return prompt || "matching decorative metal surface, seamlessly continuing the surrounding jewelry pattern";
+  } catch {
+    return "matching decorative metal surface, seamlessly continuing the surrounding jewelry pattern";
+  }
+}
+
 async function opInpaint(imgBuf: Buffer, maskBuf: Buffer, apiKey: string): Promise<NextResponse> {
+  const prompt = await buildInpaintPrompt(imgBuf);
   const form = new FormData();
   form.append("image", bufferToBlob(imgBuf), "image.png");
   form.append("mask", bufferToBlob(maskBuf), "mask.png");
-  form.append("prompt", "smooth metal surface, empty setting, no stones, clean polished metal");
+  form.append("prompt", prompt);
+  form.append("negative_prompt", "random object, detached element, logo, text, watermark, skull, button, cap, unrelated motif");
   form.append("output_format", "png");
   return stabilityPost("/v2beta/stable-image/edit/inpaint", form, apiKey);
 }
