@@ -214,7 +214,6 @@
     import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
     import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
     import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 
     let scene, camera, renderer, controls, modelGroup, gridHelper;
@@ -260,9 +259,78 @@
 
         RectAreaLightUniformsLib.init();
 
+        // Takı stüdyosu environment — RoomEnvironment yerine özel lightbox
+        // Bu texture metalik yüzeylerin refleksiyonuna doğrudan etki eder
         const pmremGenerator = new THREE.PMREMGenerator(renderer);
-        const roomEnv = new RoomEnvironment();
-        scene.environment = pmremGenerator.fromScene(roomEnv, 0.04).texture;
+        pmremGenerator.compileEquirectangularShader();
+
+        const lightboxScene = new THREE.Scene();
+
+        // Tavan — ana aydınlık (sıcak beyaz, altın için doğal)
+        const ceiling = new THREE.Mesh(
+            new THREE.PlaneGeometry(30, 30),
+            new THREE.MeshBasicMaterial({ color: 0xfff9f0, side: THREE.DoubleSide })
+        );
+        ceiling.position.set(0, 12, 0);
+        ceiling.rotation.x = Math.PI / 2;
+        lightboxScene.add(ceiling);
+
+        // Zemin — koyu, kontrastı güçlendirir
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(30, 30),
+            new THREE.MeshBasicMaterial({ color: 0x080808, side: THREE.DoubleSide })
+        );
+        floor.position.set(0, -12, 0);
+        floor.rotation.x = -Math.PI / 2;
+        lightboxScene.add(floor);
+
+        // Sol dikey şerit — metalik kenarda uzun beyaz çizgi refleksiyonu
+        const leftStrip = new THREE.Mesh(
+            new THREE.PlaneGeometry(2, 28),
+            new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide })
+        );
+        leftStrip.position.set(-12, 0, 0);
+        leftStrip.rotation.y = Math.PI / 2;
+        lightboxScene.add(leftStrip);
+
+        // Sağ dikey şerit
+        const rightStrip = new THREE.Mesh(
+            new THREE.PlaneGeometry(2, 28),
+            new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide })
+        );
+        rightStrip.position.set(12, 0, 0);
+        rightStrip.rotation.y = -Math.PI / 2;
+        lightboxScene.add(rightStrip);
+
+        // Ön dolgu — ürünün önünü aydınlatır
+        const frontFill = new THREE.Mesh(
+            new THREE.PlaneGeometry(20, 14),
+            new THREE.MeshBasicMaterial({ color: 0xd8d8d8, side: THREE.DoubleSide })
+        );
+        frontFill.position.set(0, 2, 12);
+        lightboxScene.add(frontFill);
+
+        // Arka rim — ürünü zeminden ayırır, soğuk mavi tonu
+        const backRim = new THREE.Mesh(
+            new THREE.PlaneGeometry(20, 10),
+            new THREE.MeshBasicMaterial({ color: 0xd0e0ff, side: THREE.DoubleSide })
+        );
+        backRim.position.set(0, 4, -12);
+        lightboxScene.add(backRim);
+
+        // Yan gri duvarlar — genel dolgu
+        [-1, 1].forEach((side) => {
+            const wall = new THREE.Mesh(
+                new THREE.PlaneGeometry(30, 30),
+                new THREE.MeshBasicMaterial({ color: 0x404040, side: THREE.DoubleSide })
+            );
+            wall.position.set(side * 15, 0, 0);
+            wall.rotation.y = side * Math.PI / 2;
+            lightboxScene.add(wall);
+        });
+
+        scene.environment = pmremGenerator.fromScene(lightboxScene).texture;
+        pmremGenerator.dispose();
 
         controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
