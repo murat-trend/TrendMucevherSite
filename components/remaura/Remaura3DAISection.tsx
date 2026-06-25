@@ -578,33 +578,24 @@ export function Remaura3DAISection() {
           </button>
         </div>
 
-        {/* Format + İndir — model gelince aktif */}
+        {/* İndirme — model gelince aktif */}
         <div className="grid grid-cols-2 gap-2">
-          <label className="inline-flex min-h-10 items-center justify-center rounded-lg border border-white/15 bg-white/5 px-3">
-            <span className="mr-2 text-[10px] font-semibold uppercase tracking-wide text-muted">Format</span>
-            <select
-              value={downloadFormat}
-              onChange={(e) => setDownloadFormat(e.target.value as DownloadModelFormat)}
-              className="w-full text-xs font-semibold outline-none"
-              style={{ backgroundColor: "#1a1f2e", color: "#e2e8f0" }}
+          {(["glb", "stl"] as DownloadModelFormat[]).map((fmt) => (
+            <button
+              key={fmt}
+              type="button"
+              onClick={() => { setDownloadFormat(fmt); void handleDownloadModel(); }}
+              disabled={isDownloading || !(mesh3DDownloadUrl || mesh3DModelUrl)}
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.04] px-3 text-xs font-semibold text-white/70 transition-colors hover:border-[#b76e79]/50 hover:bg-[#b76e79]/10 hover:text-[#f2d5d9] disabled:cursor-not-allowed disabled:opacity-35"
             >
-              <option value="glb" style={{ backgroundColor: "#1a1f2e", color: "#e2e8f0" }}>.glb</option>
-              <option value="stl" style={{ backgroundColor: "#1a1f2e", color: "#e2e8f0" }}>.stl</option>
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={() => void handleDownloadModel()}
-            disabled={isDownloading || !(mesh3DDownloadUrl || mesh3DModelUrl)}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#b76e79]/50 bg-[#b76e79]/15 px-3 text-xs font-semibold text-[#f2d5d9] transition-colors hover:bg-[#b76e79]/25 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {isDownloading ? (
-              <>
+              {isDownloading && downloadFormat === fmt ? (
                 <span className="h-3 w-3 animate-spin rounded-full border border-white/30 border-t-white" />
-                İndiriliyor…
-              </>
-            ) : `İndir (.${downloadFormat})`}
-          </button>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+              )}
+              .{fmt.toUpperCase()}
+            </button>
+          ))}
         </div>
 
       </div>
