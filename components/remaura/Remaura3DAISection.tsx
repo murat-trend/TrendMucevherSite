@@ -44,7 +44,6 @@ export function Remaura3DAISection() {
   const [generationMode, setGenerationMode] = useState<MeshGenerationMode>("production");
   const [remainingAttempts, setRemainingAttempts] = useState<number>(MAX_ATTEMPTS_PER_IMAGE);
   const [outerDiameterMm, setOuterDiameterMm] = useState<number | null>(null);
-  const [zScaleMm, setZScaleMm] = useState<number>(1.0);
   const [cleanedPreviewUrl, setCleanedPreviewUrl] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [meshFileCode, setMeshFileCode] = useState<string | null>(null);
@@ -517,7 +516,7 @@ export function Remaura3DAISection() {
                     ? (buildProxyFileUrl("view", "glb") ?? null)
                     : null
                 }
-                zScaleMm={zScaleMm}
+                zScaleMm={1.0}
               />
             </div>
             {isCreating3D || (mesh3DTaskId && !mesh3DModelUrl && !mesh3DDownloadUrl) ? (
@@ -581,30 +580,6 @@ export function Remaura3DAISection() {
           {generationMode === "visual" ? (
             <p className="mt-2 text-[11px] text-amber-300">+10 Kredi ve ek işlem süresi uygulanır.</p>
           ) : null}
-        </div>
-
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted">Kalınlık (Z Ekseni)</p>
-            <span className="text-xs font-semibold text-foreground">
-              {Math.round(zScaleMm * 100)}%
-              {zScaleMm >= 0.999 && (
-                <span className="ml-1 text-[10px] text-emerald-400">Doğal</span>
-              )}
-            </span>
-          </div>
-          <input
-            type="range"
-            min={0.01}
-            max={1.0}
-            step={0.001}
-            value={zScaleMm}
-            onChange={(e) => setZScaleMm(Number(e.target.value))}
-            className="w-full accent-[#b76e79]"
-          />
-          <p className="mt-1 text-[10px] text-muted/60">
-            100% = modelin orijinal oranları. Azaltınca Z ekseni incelir, taban sabit kalır.
-          </p>
         </div>
 
         {/* Dış Çap (mm) — her zaman görünür */}
