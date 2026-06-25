@@ -274,10 +274,13 @@ export function Remaura3DAISection() {
     }
   }, [isDownloading, buildProxyFileUrl, downloadFormat]);
 
-  const fetchMeshStatusOnce = useCallback(async (taskId: string) => {
-    const res = await fetch(`/api/remaura/mesh3d/status?taskId=${encodeURIComponent(taskId)}`);
+  const fetchStatusOnce = useCallback(async (taskId: string, engine: "rv1" | "rv2") => {
+    const url = engine === "rv2"
+      ? `/api/remaura/tripo3d/status?taskId=${encodeURIComponent(taskId)}`
+      : `/api/remaura/mesh3d/status?taskId=${encodeURIComponent(taskId)}`;
+    const res = await fetch(url);
     const data = await res.json();
-    if (!res.ok) throw new Error(data?.error ?? "Meshy durum kontrolu basarisiz.");
+    if (!res.ok) throw new Error(data?.error ?? "Durum kontrolu basarisiz.");
 
     const status = String(data?.status ?? "PENDING");
     setMesh3DStatus(status);
@@ -287,18 +290,29 @@ export function Remaura3DAISection() {
     return status.toUpperCase();
   }, []);
 
-  const pollMeshStatus = useCallback(async (taskId: string) => {
+  // Eski alias — RV1 için geriye dönük uyumluluk
+  const fetchMeshStatusOnce = useCallback(
+    (taskId: string) => fetchStatusOnce(taskId, "rv1"),
+    [fetchStatusOnce]
+  );
+
+  const pollStatus = useCallback(async (taskId: string, engine: "rv1" | "rv2") => {
     let attempts = 0;
     while (attempts < 150) {
       attempts += 1;
-      const status = await fetchMeshStatusOnce(taskId);
+      const status = await fetchStatusOnce(taskId, engine);
       if (status === "SUCCEEDED" || status === "SUCCESS" || status === "COMPLETED") return;
       if (status === "FAILED" || status === "ERROR" || status === "CANCELED") {
-        throw new Error("Mesh olusturma basarisiz oldu.");
+        throw new Error("3D model oluşturma başarısız oldu.");
       }
       await new Promise((resolve) => setTimeout(resolve, 5000));
     }
-  }, [fetchMeshStatusOnce]);
+  }, [fetchStatusOnce]);
+
+  const pollMeshStatus = useCallback(
+    (taskId: string) => pollStatus(taskId, "rv1"),
+    [pollStatus]
+  );
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -408,7 +422,6 @@ export function Remaura3DAISection() {
 
       if (taskId) {
         await pollMeshStatus(taskId);
-        // Başarılı → kaydet + galeriyi güncelle
         void saveJob(taskId, uploadedImage, "rv1");
         void loadHistory();
       }
@@ -418,6 +431,75 @@ export function Remaura3DAISection() {
       setIsCreating3D(false);
     }
   }, [uploadedImage, isCreating3D, toDataUrl, dataUrlToPngBlob, pollMeshStatus, generationMode, remainingAttempts, billingUi, saveJob, loadHistory]);
+
+  const handleCreate3DRV2 = useCallback(async () => {
+    if (!uploadedImage || isCreating3D) return;
+    if (remainingAttempts <= 0) {
+      setMesh3DError(`Bu gorsel icin ${MAX_ATTEMPTS_PER_IMAGE} deneme hakki doldu. Yeni gorsel yukleyin.`);
+      return;
+    }
+    setIsCreating3D(true);
+    setMesh3DError(null);
+    setMesh3DTaskId(null);
+    setMesh3DStatus("PENDING");
+    setMesh3DProgress(null);
+    setMesh3DModelUrl(null);
+    setMesh3DDownloadUrl(null);
+
+    try {
+      const { data: { user } } = await createClient().auth.getUser();
+
+      // Arka planı kaldır (aynı RV1 akışı — temizlenmiş blob cache'lenir)
+      let cleanedBlob = cleanedImageBlobRef.current;
+      if (!cleanedBlob) {
+        const bgRes = await fetch("/api/remaura/mesh3d/remove-bg", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: uploadedImage, userId: user?.id ?? "" }),
+        });
+        if (!bgRes.ok) {
+          const err = await bgRes.json().catch(() => ({}));
+          throw new Error((err as { error?: string })?.error ?? "Arka plan kaldırılamadı.");
+        }
+        const bgData = await bgRes.json();
+        cleanedBlob = await dataUrlToPngBlob(bgData.image as string);
+        cleanedImageBlobRef.current = cleanedBlob;
+        if (cleanedObjectUrlRef.current) URL.revokeObjectURL(cleanedObjectUrlRef.current);
+        const objectUrl = URL.createObjectURL(cleanedBlob);
+        cleanedObjectUrlRef.current = objectUrl;
+        setCleanedPreviewUrl(objectUrl);
+      }
+
+      const pngDataUrl = await toDataUrl(cleanedBlob);
+
+      const res = await fetch("/api/remaura/tripo3d/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: pngDataUrl, userId: user?.id ?? "" }),
+      });
+      if (await remauraHandleBillingApiResponse(res, billingUi)) return;
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "3D olusturma basarisiz.");
+
+      const taskId = (data?.taskId as string | null) ?? null;
+      setMesh3DTaskId(taskId);
+      setCurrentEngine("rv2");
+      setMeshFileCode(generateRemauraFilename("rv2"));
+      setMesh3DStatus(typeof data?.status === "string" ? data.status : "PENDING");
+      setMesh3DProgress(typeof data?.progress === "number" ? data.progress : null);
+      setRemainingAttempts((prev) => Math.max(0, prev - 1));
+
+      if (taskId) {
+        await pollStatus(taskId, "rv2");
+        void saveJob(taskId, uploadedImage, "rv2");
+        void loadHistory();
+      }
+    } catch (e) {
+      setMesh3DError(e instanceof Error ? e.message : "3D olusturma basarisiz.");
+    } finally {
+      setIsCreating3D(false);
+    }
+  }, [uploadedImage, isCreating3D, toDataUrl, dataUrlToPngBlob, pollStatus, remainingAttempts, billingUi, saveJob, loadHistory]);
 
   return (
     <section className="mx-auto w-full max-w-6xl rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-6">
@@ -595,14 +677,22 @@ export function Remaura3DAISection() {
             <span className="text-[10px] text-[#b76e79]/70">Ekonomik · Hızlı</span>
           </button>
 
-          {/* RV2 — Tripo AI (yakında) */}
+          {/* RV2 — Tripo AI */}
           <button
             type="button"
-            disabled
-            className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 opacity-40 cursor-not-allowed"
+            onClick={() => void handleCreate3DRV2()}
+            disabled={isCreating3D || !uploadedImage || remainingAttempts <= 0}
+            className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl border border-[#c69575]/60 bg-[#c69575]/10 px-3 py-3 transition-all hover:bg-[#c69575]/20 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <span className="text-sm font-black tracking-tight text-white/60">RV2</span>
-            <span className="text-[10px] text-white/30">Yakında</span>
+            <span className="text-sm font-black tracking-tight text-[#f5e0d4]">
+              {isCreating3D && currentEngine === "rv2" ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-[#c69575]/40 border-t-[#c69575]" />
+                  Üretiliyor…
+                </span>
+              ) : "RV2"}
+            </span>
+            <span className="text-[10px] text-[#c69575]/70">Premium · Detaylı</span>
           </button>
         </div>
 
