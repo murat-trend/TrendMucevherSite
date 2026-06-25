@@ -43,6 +43,11 @@ export function Remaura3DAISection() {
   const [downloadFormat, setDownloadFormat] = useState<DownloadModelFormat>("glb");
   const generationMode: MeshGenerationMode = "production";
   const [remainingAttempts, setRemainingAttempts] = useState<number>(MAX_ATTEMPTS_PER_IMAGE);
+
+  type HistoryItem = { id: string; taskId: string; imageUrl: string | null; createdAt: string; expiresAt: string };
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [outerDiameterMm, setOuterDiameterMm] = useState<number | null>(null);
   const [cleanedPreviewUrl, setCleanedPreviewUrl] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -298,6 +303,28 @@ export function Remaura3DAISection() {
     }
   }, [fetchMeshStatusOnce]);
 
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      // Önce süresi dolmuşları temizle
+      await fetch("/api/remaura/mesh3d/history", { method: "DELETE" });
+      const res = await fetch("/api/remaura/mesh3d/history");
+      const data = await res.json() as { items?: HistoryItem[] };
+      setHistory(data.items ?? []);
+    } catch { /* sessiz hata */ }
+    finally { setHistoryLoading(false); }
+  }, []);
+
+  const saveJob = useCallback(async (taskId: string, image: string | null) => {
+    try {
+      await fetch("/api/remaura/mesh3d/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskId, image }),
+      });
+    } catch { /* sessiz hata */ }
+  }, []);
+
   const handleRefreshStatus = useCallback(async () => {
     if (!mesh3DTaskId) return;
     try {
@@ -383,13 +410,16 @@ export function Remaura3DAISection() {
 
       if (taskId) {
         await pollMeshStatus(taskId);
+        // Başarılı → kaydet + galeriyi güncelle
+        void saveJob(taskId, uploadedImage);
+        void loadHistory();
       }
     } catch (e) {
       setMesh3DError(e instanceof Error ? e.message : "3D olusturma basarisiz.");
     } finally {
       setIsCreating3D(false);
     }
-  }, [uploadedImage, isCreating3D, toDataUrl, dataUrlToPngBlob, pollMeshStatus, generationMode, remainingAttempts, billingUi]);
+  }, [uploadedImage, isCreating3D, toDataUrl, dataUrlToPngBlob, pollMeshStatus, generationMode, remainingAttempts, billingUi, saveJob, loadHistory]);
 
   return (
     <section className="mx-auto w-full max-w-6xl rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-6">
@@ -598,6 +628,70 @@ export function Remaura3DAISection() {
           ))}
         </div>
 
+      </div>
+
+      {/* ── 24 Saatlik Model Galerisi ── */}
+      <div className="mt-6 border-t border-white/[0.06] pt-4">
+        <button
+          type="button"
+          onClick={() => {
+            const next = !historyOpen;
+            setHistoryOpen(next);
+            if (next && history.length === 0) void loadHistory();
+          }}
+          className="flex w-full items-center justify-between text-[11px] font-bold uppercase tracking-widest text-muted/70 hover:text-muted"
+        >
+          <span>Son 24 Saatteki Modeller</span>
+          <span>{historyOpen ? "▲" : "▼"}</span>
+        </button>
+
+        {historyOpen && (
+          <div className="mt-3">
+            {historyLoading ? (
+              <div className="flex items-center gap-2 py-4 text-xs text-muted/60">
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/15 border-t-[#b76e79]" />
+                Yükleniyor…
+              </div>
+            ) : history.length === 0 ? (
+              <p className="py-4 text-center text-xs text-muted/40">Henüz model yok.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                {history.map((item) => {
+                  const remaining = Math.max(0, Math.round((new Date(item.expiresAt).getTime() - Date.now()) / 3600000));
+                  return (
+                    <div key={item.id} className="flex flex-col gap-2 rounded-xl border border-white/[0.07] bg-white/[0.02] p-2">
+                      {/* Thumbnail */}
+                      <div className="relative aspect-square overflow-hidden rounded-lg bg-black/30">
+                        {item.imageUrl ? (
+                          <img src={item.imageUrl} alt="" className="h-full w-full object-contain" />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-[10px] text-muted/30">Görsel yok</div>
+                        )}
+                        <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1.5 py-0.5 text-[9px] text-white/50">
+                          {remaining}s kaldı
+                        </span>
+                      </div>
+                      <p className="text-[9px] text-muted/40">{new Date(item.createdAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</p>
+                      {/* İndir butonları */}
+                      <div className="grid grid-cols-2 gap-1">
+                        {(["glb", "stl"] as DownloadModelFormat[]).map((fmt) => (
+                          <a
+                            key={fmt}
+                            href={`/api/remaura/mesh3d/file?taskId=${encodeURIComponent(item.taskId)}&format=${fmt}&kind=download`}
+                            download={`remaura-${item.taskId.slice(-6)}.${fmt}`}
+                            className="inline-flex items-center justify-center rounded-md border border-white/10 bg-white/[0.03] py-1 text-[10px] font-semibold text-white/60 transition hover:border-[#b76e79]/50 hover:text-[#f2d5d9]"
+                          >
+                            .{fmt.toUpperCase()}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );
