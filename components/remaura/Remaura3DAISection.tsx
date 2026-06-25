@@ -41,7 +41,7 @@ export function Remaura3DAISection() {
   const [mesh3DModelUrl, setMesh3DModelUrl] = useState<string | null>(null);
   const [mesh3DDownloadUrl, setMesh3DDownloadUrl] = useState<string | null>(null);
   const [downloadFormat, setDownloadFormat] = useState<DownloadModelFormat>("glb");
-  const [generationMode, setGenerationMode] = useState<MeshGenerationMode>("production");
+  const generationMode: MeshGenerationMode = "production";
   const [remainingAttempts, setRemainingAttempts] = useState<number>(MAX_ATTEMPTS_PER_IMAGE);
   const [outerDiameterMm, setOuterDiameterMm] = useState<number | null>(null);
   const [cleanedPreviewUrl, setCleanedPreviewUrl] = useState<string | null>(null);
@@ -103,7 +103,6 @@ export function Remaura3DAISection() {
     cleanedImageBlobRef.current = null;
     setCleanedPreviewUrl(null);
     resetMeshState();
-    setGenerationMode("production");
     setRemainingAttempts(MAX_ATTEMPTS_PER_IMAGE);
     const reader = new FileReader();
     reader.onload = () => setUploadedImage(reader.result as string);
@@ -161,7 +160,6 @@ export function Remaura3DAISection() {
     setCleanedPreviewUrl(null);
     setUploadedImage(null);
     resetMeshState();
-    setGenerationMode("production");
     setRemainingAttempts(MAX_ATTEMPTS_PER_IMAGE);
   }, [resetMeshState]);
 
@@ -544,79 +542,44 @@ export function Remaura3DAISection() {
         </div>
       </div>
 
-      {/* Kontroller + Butonlar — viewer altında, tam genişlik */}
+      {/* Motor seçim butonları + indirme */}
       <div className="mt-4 flex flex-col gap-3">
 
-        {mesh3DError ? <p className="text-xs text-red-600 dark:text-red-400">{mesh3DError}</p> : null}
+        {mesh3DError ? <p className="text-xs text-red-400">{mesh3DError}</p> : null}
 
+        {/* RV1 / RV2 butonları */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* RV1 Magic — Mesh AI */}
+          <button
+            type="button"
+            onClick={() => void handleCreate3D()}
+            disabled={isCreating3D || !uploadedImage || remainingAttempts <= 0}
+            className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl border border-[#b76e79]/60 bg-[#b76e79]/12 px-3 py-3 transition-colors hover:bg-[#b76e79]/22 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <span className="text-sm font-black tracking-tight text-[#f2d5d9]">
+              {isCreating3D ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#f2d5d9]/30 border-t-[#f2d5d9]" />
+                  Üretiliyor…
+                </span>
+              ) : "RV1 Magic"}
+            </span>
+            <span className="text-[10px] text-[#b76e79]/70">Ekonomik · Hızlı</span>
+          </button>
 
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">Üretim Modu</p>
-          <div className="grid grid-cols-1 gap-2">
-            <button
-              type="button"
-              onClick={() => setGenerationMode("production")}
-              className={`rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
-                generationMode === "production"
-                  ? "border-emerald-400/50 bg-emerald-500/10 text-emerald-200"
-                  : "border-white/10 bg-white/[0.02] text-foreground hover:bg-white/[0.06]"
-              }`}
-            >
-              Üretim Odaklı (Hızlı &amp; Ekonomik)
-            </button>
-            <button
-              type="button"
-              onClick={() => setGenerationMode("visual")}
-              className={`rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
-                generationMode === "visual"
-                  ? "border-[#b76e79]/50 bg-[#b76e79]/12 text-[#f2d5d9]"
-                  : "border-white/10 bg-white/[0.02] text-foreground hover:bg-white/[0.06]"
-              }`}
-            >
-              Görsel Odaklı (Renkli &amp; Detaylı - Ek Kredi)
-              <span className="ml-1 text-[10px] uppercase text-muted">Sunum İçin</span>
-            </button>
-          </div>
-          {generationMode === "visual" ? (
-            <p className="mt-2 text-[11px] text-amber-300">+10 Kredi ve ek işlem süresi uygulanır.</p>
-          ) : null}
+          {/* RV2 — Tripo AI (yakında) */}
+          <button
+            type="button"
+            disabled
+            className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 opacity-40 cursor-not-allowed"
+          >
+            <span className="text-sm font-black tracking-tight text-white/60">RV2</span>
+            <span className="text-[10px] text-white/30">Yakında</span>
+          </button>
         </div>
 
-        {/* Dış Çap (mm) — her zaman görünür */}
-        <div className="rounded-lg border border-teal-500/20 bg-teal-500/5 p-2.5">
-          <div className="mb-1.5 flex items-center justify-between">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-teal-400">
-              Hedef Dış Çap (mm)
-            </p>
-            {outerDiameterMm !== null && outerDiameterMm > 0 && (
-              <span className="text-[10px] font-semibold text-teal-300">
-                {outerDiameterMm.toFixed(1)} mm
-              </span>
-            )}
-          </div>
-          <input
-            type="number"
-            min={1}
-            max={200}
-            step={0.1}
-            value={outerDiameterMm ?? ""}
-            onChange={(e) => {
-              const v = e.target.value;
-              setOuterDiameterMm(v === "" ? null : Number(v));
-            }}
-            placeholder="Ör: 18.5"
-            className="min-h-9 w-full rounded-lg border border-white/15 px-3 text-xs outline-none"
-            style={{ backgroundColor: "#1a1f2e", color: "#e2e8f0" }}
-          />
-          <p className="mt-1 text-[10px] text-teal-400/60">
-            {outerDiameterMm !== null && outerDiameterMm > 0
-              ? `Model ${outerDiameterMm.toFixed(1)} mm dış çapa ölçeklenir`
-              : "Boş bırakılırsa model orijinal boyutuyla indirilir"}
-          </p>
-        </div>
-
-        {/* Format + İndir — her zaman görünür, model yokken disabled */}
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {/* Format + İndir — model gelince aktif */}
+        <div className="grid grid-cols-2 gap-2">
           <label className="inline-flex min-h-10 items-center justify-center rounded-lg border border-white/15 bg-white/5 px-3">
             <span className="mr-2 text-[10px] font-semibold uppercase tracking-wide text-muted">Format</span>
             <select
@@ -638,43 +601,12 @@ export function Remaura3DAISection() {
             {isDownloading ? (
               <>
                 <span className="h-3 w-3 animate-spin rounded-full border border-white/30 border-t-white" />
-                İndiriliyor...
+                İndiriliyor…
               </>
-            ) : (
-              `İndir (.${downloadFormat})`
-            )}
+            ) : `İndir (.${downloadFormat})`}
           </button>
-          {downloadFormat === "glb" && (mesh3DDownloadUrl || mesh3DModelUrl) ? (
-            <a
-              href={buildProxyFileUrl("download", downloadFormat) ?? "#"}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-white/15 bg-white/5 px-3 text-xs font-semibold text-foreground transition-colors hover:bg-white/10 sm:col-span-2"
-            >
-              Yeni Sekmede Aç
-            </a>
-          ) : null}
         </div>
 
-      </div>
-
-      <div className="mt-2 flex flex-col gap-2">
-        <button
-          type="button"
-          onClick={() => void handleCreate3D()}
-          disabled={isCreating3D || !uploadedImage || remainingAttempts <= 0}
-          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#b76e79] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#a65f69] disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isCreating3D ? "Arka plan temizleniyor ve 3D oluşturuluyor..." : "3D Oluştur"}
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleCreate3D()}
-          disabled={isCreating3D || !uploadedImage || remainingAttempts <= 0}
-          className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-4 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Aynı Görselle Tekrar Dene
-        </button>
       </div>
     </section>
   );
