@@ -34,7 +34,8 @@ export async function POST(req: Request) {
       const { error: uploadError } = await supabase.storage
         .from(BUCKET)
         .upload(filename, buf, { contentType: "image/png", upsert: false });
-      if (!uploadError) imagePath = filename;
+      if (uploadError) console.error("[mesh/save] storage upload:", uploadError.message);
+      else imagePath = filename;
     } catch {
       // görsel kaydedilemese de devam et
     }

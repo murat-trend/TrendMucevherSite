@@ -328,12 +328,19 @@ export function Remaura3DAISection() {
 
   const saveJob = useCallback(async (taskId: string, image: string | null, engine: "rv1" | "rv2") => {
     try {
-      await fetch("/api/remaura/mesh3d/save", {
+      const res = await fetch("/api/remaura/mesh3d/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ taskId, image, engine }),
       });
-    } catch { /* sessiz hata */ }
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { error?: string };
+        console.error("[saveJob]", d.error);
+        setMesh3DError(`Model galeriye kaydedilemedi: ${d.error ?? res.status}`);
+      }
+    } catch (e) {
+      console.error("[saveJob]", e);
+    }
   }, []);
 
   const handleRefreshStatus = useCallback(async () => {
@@ -658,7 +665,7 @@ export function Remaura3DAISection() {
         {mesh3DError ? <p className="text-xs text-red-400">{mesh3DError}</p> : null}
 
         {/* RV1 / RV2 butonları */}
-        <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-2 gap-3">
           {/* RV1 Magic — Mesh AI */}
           <button
             type="button"
@@ -697,7 +704,7 @@ export function Remaura3DAISection() {
         </div>
 
         {/* İndirme — model gelince aktif */}
-        <div className="flex flex-col gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {(["glb", "stl"] as DownloadModelFormat[]).map((fmt) => (
             <button
               key={fmt}
