@@ -222,6 +222,7 @@
     let isRecording = false;
     let envIntensity = 2.50;
     let contrastValue = 1.0;
+    let isGLBModel = false; // GLB yüklendiğinde orijinal materyal korunur
 
     let currentMaterialState = {
         color: 0xb8b8b8,
@@ -393,22 +394,27 @@
     }
 
     function updateMaterialProperties() {
-        const base = new THREE.Color(currentMaterialState.color);
-        const hsl = {};
-        base.getHSL(hsl);
-        const displayColor = new THREE.Color().setHSL(
-            hsl.h,
-            Math.min(1.0, hsl.s * contrastValue),
-            Math.min(0.95, Math.pow(hsl.l, 1.0 / contrastValue))
-        );
         modelGroup.traverse(c => {
             if (c.isMesh && c.material) {
                 const materials = Array.isArray(c.material) ? c.material : [c.material];
                 materials.forEach(m => {
-                    m.color.copy(displayColor);
-                    m.roughness = currentMaterialState.roughness;
-                    m.metalness = currentMaterialState.metalness;
-                    m.envMapIntensity = envIntensity;
+                    if (isGLBModel) {
+                        // GLB: orijinal renk/roughness/metalness korunur, sadece env güncellenir
+                        m.envMapIntensity = envIntensity;
+                    } else {
+                        const base = new THREE.Color(currentMaterialState.color);
+                        const hsl = {};
+                        base.getHSL(hsl);
+                        const displayColor = new THREE.Color().setHSL(
+                            hsl.h,
+                            Math.min(1.0, hsl.s * contrastValue),
+                            Math.min(0.95, Math.pow(hsl.l, 1.0 / contrastValue))
+                        );
+                        m.color.copy(displayColor);
+                        m.roughness = currentMaterialState.roughness;
+                        m.metalness = currentMaterialState.metalness;
+                        m.envMapIntensity = envIntensity;
+                    }
                     m.needsUpdate = true;
                 });
             }
@@ -482,6 +488,7 @@
                 envMapIntensity: envIntensity
             });
             try {
+                isGLBModel = false;
                 if (name.endsWith('.stl')) {
                     const loader = new STLLoader();
                     const geo = loader.parse(buffer);
@@ -494,10 +501,19 @@
                     obj.traverse(c => { if(c.isMesh) { c.material = activeMat; c.castShadow = true; } });
                     finalizeModel(obj, file.name);
                 } else if (name.endsWith('.glb') || name.endsWith('.gltf')) {
+                    isGLBModel = true;
                     const loader = new GLTFLoader();
                     loader.setDRACOLoader(dracoLoader);
                     loader.parse(buffer, '', (gltf) => {
-                        gltf.scene.traverse(c => { if(c.isMesh) { c.material = activeMat; c.castShadow = true; } });
+                        gltf.scene.traverse(c => {
+                            if (c.isMesh) {
+                                c.castShadow = true;
+                                const mats = Array.isArray(c.material) ? c.material : [c.material];
+                                mats.forEach(m => {
+                                    if (m) { m.envMapIntensity = envIntensity; m.needsUpdate = true; }
+                                });
+                            }
+                        });
                         finalizeModel(gltf.scene, file.name);
                     });
                 }
