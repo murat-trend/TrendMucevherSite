@@ -77,6 +77,10 @@
                 KAY
             </button>
         </div>
+        <button id="download-video-btn" class="hidden flex items-center justify-center gap-1.5 bg-zinc-900 border border-[#c5a059]/40 hover:border-[#c5a059] text-[#c5a059] px-3 py-3 rounded-2xl font-bold text-[10px] transition-all active:scale-[0.98]">
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            VİDEO İNDİR
+        </button>
 
         <div class="panel-card p-3 mt-1">
             <h3 class="text-[9px] font-black text-white/20 tracking-[0.2em] uppercase mb-3">FORMAT</h3>
@@ -632,6 +636,15 @@
         controls.update();
     }
 
+    document.getElementById('download-video-btn').addEventListener('click', () => {
+        if (!lastRecordedBlob) return;
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(lastRecordedBlob);
+        link.download = `remaura_video_${Date.now()}.webm`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+    });
+
     document.getElementById('screenshot-btn').addEventListener('click', () => {
         renderer.render(scene, camera);
         const link = document.createElement('a');
@@ -664,7 +677,8 @@
             if (uploadBtn) uploadBtn.style.opacity = '1';
             indicator.classList.add('hidden');
             isRecording = false;
-            showToast('Video hazır — "Platforma Yükle" ile yükleyebilirsiniz.');
+            document.getElementById('download-video-btn').classList.remove('hidden');
+            showToast('Video hazır — indirebilir veya platforma yükleyebilirsiniz.');
         };
         recorder.start();
         setTimeout(() => { if (recorder.state === "recording") recorder.stop(); }, activeDuration * 1000);
