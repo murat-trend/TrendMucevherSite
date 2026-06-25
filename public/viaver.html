@@ -133,11 +133,11 @@
             <div class="flex flex-col gap-1.5">
                 <p class="text-[8px] font-bold text-white/30 uppercase">Gümüş</p>
                 <div class="grid grid-cols-2 gap-1.5">
-                    <button id="mat-antik" onclick="setMaterial(0xb8b8b8,0.05,1.0,'mat-antik')" class="btn-option active py-2 rounded-lg flex items-center justify-center gap-1.5">
-                        <div class="w-2.5 h-2.5 rounded-full bg-[#b8b8b8] flex-shrink-0"></div><span>Antik</span>
+                    <button id="mat-antik" onclick="setMaterial(0xbcbcbc,0.20,0.95,'mat-antik')" class="btn-option active py-2 rounded-lg flex items-center justify-center gap-1.5">
+                        <div class="w-2.5 h-2.5 rounded-full bg-[#bcbcbc] flex-shrink-0"></div><span>Antik</span>
                     </button>
-                    <button id="mat-parlak" onclick="setMaterial(0xffffff,0.0,1.0,'mat-parlak')" class="btn-option py-2 rounded-lg flex items-center justify-center gap-1.5">
-                        <div class="w-2.5 h-2.5 rounded-full bg-[#ffffff] flex-shrink-0"></div><span>Parlak</span>
+                    <button id="mat-parlak" onclick="setMaterial(0xf0f0f0,0.04,1.0,'mat-parlak')" class="btn-option py-2 rounded-lg flex items-center justify-center gap-1.5">
+                        <div class="w-2.5 h-2.5 rounded-full bg-[#f0f0f0] flex-shrink-0"></div><span>Parlak</span>
                     </button>
                 </div>
                 <p class="text-[8px] font-bold text-white/30 uppercase mt-1">Metaller</p>
@@ -169,24 +169,24 @@
         <div class="panel-card p-3">
             <div class="flex justify-between items-center mb-1.5">
                 <span class="text-[8px] font-bold text-white/30 uppercase">Roughness</span>
-                <span id="rough-val" class="text-[8px] font-mono text-[#c5a059]">0.05</span>
+                <span id="rough-val" class="text-[8px] font-mono text-[#c5a059]">0.20</span>
             </div>
-            <input type="range" id="rough-slider" min="0" max="1" step="0.01" value="0.05">
+            <input type="range" id="rough-slider" min="0" max="1" step="0.01" value="0.20">
             <div class="flex justify-between items-center mb-1.5 mt-3">
                 <span class="text-[8px] font-bold text-white/30 uppercase">Metalness</span>
-                <span id="metal-val" class="text-[8px] font-mono text-[#c5a059]">1.00</span>
+                <span id="metal-val" class="text-[8px] font-mono text-[#c5a059]">0.95</span>
             </div>
-            <input type="range" id="metal-slider" min="0" max="2" step="0.01" value="1.00">
+            <input type="range" id="metal-slider" min="0" max="1" step="0.01" value="0.95">
             <div class="flex justify-between items-center mb-1.5 mt-3">
                 <span class="text-[8px] font-bold text-white/30 uppercase">Env</span>
-                <span id="env-val" class="text-[8px] font-mono text-[#c5a059]">2.50</span>
+                <span id="env-val" class="text-[8px] font-mono text-[#c5a059]">1.60</span>
             </div>
-            <input type="range" id="env-slider" min="0" max="6" step="0.05" value="2.50">
+            <input type="range" id="env-slider" min="0" max="4" step="0.05" value="1.60">
             <div class="flex justify-between items-center mb-1.5 mt-3">
                 <span class="text-[8px] font-bold text-white/30 uppercase">Exposure</span>
-                <span id="exposure-val" class="text-[8px] font-mono text-[#c5a059]">1.80</span>
+                <span id="exposure-val" class="text-[8px] font-mono text-[#c5a059]">1.20</span>
             </div>
-            <input type="range" id="exposure-slider" min="0.5" max="4.0" step="0.05" value="1.80">
+            <input type="range" id="exposure-slider" min="0.3" max="3.0" step="0.05" value="1.20">
         </div>
 
         <div class="panel-card p-3">
@@ -220,14 +220,14 @@
     let scene, camera, renderer, controls, modelGroup, gridHelper;
     let activeDuration = 10;
     let isRecording = false;
-    let envIntensity = 2.50;
+    let envIntensity = 1.60;
     let contrastValue = 1.0;
-    let isGLBModel = false; // GLB yüklendiğinde orijinal materyal korunur
+    let isGLBModel = false;
 
     let currentMaterialState = {
-        color: 0xb8b8b8,
-        roughness: 0.05,
-        metalness: 1.0
+        color: 0xbcbcbc,
+        roughness: 0.20,
+        metalness: 0.95
     };
 
     const dracoLoader = new DRACOLoader();
@@ -253,7 +253,7 @@
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.80;
+        renderer.toneMappingExposure = 1.20;
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         container.appendChild(renderer.domElement);
@@ -269,35 +269,39 @@
         controls.autoRotate = true;
         controls.autoRotateSpeed = 2.0;
 
-        // Top softbox — ana yumuşak ışık
-        const topBox = new THREE.RectAreaLight(0xffffff, 12, 300, 150);
-        topBox.position.set(0, 350, 50);
+        // Genel dolgu — sert gölgeleri yumuşatır
+        const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambient);
+
+        // Ana tepe kutusu — geniş, yumuşak, takı stüdyo tarzı
+        const topBox = new THREE.RectAreaLight(0xfff8f0, 7, 500, 250);
+        topBox.position.set(0, 380, 80);
         topBox.lookAt(0, 0, 0);
         scene.add(topBox);
 
-        // Sol panel — dikey şerit yansıması
-        const leftPanel = new THREE.RectAreaLight(0xfff8f0, 8, 40, 300);
-        leftPanel.position.set(-250, 100, 0);
+        // Sol dikey şerit — metalik kenarlarda uzun yansıma
+        const leftPanel = new THREE.RectAreaLight(0xfffaf5, 5, 25, 400);
+        leftPanel.position.set(-260, 130, 20);
         leftPanel.lookAt(0, 0, 0);
         scene.add(leftPanel);
 
-        // Sağ panel — dikey şerit yansıması
-        const rightPanel = new THREE.RectAreaLight(0xfff8f0, 8, 40, 300);
-        rightPanel.position.set(250, 100, 0);
+        // Sağ dikey şerit
+        const rightPanel = new THREE.RectAreaLight(0xfffaf5, 5, 25, 400);
+        rightPanel.position.set(260, 130, 20);
         rightPanel.lookAt(0, 0, 0);
         scene.add(rightPanel);
 
-        // Arka ışık — ürünü zeminden ayırır
-        const backLight = new THREE.RectAreaLight(0xeef0ff, 5, 400, 200);
-        backLight.position.set(0, 80, -300);
-        backLight.lookAt(0, 0, 0);
-        scene.add(backLight);
+        // Ön alt dolgu — alt tarafı karartmaz
+        const frontFill = new THREE.RectAreaLight(0xffffff, 2.5, 350, 100);
+        frontFill.position.set(0, 40, 320);
+        frontFill.lookAt(0, 0, 0);
+        scene.add(frontFill);
 
-        // Hot spot — tek keskin parlaklık noktası
-        const hotSpot = new THREE.SpotLight(0xffffff, 15.0, 1500, Math.PI / 10, 0.25);
-        hotSpot.position.set(80, 500, 120);
-        hotSpot.castShadow = true;
-        scene.add(hotSpot);
+        // Arka rim — ürünü zeminden ayırır, soğuk tonlu
+        const backRim = new THREE.RectAreaLight(0xe8eeff, 3.5, 350, 180);
+        backRim.position.set(0, 160, -320);
+        backRim.lookAt(0, 0, 0);
+        scene.add(backRim);
 
         gridHelper = new THREE.GridHelper(2000, 100, 0x333333, 0x222222);
         gridHelper.position.y = -0.01;
