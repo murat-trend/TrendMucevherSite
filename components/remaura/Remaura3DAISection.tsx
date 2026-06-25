@@ -667,16 +667,14 @@ export function Remaura3DAISection() {
         >
           {isCreating3D ? "Arka plan temizleniyor ve 3D oluşturuluyor..." : "3D Oluştur"}
         </button>
-        {uploadedImage ? (
-          <button
-            type="button"
-            onClick={() => void handleCreate3D()}
-            disabled={isCreating3D || remainingAttempts <= 0}
-            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-4 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Aynı Görselle Tekrar Dene
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={() => void handleCreate3D()}
+          disabled={isCreating3D || !uploadedImage || remainingAttempts <= 0}
+          className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-4 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Aynı Görselle Tekrar Dene
+        </button>
       </div>
     </section>
   );
