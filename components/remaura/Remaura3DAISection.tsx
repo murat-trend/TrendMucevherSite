@@ -658,7 +658,7 @@ export function Remaura3DAISection() {
         {mesh3DError ? <p className="text-xs text-red-400">{mesh3DError}</p> : null}
 
         {/* RV1 / RV2 butonları */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-3">
           {/* RV1 Magic — Mesh AI */}
           <button
             type="button"
@@ -697,7 +697,7 @@ export function Remaura3DAISection() {
         </div>
 
         {/* İndirme — model gelince aktif */}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="flex flex-col gap-2">
           {(["glb", "stl"] as DownloadModelFormat[]).map((fmt) => (
             <button
               key={fmt}
