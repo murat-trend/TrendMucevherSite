@@ -19,7 +19,7 @@ export async function GET() {
 
   const { data: jobs, error } = await supabase
     .from("mesh_jobs")
-    .select("id, task_id, image_path, created_at, expires_at")
+    .select("id, task_id, image_path, engine, created_at, expires_at")
     .eq("user_id", user.id)
     .gt("expires_at", now)
     .order("created_at", { ascending: false })
@@ -42,6 +42,7 @@ export async function GET() {
       return {
         id: job.id,
         taskId: job.task_id,
+        engine: (job.engine as string) ?? "rv1",
         imageUrl,
         createdAt: job.created_at,
         expiresAt: job.expires_at,

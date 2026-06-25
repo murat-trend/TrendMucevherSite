@@ -16,8 +16,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Oturum gerekli." }, { status: 401 });
   }
 
-  const body = await req.json() as { taskId: string; image?: string };
-  const { taskId, image } = body;
+  const body = await req.json() as { taskId: string; image?: string; engine?: string };
+  const { taskId, image, engine = "rv1" } = body;
 
   if (!taskId) {
     return NextResponse.json({ error: "taskId gerekli." }, { status: 400 });
@@ -46,6 +46,7 @@ export async function POST(req: Request) {
     user_id: user.id,
     task_id: taskId,
     image_path: imagePath,
+    engine,
     expires_at: expiresAt,
   });
 

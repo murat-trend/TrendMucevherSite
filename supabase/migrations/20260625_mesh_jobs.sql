@@ -3,6 +3,7 @@ create table if not exists public.mesh_jobs (
   id          uuid        default gen_random_uuid() primary key,
   user_id     uuid        references auth.users(id) on delete cascade not null,
   task_id     text        not null,
+  engine      text        not null default 'rv1',
   image_path  text,                          -- supabase storage: mesh-inputs/{user_id}/{filename}
   created_at  timestamptz default now()      not null,
   expires_at  timestamptz default (now() + interval '24 hours') not null

@@ -15,17 +15,13 @@ type DownloadModelFormat = "glb" | "stl";
 type MeshGenerationMode = "production" | "visual";
 const MAX_ATTEMPTS_PER_IMAGE = 4;
 
-function generateMeshFileCode(): string {
+function generateRemauraFilename(engine: "rv1" | "rv2"): string {
   const now = new Date();
-  const dd = String(now.getDate()).padStart(2, "0");
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const yyyy = String(now.getFullYear());
-  const dateKey = `${dd}${mm}${yyyy}`;
-  const storageKey = `remaura-mesh-counter-${dateKey}`;
-  const current = parseInt(localStorage.getItem(storageKey) ?? "0", 10);
-  const next = current + 1;
-  localStorage.setItem(storageKey, String(next));
-  return `${dateKey}${String(next).padStart(4, "0")}`;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const date = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+  const time = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const label = engine === "rv1" ? "RemauraRV1" : "RemauraRV2";
+  return `${label}-${date}-${time}`;
 }
 
 export function Remaura3DAISection() {
@@ -44,7 +40,7 @@ export function Remaura3DAISection() {
   const generationMode: MeshGenerationMode = "production";
   const [remainingAttempts, setRemainingAttempts] = useState<number>(MAX_ATTEMPTS_PER_IMAGE);
 
-  type HistoryItem = { id: string; taskId: string; imageUrl: string | null; createdAt: string; expiresAt: string };
+  type HistoryItem = { id: string; taskId: string; engine: string; imageUrl: string | null; createdAt: string; expiresAt: string };
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -52,6 +48,7 @@ export function Remaura3DAISection() {
   const [cleanedPreviewUrl, setCleanedPreviewUrl] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [meshFileCode, setMeshFileCode] = useState<string | null>(null);
+  const [currentEngine, setCurrentEngine] = useState<"rv1" | "rv2">("rv1");
   const [canUpload, setCanUpload] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -244,8 +241,8 @@ export function Remaura3DAISection() {
           setMesh3DError("Model dosyası indirilemedi veya geçersiz.");
           return;
         }
-        const code = meshFileCode ?? generateMeshFileCode();
-        const filename = `remaura-ai-${code}.${downloadFormat}`;
+        const code = meshFileCode ?? generateRemauraFilename(currentEngine);
+        const filename = `${code}.${downloadFormat}`;
 
         const dirHandle = await getOrPickDir("remaura-3d-dir");
         if (dirHandle) {
@@ -315,12 +312,12 @@ export function Remaura3DAISection() {
     finally { setHistoryLoading(false); }
   }, []);
 
-  const saveJob = useCallback(async (taskId: string, image: string | null) => {
+  const saveJob = useCallback(async (taskId: string, image: string | null, engine: "rv1" | "rv2") => {
     try {
       await fetch("/api/remaura/mesh3d/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskId, image }),
+        body: JSON.stringify({ taskId, image, engine }),
       });
     } catch { /* sessiz hata */ }
   }, []);
@@ -395,7 +392,8 @@ export function Remaura3DAISection() {
 
       const taskId = (data?.taskId as string | null) ?? null;
       setMesh3DTaskId(taskId);
-      setMeshFileCode(generateMeshFileCode());
+      setCurrentEngine("rv1");
+      setMeshFileCode(generateRemauraFilename("rv1"));
       setMesh3DStatus(typeof data?.status === "string" ? data.status : "PENDING");
       setMesh3DProgress(typeof data?.progress === "number" ? data.progress : null);
       setMesh3DModelUrl(typeof data?.modelUrl === "string" ? data.modelUrl : null);
@@ -411,7 +409,7 @@ export function Remaura3DAISection() {
       if (taskId) {
         await pollMeshStatus(taskId);
         // Başarılı → kaydet + galeriyi güncelle
-        void saveJob(taskId, uploadedImage);
+        void saveJob(taskId, uploadedImage, "rv1");
         void loadHistory();
       }
     } catch (e) {
@@ -674,16 +672,20 @@ export function Remaura3DAISection() {
                       <p className="text-[9px] text-muted/40">{new Date(item.createdAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</p>
                       {/* İndir butonları */}
                       <div className="grid grid-cols-2 gap-1">
-                        {(["glb", "stl"] as DownloadModelFormat[]).map((fmt) => (
-                          <a
-                            key={fmt}
-                            href={`/api/remaura/mesh3d/file?taskId=${encodeURIComponent(item.taskId)}&format=${fmt}&kind=download`}
-                            download={`remaura-${item.taskId.slice(-6)}.${fmt}`}
-                            className="inline-flex items-center justify-center rounded-md border border-white/10 bg-white/[0.03] py-1 text-[10px] font-semibold text-white/60 transition hover:border-[#b76e79]/50 hover:text-[#f2d5d9]"
-                          >
-                            .{fmt.toUpperCase()}
-                          </a>
-                        ))}
+                        {(["glb", "stl"] as DownloadModelFormat[]).map((fmt) => {
+                          const eng = (item.engine ?? "rv1") as "rv1" | "rv2";
+                          const fname = generateRemauraFilename(eng);
+                          return (
+                            <a
+                              key={fmt}
+                              href={`/api/remaura/mesh3d/file?taskId=${encodeURIComponent(item.taskId)}&format=${fmt}&kind=download`}
+                              download={`${fname}.${fmt}`}
+                              className="inline-flex items-center justify-center rounded-md border border-white/10 bg-white/[0.03] py-1 text-[10px] font-semibold text-white/60 transition hover:border-[#b76e79]/50 hover:text-[#f2d5d9]"
+                            >
+                              .{fmt.toUpperCase()}
+                            </a>
+                          );
+                        })}
                       </div>
                     </div>
                   );
