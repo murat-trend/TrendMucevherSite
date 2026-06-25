@@ -262,7 +262,7 @@
         // Takı stüdyosu environment — RoomEnvironment yerine özel lightbox
         // Bu texture metalik yüzeylerin refleksiyonuna doğrudan etki eder
         const pmremGenerator = new THREE.PMREMGenerator(renderer);
-        pmremGenerator.compileEquirectangularShader();
+        pmremGenerator.compileCubemapShader();
 
         const lightboxScene = new THREE.Scene();
 
