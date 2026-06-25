@@ -360,16 +360,15 @@
         scene.add(rightPanel);
 
         // Ön alt dolgu — alt tarafı karartmaz
-        const frontFill = new THREE.RectAreaLight(0xffffff, 2.5, 350, 100);
-        frontFill.position.set(0, 40, 320);
-        frontFill.lookAt(0, 0, 0);
-        scene.add(frontFill);
+        const frontAreaLight = new THREE.RectAreaLight(0xffffff, 2.5, 350, 100);
+        frontAreaLight.position.set(0, 40, 320);
+        frontAreaLight.lookAt(0, 0, 0);
+        scene.add(frontAreaLight);
 
-        // Arka rim — ürünü zeminden ayırır, soğuk tonlu
-        const backRim = new THREE.RectAreaLight(0xe8eeff, 3.5, 350, 180);
-        backRim.position.set(0, 160, -320);
-        backRim.lookAt(0, 0, 0);
-        scene.add(backRim);
+        const backRimLight = new THREE.RectAreaLight(0xe8eeff, 3.5, 350, 180);
+        backRimLight.position.set(0, 160, -320);
+        backRimLight.lookAt(0, 0, 0);
+        scene.add(backRimLight);
 
         gridHelper = new THREE.GridHelper(2000, 100, 0x333333, 0x222222);
         gridHelper.position.y = -0.01;
