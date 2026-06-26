@@ -10,7 +10,10 @@ export type MeshAnalysis = {
   shellCount: number;
   boundaryEdges: number;
   nonManifoldEdges: number;
-  watertight: boolean;
+  flippedEdges: number;       // ters normal kaynaklı tutarsız kenar sayısı
+  windingConsistent: boolean; // tüm normaller tutarlı mı (Magics 'ters normal')
+  watertight: boolean;        // kapalı + tek parça + non-manifold yok
+  productionReady: boolean;   // watertight VE winding tutarlı
   shellFaceGroups: Map<number, number[]>;
 };
 
@@ -60,10 +63,15 @@ export function analyzeGeometry(geometry: THREE.BufferGeometry): MeshAnalysis {
   };
 
   const edgeOwners = new Map<string, number[]>();
+  // yön takibi (winding): her kenar için yarı-kenarın "a<b" yönü
+  const edgeDirs = new Map<string, boolean[]>();
   const addEdge = (a: string, b: string, f: number) => {
     const k = edgeKeyStr(a, b);
     const o = edgeOwners.get(k);
     if (o) o.push(f); else edgeOwners.set(k, [f]);
+    const d = a < b; // bu yüzün kenarı geçiş yönü
+    const dd = edgeDirs.get(k);
+    if (dd) dd.push(d); else edgeDirs.set(k, [d]);
   };
 
   for (let f = 0; f < triangleCount; f += 1) {
@@ -72,11 +80,16 @@ export function analyzeGeometry(geometry: THREE.BufferGeometry): MeshAnalysis {
     addEdge(a, b, f); addEdge(b, c, f); addEdge(c, a, f);
   }
 
-  let boundaryEdges = 0, nonManifoldEdges = 0;
+  let boundaryEdges = 0, nonManifoldEdges = 0, flippedEdges = 0;
   edgeOwners.forEach((owners) => {
     if (owners.length === 1) boundaryEdges += 1;
     if (owners.length > 2) nonManifoldEdges += 1;
     for (let i = 1; i < owners.length; i += 1) union(owners[0], owners[i]);
+  });
+  // tutarlı winding: bir kenarı paylaşan 2 yüz, kenarı TERS yönde geçmeli.
+  // aynı yönde geçiyorsa biri ters normalli demektir.
+  edgeDirs.forEach((dirs) => {
+    if (dirs.length === 2 && dirs[0] === dirs[1]) flippedEdges += 1;
   });
 
   const shellFaceGroups = new Map<number, number[]>();
@@ -96,6 +109,8 @@ export function analyzeGeometry(geometry: THREE.BufferGeometry): MeshAnalysis {
   const uniq = new Set<string>();
   for (let i = 0; i < position.count; i += 1) uniq.add(keyOf(position, i));
 
+  const watertight = boundaryEdges === 0 && nonManifoldEdges === 0;
+  const windingConsistent = flippedEdges === 0;
   return {
     triangleCount,
     vertexCount: uniq.size,
@@ -103,7 +118,10 @@ export function analyzeGeometry(geometry: THREE.BufferGeometry): MeshAnalysis {
     shellCount: shellFaceGroups.size,
     boundaryEdges,
     nonManifoldEdges,
-    watertight: boundaryEdges === 0 && nonManifoldEdges === 0,
+    flippedEdges,
+    windingConsistent,
+    watertight,
+    productionReady: watertight && windingConsistent,
     shellFaceGroups,
   };
 }
@@ -343,6 +361,104 @@ export function nonManifoldEdgeLines(geometry: THREE.BufferGeometry | null): THR
   if (out.length === 0) return null;
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(out, 3));
+  return g;
+}
+
+// ---------------------------------------------------------------------------
+// Normalleri/winding'i düzelt: tüm yüzleri tutarlı yöne çevir + dışa baktır.
+// (Magics'in '139 ters normal / 278 bad edge / 38 shell' dediği sorunu çözer.)
+// ---------------------------------------------------------------------------
+export function fixWinding(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+  const src = geometry.index ? geometry.toNonIndexed() : geometry.clone();
+  const pos = src.attributes.position;
+  const triCount = Math.floor(pos.count / 3);
+
+  // weld
+  const vmap = new Map<string, number>();
+  const verts: number[] = [];
+  const vid = (i: number) => {
+    const k = keyOf(pos, i);
+    const ex = vmap.get(k);
+    if (ex !== undefined) return ex;
+    const id = verts.length / 3;
+    vmap.set(k, id);
+    verts.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+    return id;
+  };
+  const faces: number[][] = [];
+  for (let i = 0; i < pos.count; i += 3) faces.push([vid(i), vid(i + 1), vid(i + 2)]);
+
+  // kenar -> yüz listesi
+  const e2f = new Map<string, number[]>();
+  faces.forEach((f, fi) => {
+    for (let e = 0; e < 3; e += 1) {
+      const k = edgeKeyNum(f[e], f[(e + 1) % 3]);
+      const o = e2f.get(k);
+      if (o) o.push(fi); else e2f.set(k, [fi]);
+    }
+  });
+
+  const flip = new Uint8Array(triCount);
+  const visited = new Uint8Array(triCount);
+
+  // bir yüzün (flip uygulanmış) sıralı vertexleri
+  const ov = (fi: number) => {
+    const f = faces[fi];
+    return flip[fi] ? [f[0], f[2], f[1]] : [f[0], f[1], f[2]];
+  };
+
+  for (let s = 0; s < triCount; s += 1) {
+    if (visited[s]) continue;
+    visited[s] = 1;
+    const stack = [s];
+    while (stack.length) {
+      const cf = stack.pop()!;
+      const v = ov(cf);
+      for (let e = 0; e < 3; e += 1) {
+        const p = v[e], q = v[(e + 1) % 3];
+        const k = edgeKeyNum(p, q);
+        const fl = e2f.get(k);
+        if (!fl) continue;
+        for (const nf of fl) {
+          if (nf === cf || visited[nf]) continue;
+          // nf'nin doğal (flip=false) bu kenardaki yönü p->q mı?
+          const f = faces[nf];
+          let samep = false;
+          for (let g = 0; g < 3; g += 1) {
+            if (f[g] === p && f[(g + 1) % 3] === q) { samep = true; break; }
+          }
+          // cf bu kenarı p->q geçiyor; nf TERS (q->p) geçmeli.
+          // nf doğal yönü de p->q ise (samep) → flip gerek.
+          flip[nf] = samep ? 1 : 0;
+          visited[nf] = 1;
+          stack.push(nf);
+        }
+      }
+    }
+  }
+
+  // dışa baktır: işaretli hacim negatifse hepsini ters çevir
+  let vol6 = 0;
+  for (let fi = 0; fi < triCount; fi += 1) {
+    const [a, b, c] = ov(fi);
+    const ax = verts[a*3], ay = verts[a*3+1], az = verts[a*3+2];
+    const bx = verts[b*3], by = verts[b*3+1], bz = verts[b*3+2];
+    const cx = verts[c*3], cy = verts[c*3+1], cz = verts[c*3+2];
+    vol6 += ax*(by*cz - bz*cy) - ay*(bx*cz - bz*cx) + az*(bx*cy - by*cx);
+  }
+  const globalFlip = vol6 < 0;
+
+  const out: number[] = [];
+  for (let fi = 0; fi < triCount; fi += 1) {
+    let [a, b, c] = ov(fi);
+    if (globalFlip) { const t = b; b = c; c = t; }
+    out.push(verts[a*3], verts[a*3+1], verts[a*3+2]);
+    out.push(verts[b*3], verts[b*3+1], verts[b*3+2]);
+    out.push(verts[c*3], verts[c*3+1], verts[c*3+2]);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(out, 3));
+  g.computeVertexNormals();
   return g;
 }
 

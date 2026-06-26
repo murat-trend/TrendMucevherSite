@@ -59,9 +59,13 @@ export async function buildEtsyCard({ modelImg, analysis, weight, fileName, holl
   ctx.font = "400 38px Helvetica, Arial, sans-serif";
   ctx.fillText("Remaura AI · Üretime Hazır 3D Model", S / 2, 238);
 
-  // --- Watertight rozeti ---
-  const ok = analysis.watertight;
-  const badge = ok ? "✓  WATERTIGHT — DÖKÜME HAZIR" : "⚠  ONARIM GEREKLİ";
+  // --- Durum rozeti (kapalı VE normaller tutarlı = döküme hazır) ---
+  const ok = analysis.productionReady;
+  const badge = ok
+    ? "✓  ÜRETİME / DÖKÜME HAZIR"
+    : analysis.watertight
+      ? "⚠  KAPALI · NORMALLER DÜZELTİLMELİ"
+      : "⚠  ONARIM GEREKLİ";
   ctx.font = "700 34px Helvetica, Arial, sans-serif";
   const bw = ctx.measureText(badge).width + 80;
   const bx = (S - bw) / 2, by = 282;

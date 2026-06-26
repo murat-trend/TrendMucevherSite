@@ -11,10 +11,10 @@ import {
 import { MeshCleanViewer, type MeshViewerHandle } from "./MeshCleanViewer";
 import {
   analyzeGeometry, basicCleanup, keepLargestShell, deleteNonManifoldFaces,
-  repairEdgesAndSmallHoles, scaleGeometry, computeWeight, type MeshAnalysis, type MetalWeight,
+  repairEdgesAndSmallHoles, fixWinding, scaleGeometry, computeWeight, type MeshAnalysis, type MetalWeight,
 } from "./lib/meshOps";
 import { buildEtsyCard } from "./lib/etsyCard";
-import { Ruler, ImageIcon } from "lucide-react";
+import { Ruler, ImageIcon, Compass } from "lucide-react";
 
 type Log = { id: number; type: "info" | "ok" | "warn" | "err"; msg: string };
 
@@ -98,6 +98,15 @@ export function MeshTemizleClient() {
       const a = apply(repairEdgesAndSmallHoles(geometry), "Kenar onarımı");
       addLog("ok", `Açık kenar ${before.b} → ${a.boundaryEdges}, non-manifold ${before.n} → ${a.nonManifoldEdges}.`);
     } catch { addLog("err", "Kenar onarımı başarısız."); }
+  }
+  function runFixWinding() {
+    if (!geometry || !analysis) return;
+    addLog("info", `Normaller düzeltiliyor. Ters kenar: ${analysis.flippedEdges}…`);
+    try {
+      const before = analysis.flippedEdges;
+      const a = apply(fixWinding(geometry), "Normal düzeltme");
+      addLog("ok", `Ters normal ${before} → ${a.flippedEdges}. ${a.windingConsistent ? "Normaller tutarlı ✓" : ""}`);
+    } catch { addLog("err", "Normal düzeltme başarısız."); }
   }
 
   function runScale(factor: number, label: string) {
@@ -267,11 +276,15 @@ export function MeshTemizleClient() {
               </div>
               {analysis && (
                 <div className={`mb-3 rounded-lg px-3 py-2 text-center text-sm font-semibold ${
-                  analysis.watertight
+                  analysis.productionReady
                     ? "border border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
                     : "border border-amber-400/30 bg-amber-400/10 text-amber-300"
                 }`}>
-                  {analysis.watertight ? "✓ Watertight — Üretime / Döküme Hazır" : "⚠ Onarım gerekli — temizle"}
+                  {analysis.productionReady
+                    ? "✓ Üretime / Döküme Hazır (kapalı + normaller tutarlı)"
+                    : analysis.watertight
+                      ? "⚠ Kapalı ama normaller ters — «Normalleri düzelt»"
+                      : "⚠ Onarım gerekli — temizle"}
                 </div>
               )}
               {analysis ? (
@@ -281,6 +294,7 @@ export function MeshTemizleClient() {
                   <Row label="Parça / Shell" value={String(analysis.shellCount)} bad={analysis.shellCount > 1} />
                   <Row label="Açık kenar" value={analysis.boundaryEdges.toLocaleString()} bad={analysis.boundaryEdges > 0} />
                   <Row label="Non-manifold" value={analysis.nonManifoldEdges.toLocaleString()} bad={analysis.nonManifoldEdges > 0} />
+                  <Row label="Ters normal" value={analysis.flippedEdges.toLocaleString()} bad={analysis.flippedEdges > 0} />
                   <Row label="Boyut (mm)" value={analysis.dimensions.map((d) => d.toFixed(2)).join(" × ")} />
                 </div>
               ) : <p className="text-sm text-white/30">STL yüklenince rapor burada görünür.</p>}
@@ -326,6 +340,7 @@ export function MeshTemizleClient() {
                 <OpBtn onClick={runKeepLargest} disabled={!analysis || analysis.shellCount < 2} icon={<Scissors className="h-4 w-4" />}>İzole parçaları sil (en büyüğü tut)</OpBtn>
                 <OpBtn onClick={runDeleteNM} disabled={!analysis || analysis.nonManifoldEdges === 0} icon={<Scissors className="h-4 w-4" />} green>Yeşil çöpleri temizle</OpBtn>
                 <OpBtn onClick={runEdgeRepair} disabled={!analysis || (analysis.boundaryEdges === 0 && analysis.nonManifoldEdges === 0)} icon={<AlertTriangle className="h-4 w-4" />}>Açık kenarları kapat (delik onarımı)</OpBtn>
+                <OpBtn onClick={runFixWinding} disabled={!analysis || analysis.windingConsistent} icon={<Compass className="h-4 w-4" />}>Normalleri düzelt (ters yüz)</OpBtn>
               </div>
             </div>
 
