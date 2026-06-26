@@ -5,6 +5,7 @@ type CardInput = {
   analysis: MeshAnalysis;
   weight: MetalWeight;
   fileName?: string;
+  hollowed?: boolean;            // false = dolu (içi boşaltılmamış), true = içi boşaltılmış
 };
 
 const ROSE = "#b76e79";
@@ -28,7 +29,7 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
  * Etsy ürün görseli (2000×2000) üretir: model anlık görüntüsü + tüm rapor değerleri.
  * Döndürdüğü PNG dataURL doğrudan e-ticarete yüklenebilir.
  */
-export async function buildEtsyCard({ modelImg, analysis, weight, fileName }: CardInput): Promise<string> {
+export async function buildEtsyCard({ modelImg, analysis, weight, fileName, hollowed = false }: CardInput): Promise<string> {
   const S = 2000;
   const canvas = document.createElement("canvas");
   canvas.width = S; canvas.height = S;
@@ -72,8 +73,16 @@ export async function buildEtsyCard({ modelImg, analysis, weight, fileName }: Ca
   ctx.fillStyle = ok ? "#34d399" : "#fbbf24";
   ctx.fillText(badge, S / 2, by + 43);
 
+  // --- Dolu / İçi boşaltılmış notu ---
+  const fillNote = hollowed
+    ? "İÇİ BOŞALTILMIŞ MODEL · azaltılmış metal ağırlığı"
+    : "DOLU MODEL · içi boşaltılmamış · tam metal ağırlığı";
+  ctx.fillStyle = hollowed ? GOLD : "rgba(245,243,240,0.55)";
+  ctx.font = "600 28px Helvetica, Arial, sans-serif";
+  ctx.fillText(fillNote, S / 2, by + 110);
+
   // --- Model görseli (kare çerçeve) ---
-  const boxY = 400, boxSize = 1020, boxX = (S - boxSize) / 2;
+  const boxY = 430, boxSize = 980, boxX = (S - boxSize) / 2;
   ctx.fillStyle = "#05060a";
   roundRect(ctx, boxX, boxY, boxSize, boxSize, 28);
   ctx.fill();
@@ -94,8 +103,8 @@ export async function buildEtsyCard({ modelImg, analysis, weight, fileName }: Ca
   ctx.stroke();
 
   // --- Spec panelleri (iki sütun) ---
-  const panY = boxY + boxSize + 40;
-  const panH = 470;
+  const panY = boxY + boxSize + 34;
+  const panH = 440;
   const gap = 36;
   const panW = (boxSize - gap) / 2;
   const leftX = boxX, rightX = boxX + panW + gap;
@@ -114,13 +123,22 @@ export async function buildEtsyCard({ modelImg, analysis, weight, fileName }: Ca
     const rowH = (panH - 110) / rows.length;
     rows.forEach((r, i) => {
       const ry = panY + 110 + rowH * i + rowH / 2;
+      // etiket (sol)
       ctx.fillStyle = "rgba(245,243,240,0.55)";
       ctx.font = "400 30px Helvetica, Arial, sans-serif";
       ctx.textAlign = "left";
       ctx.fillText(r[0], x + 40, ry + 10);
-      ctx.fillStyle = "#f5f3f0";
-      ctx.font = "600 34px 'Consolas', monospace";
+      const labelW = ctx.measureText(r[0]).width;
+      // değer (sağ) — etikete binmesin diye fontu daralt
       ctx.textAlign = "right";
+      ctx.fillStyle = "#f5f3f0";
+      const maxValW = panW - 80 - labelW - 24;
+      let fs = 34;
+      do {
+        ctx.font = `600 ${fs}px 'Consolas', monospace`;
+        if (ctx.measureText(r[1]).width <= maxValW || fs <= 20) break;
+        fs -= 2;
+      } while (true);
       ctx.fillText(r[1], x + panW - 40, ry + 11);
     });
   };
