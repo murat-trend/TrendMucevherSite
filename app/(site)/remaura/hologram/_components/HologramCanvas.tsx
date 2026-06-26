@@ -32,6 +32,12 @@ export interface HologramConfig {
   useOriginalMaterials: boolean;
   cloneCount: number;
   specialEffect: 'none' | 'sparkles' | 'scanlines' | 'flicker';
+  sparklesCount: number;    // 5-80
+  sparklesSpeed: number;    // 0.001-0.05
+  sparklesSize: number;     // 0.05-0.5
+  scanlinesSpeed: number;   // 1-20
+  scanlinesIntensity: number; // 0.01-0.15
+  flickerRate: number;      // 0.8-0.99 (ne kadar yüksekse o kadar az titrer)
   showroomMode: boolean;
   slot1Url: string | null; slot1Format: 'gltf' | 'obj' | 'stl' | null;
   slot2Url: string | null; slot2Format: 'gltf' | 'obj' | 'stl' | null;
@@ -292,11 +298,12 @@ export function HologramCanvas({ config, className, isFullScreen }: Props) {
         gw.add(clone);
 
         if (activeConfig.specialEffect === 'sparkles') {
+          const count = Math.floor(activeConfig.sparklesCount);
           const sg = new THREE.BufferGeometry();
-          const sp = new Float32Array(12 * 3);
-          for (let i = 0; i < 12; i++) { sp[i*3] = (Math.random()-0.5)*2.2; sp[i*3+1] = (Math.random()-0.5)*2.2; sp[i*3+2] = (Math.random()-0.5)*1.5; }
+          const sp = new Float32Array(count * 3);
+          for (let i = 0; i < count; i++) { sp[i*3] = (Math.random()-0.5)*2.2; sp[i*3+1] = (Math.random()-0.5)*2.2; sp[i*3+2] = (Math.random()-0.5)*1.5; }
           sg.setAttribute('position', new THREE.BufferAttribute(sp, 3));
-          const sparkles = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 0.14, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending }));
+          const sparkles = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: activeConfig.sparklesSize, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending }));
           gw.add(sparkles); sparklesRef.current.push(sparkles);
         }
 
@@ -397,9 +404,9 @@ export function HologramCanvas({ config, className, isFullScreen }: Props) {
           inner.scale.set(dynamicScale, dynamicScale, dynamicScale);
           inner.rotation.y = globalRotation;
           inner.rotation.x = globalRotation * 0.25;
-          if (ac.specialEffect === 'flicker' && Math.random() > 0.94) inner.scale.set(0, 0, 0);
+          if (ac.specialEffect === 'flicker' && Math.random() > ac.flickerRate) inner.scale.set(0, 0, 0);
           if (ac.specialEffect === 'scanlines') {
-            const pulse = 1.0 + Math.sin(globalRotation * 8.0) * 0.04;
+            const pulse = 1.0 + Math.sin(globalRotation * ac.scanlinesSpeed) * ac.scanlinesIntensity;
             inner.scale.set(dynamicScale * pulse, dynamicScale, dynamicScale * pulse);
           }
         }
@@ -407,13 +414,15 @@ export function HologramCanvas({ config, className, isFullScreen }: Props) {
 
       if (ac.specialEffect === 'sparkles' && sparklesRef.current.length > 0) {
         sparklesRef.current.forEach(sparkles => {
+          const mat = sparkles.material as THREE.PointsMaterial;
+          mat.size = ac.sparklesSize;
           const positions = sparkles.geometry.attributes.position as THREE.BufferAttribute;
           for (let i = 0; i < positions.count; i++) {
-            (positions.array as Float32Array)[i * 3 + 1] += 0.015;
+            (positions.array as Float32Array)[i * 3 + 1] += ac.sparklesSpeed;
             if ((positions.array as Float32Array)[i * 3 + 1] > 1.5) (positions.array as Float32Array)[i * 3 + 1] = -1.5;
           }
           positions.needsUpdate = true;
-          (sparkles.material as THREE.PointsMaterial).opacity = 0.5 + Math.sin(globalRotation * 5.0) * 0.45;
+          mat.opacity = 0.5 + Math.sin(globalRotation * 5.0) * 0.45;
         });
       }
 

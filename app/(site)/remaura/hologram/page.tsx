@@ -31,6 +31,12 @@ const defaultConfig: HologramConfig = {
   useOriginalMaterials: true,
   cloneCount: 4,
   specialEffect: 'none',
+  sparklesCount: 20,
+  sparklesSpeed: 0.015,
+  sparklesSize: 0.14,
+  scanlinesSpeed: 8,
+  scanlinesIntensity: 0.04,
+  flickerRate: 0.94,
   showroomMode: false,
   slot1Url: null, slot1Format: null,
   slot2Url: null, slot2Format: null,
@@ -257,15 +263,68 @@ export default function HologramPage() {
                 ))}
               </div>
 
-              <div className="flex items-center gap-2 flex-wrap">
-                <label className="text-xs text-white/50 w-20 shrink-0">Efekt</label>
-                {(['none', 'sparkles', 'scanlines', 'flicker'] as const).map(fx => (
-                  <button key={fx} onClick={() => update('specialEffect', fx)}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition border"
-                    style={{ background: config.specialEffect === fx ? ROSE_DIM : 'rgba(255,255,255,0.05)', color: config.specialEffect === fx ? ROSE : 'rgba(255,255,255,0.5)', borderColor: config.specialEffect === fx ? ROSE : 'rgba(255,255,255,0.08)' }}>
-                    {fx}
-                  </button>
-                ))}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <label className="text-xs text-white/50 w-20 shrink-0">Efekt</label>
+                  {(['none', 'sparkles', 'scanlines', 'flicker'] as const).map(fx => (
+                    <button key={fx} onClick={() => update('specialEffect', fx)}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition border"
+                      style={{ background: config.specialEffect === fx ? ROSE_DIM : 'rgba(255,255,255,0.05)', color: config.specialEffect === fx ? ROSE : 'rgba(255,255,255,0.5)', borderColor: config.specialEffect === fx ? ROSE : 'rgba(255,255,255,0.08)' }}>
+                      {fx}
+                    </button>
+                  ))}
+                </div>
+
+                {config.specialEffect === 'sparkles' && (
+                  <div className="pl-[88px] space-y-2">
+                    {([
+                      { key: 'sparklesCount' as const, label: 'Sayı', min: 5, max: 80, step: 1 },
+                      { key: 'sparklesSpeed' as const, label: 'Hız', min: 0.001, max: 0.05, step: 0.001 },
+                      { key: 'sparklesSize' as const, label: 'Boyut', min: 0.02, max: 0.5, step: 0.01 },
+                    ]).map(({ key, label, min, max, step }) => (
+                      <div key={key} className="flex items-center gap-3">
+                        <label className="text-[11px] text-white/40 w-12">{label}</label>
+                        <input type="range" min={min} max={max} step={step} value={config[key] as number}
+                          onChange={e => update(key, parseFloat(e.target.value))}
+                          className="flex-1 h-1 rounded appearance-none cursor-pointer accent-[#b76e79]"
+                          style={{ background: 'rgba(183,110,121,0.2)' }} />
+                        <span className="text-[10px] font-mono text-white/30 w-10 text-right">{(config[key] as number).toFixed(3)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {config.specialEffect === 'scanlines' && (
+                  <div className="pl-[88px] space-y-2">
+                    {([
+                      { key: 'scanlinesSpeed' as const, label: 'Hız', min: 1, max: 20, step: 0.5 },
+                      { key: 'scanlinesIntensity' as const, label: 'Yoğunluk', min: 0.01, max: 0.15, step: 0.005 },
+                    ]).map(({ key, label, min, max, step }) => (
+                      <div key={key} className="flex items-center gap-3">
+                        <label className="text-[11px] text-white/40 w-12">{label}</label>
+                        <input type="range" min={min} max={max} step={step} value={config[key] as number}
+                          onChange={e => update(key, parseFloat(e.target.value))}
+                          className="flex-1 h-1 rounded appearance-none cursor-pointer accent-[#b76e79]"
+                          style={{ background: 'rgba(183,110,121,0.2)' }} />
+                        <span className="text-[10px] font-mono text-white/30 w-10 text-right">{(config[key] as number).toFixed(3)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {config.specialEffect === 'flicker' && (
+                  <div className="pl-[88px] space-y-1">
+                    <div className="flex items-center gap-3">
+                      <label className="text-[11px] text-white/40 w-12">Oran</label>
+                      <input type="range" min={0.8} max={0.99} step={0.01} value={config.flickerRate}
+                        onChange={e => update('flickerRate', parseFloat(e.target.value))}
+                        className="flex-1 h-1 rounded appearance-none cursor-pointer accent-[#b76e79]"
+                        style={{ background: 'rgba(183,110,121,0.2)' }} />
+                      <span className="text-[10px] font-mono text-white/30 w-10 text-right">{config.flickerRate.toFixed(2)}</span>
+                    </div>
+                    <p className="text-[10px] text-white/25">← sol: çok titrer · sağ: az titrer</p>
+                  </div>
+                )}
               </div>
 
               {([
