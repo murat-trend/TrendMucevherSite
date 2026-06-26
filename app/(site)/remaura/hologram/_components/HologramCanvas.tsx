@@ -8,6 +8,7 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 export interface HologramConfig {
   objectType: 'text' | 'customModel';
@@ -113,6 +114,15 @@ export function HologramCanvas({ config, className, isFullScreen }: Props) {
     renderer.toneMappingExposure = 1.1;
     mountRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
+
+    // Orbit controls — sol tık: döndür, sağ tık/iki parmak: kaydır, scroll: zoom
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 1;
+    controls.maxDistance = 30;
+    controls.enablePan = true;
+    controls.autoRotate = false;
 
     // 6-point cinematic jewelry studio lighting
     scene.add(new THREE.AmbientLight(0xffffff, 0.35));
@@ -380,8 +390,12 @@ export function HologramCanvas({ config, className, isFullScreen }: Props) {
         lastGuideType = ac.guideType; lastGuideShow = ac.showGuide; lastGuideColor = ac.guideColor;
       }
 
-      // Canlı güncellenenler: kamera pozisyonu + bloom parametreleri
-      if (cameraRef.current) cameraRef.current.position.z = ac.cameraZ;
+      // OrbitControls damping
+      controls.update();
+
+      // cameraZ slider ile orbit target'ı koruyarak kamera mesafesini güncelle
+      const dir = camera.position.clone().sub(controls.target).normalize();
+      camera.position.copy(controls.target).addScaledVector(dir, ac.cameraZ);
       if (bloomPassRef.current) {
         bloomPassRef.current.strength = ac.bloomStrength;
         bloomPassRef.current.radius = ac.bloomRadius;
@@ -445,6 +459,7 @@ export function HologramCanvas({ config, className, isFullScreen }: Props) {
     return () => {
       window.removeEventListener('resize', handleResize);
       if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
+      controls.dispose();
       renderer.dispose();
       if (mountRef.current && renderer.domElement) mountRef.current.removeChild(renderer.domElement);
     };
@@ -453,7 +468,7 @@ export function HologramCanvas({ config, className, isFullScreen }: Props) {
   return (
     <div
       ref={mountRef}
-      className={`${className ?? ''} relative overflow-hidden bg-black select-none cursor-pointer`}
+      className={`${className ?? ''} relative overflow-hidden bg-black select-none cursor-grab active:cursor-grabbing`}
       style={{ minHeight: isFullScreen ? '100vh' : '450px' }}
     />
   );
