@@ -11,8 +11,9 @@ import {
 import { MeshCleanViewer } from "./MeshCleanViewer";
 import {
   analyzeGeometry, basicCleanup, keepLargestShell, deleteNonManifoldFaces,
-  repairEdgesAndSmallHoles, computeWeight, type MeshAnalysis, type MetalWeight,
+  repairEdgesAndSmallHoles, scaleGeometry, computeWeight, type MeshAnalysis, type MetalWeight,
 } from "./lib/meshOps";
+import { Ruler } from "lucide-react";
 
 type Log = { id: number; type: "info" | "ok" | "warn" | "err"; msg: string };
 
@@ -21,6 +22,7 @@ export function MeshTemizleClient() {
   const [analysis, setAnalysis] = useState<MeshAnalysis | null>(null);
   const [weight, setWeight] = useState<MetalWeight | null>(null);
   const [fileName, setFileName] = useState<string>("");
+  const [targetMm, setTargetMm] = useState("");
   const [wireframe, setWireframe] = useState(false);
   const [showBadEdges, setShowBadEdges] = useState(true);
   const [logs, setLogs] = useState<Log[]>([]);
@@ -94,6 +96,19 @@ export function MeshTemizleClient() {
       const a = apply(repairEdgesAndSmallHoles(geometry), "Kenar onarımı");
       addLog("ok", `Açık kenar ${before.b} → ${a.boundaryEdges}, non-manifold ${before.n} → ${a.nonManifoldEdges}.`);
     } catch { addLog("err", "Kenar onarımı başarısız."); }
+  }
+
+  function runScale(factor: number, label: string) {
+    if (!geometry || factor <= 0 || !isFinite(factor)) return;
+    addLog("info", `Ölçek uygulanıyor: ${label} (×${factor.toFixed(4)})`);
+    try { apply(scaleGeometry(geometry, factor), `Ölçek ${label}`); }
+    catch { addLog("err", "Ölçekleme başarısız."); }
+  }
+  function runScaleToMax(targetMm: number) {
+    if (!geometry || !analysis) return;
+    const cur = Math.max(...analysis.dimensions);
+    if (cur <= 0 || targetMm <= 0) return;
+    runScale(targetMm / cur, `en büyük boyut ${targetMm}mm`);
   }
 
   function runWeight() {
@@ -239,6 +254,38 @@ export function MeshTemizleClient() {
                   <Row label="Boyut (mm)" value={analysis.dimensions.map((d) => d.toFixed(2)).join(" × ")} />
                 </div>
               ) : <p className="text-sm text-white/30">STL yüklenince rapor burada görünür.</p>}
+              {analysis && (Math.max(...analysis.dimensions) < 4 || Math.max(...analysis.dimensions) > 250) && (
+                <p className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-300">
+                  Boyut mücevher için olağandışı görünüyor — gerçek ölçüyü aşağıdan girip ölçekle.
+                </p>
+              )}
+            </div>
+
+            {/* Birim / Ölçek */}
+            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
+              <span className="mb-1 flex items-center gap-1.5 text-sm font-medium text-white/70">
+                <Ruler className="h-4 w-4" /> Birim / Ölçek
+              </span>
+              <p className="mb-3 text-xs text-white/35">
+                Mesh AI / Tripo ölçüsüne güvenme. Parçanın <strong className="text-white/55">gerçek en büyük boyutunu (mm)</strong> gir — model homojen olarak o boyuta ölçeklenir.
+              </p>
+              {analysis && (
+                <p className="mb-2 font-mono text-xs text-white/45">
+                  Şu an en büyük boyut: <span className="text-[#e6b3bb]">{Math.max(...analysis.dimensions).toFixed(2)} mm</span>
+                </p>
+              )}
+              <div className="flex items-center gap-2">
+                <input
+                  type="number" inputMode="decimal" placeholder="Gerçek en büyük boyut (mm)"
+                  value={targetMm} onChange={(e) => setTargetMm(e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[#b76e79]/40 focus:outline-none"
+                />
+                <button
+                  onClick={() => { const v = parseFloat(targetMm); if (v > 0) runScaleToMax(v); }}
+                  disabled={!geometry || !(parseFloat(targetMm) > 0)}
+                  className="shrink-0 rounded-lg bg-[#b76e79]/20 px-4 py-2 text-sm font-medium text-[#e6b3bb] hover:bg-[#b76e79]/30 disabled:opacity-35"
+                >Uygula</button>
+              </div>
             </div>
 
             {/* İşlemler */}

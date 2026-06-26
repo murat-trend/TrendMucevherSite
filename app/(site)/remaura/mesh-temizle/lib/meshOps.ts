@@ -347,6 +347,24 @@ export function nonManifoldEdgeLines(geometry: THREE.BufferGeometry | null): THR
 }
 
 // ---------------------------------------------------------------------------
+// Geometriyi sabit oranda ölçekle (birim düzeltme: cm→mm ×10, inch→mm ×25.4)
+// ---------------------------------------------------------------------------
+export function scaleGeometry(geometry: THREE.BufferGeometry, factor: number): THREE.BufferGeometry {
+  const g = geometry.clone();
+  g.scale(factor, factor, factor);
+  g.computeVertexNormals();
+  return g;
+}
+
+// En büyük boyut (mm) — ölçek mantık kontrolü için
+export function maxDimension(geometry: THREE.BufferGeometry): number {
+  geometry.computeBoundingBox();
+  const b = geometry.boundingBox;
+  if (!b) return 0;
+  return Math.max(b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z);
+}
+
+// ---------------------------------------------------------------------------
 // Metal ağırlığı: işaretli hacim (divergence teoremi) → mm³ → gram
 // ---------------------------------------------------------------------------
 export function computeWeight(geometry: THREE.BufferGeometry): MetalWeight {
