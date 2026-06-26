@@ -8,9 +8,28 @@
 ## Özet (nerede kaldık)
 
 - ✅ **Ağırlık motoru DOĞRULANDI** — gerçek dökümle kalibre: **0.83 g gümüş** (AurelleTr kolyesi).
+- ✅ İkinci doğrulama: **Mesh AI yüzüğü 8.03 g** (ham vs normal-düzeltilmiş %0.05 fark — sağlam).
 - ✅ Üç bağımsız yol aynı sonuca vardı: **bizim Python motoru**, **web kodu**, **MatrixGold**.
-- 🎯 Karar (öneri): **v1 = Ağırlık ürünü** (temizle + tart). Boşaltma = Faz 2.
-- ⏳ Açık strateji sorusu: motor **tarayıcı-öncelikli** mi, **Python sunucu** mu.
+- ✅ **Mimari kesinleşti: tarayıcı-öncelikli.** Sunucu gerekmez.
+- ✅ **v1 = Mesh Temizleme & Gramaj** sayfası CANLIDA (`/remaura/mesh-temizle`). Boşaltma = Faz 2.
+- ⏭️ Sırada: **Hollow** (faz 2) — zemin hazır (temiz + watertight gövde üretebiliyoruz).
+
+## Canlı durum (production)
+
+- `/remaura/mesh-temizle` — CANLI, tam çalışır (tarayıcıda, sunucusuz):
+  yükle → analiz → temizle (4 işlem) → **homojen ölçek** (gerçek mm) → gramaj (5 metal) → indir.
+- `/remaura/hollow` — sayfa canlı ama motor faz 2 (boşaltma henüz yok).
+- İkisi de Remaura menüsünde, super-admin'e özel.
+
+### Doğrulanmış: tarayıcı 1M üçgeni kaldırıyor
+- Mesh AI çıktısı: **1.008.494 üçgen, 48 MB** → tarayıcıda yükleme+analiz **~8 sn**, donma yok.
+- Sonuç Python ile birebir (watertight, 1 parça, 0 hata).
+- **Decimate ŞART DEĞİL** (8 sn kabul edilebilir; ileride UX hızı için opsiyonel).
+
+### Mesh AI / Tripo modelleri (gerçek dünya gözlemi)
+- Dev (1M+ üçgen) + kirli (onlarca çöp shell, açık kenar, non-manifold) + **yanlış ölçek** gelir.
+- Reçete bunların hepsini çözdü: izole parça sil → açık kenar kapat → gerçek mm'ye ölçekle → tart.
+- **Ölçek sabit çarpanla yapılmaz** (×10 her modelde yanlış) — kullanıcı gerçek mm boyutunu girer.
 
 ---
 
@@ -85,9 +104,11 @@ Yoğunluklar (g/cm³): Gümüş 925 = 10.36 · Saf gümüş = 10.49 · Altın 14
 
 ## Sıradaki adımlar
 
-- [ ] **v1: Ağırlık ürünü** — temizle + tart (kanıtlandı, tek başına değerli: döküm maliyeti)
-- [ ] Mimari kararı: tarayıcı-öncelikli vs Python sunucu (öneri: tarayıcı + GWN sunucu yedeği)
-- [ ] Malzeme seçici + birim/ölçek doğrulama (mm değilse uyar)
+- [x] **v1: Mesh Temizleme & Gramaj** — CANLIDA, tarayıcıda, 2 modelde doğrulandı (0.83g + 8.03g)
+- [x] Mimari kararı: **tarayıcı-öncelikli** (sunucu gerekmez; 1M üçgen 8 sn)
+- [x] Homojen ölçek aracı (gerçek mm boyutu; sabit çarpan yok)
+- [ ] (ops.) Tarayıcı temizliğine **normal/winding düzeltme** adımı (garanti)
+- [ ] (ops.) Çok ağır modeller için **decimate** (UX hızı — zorunlu değil)
 - [ ] **Faz 2: Boşaltma** — dış yüzeyi koruyarak iç offset + boşaltılmış ağırlık
 - [ ] Mum/reçine akma deliği (boolean, alttan/gizli)
 - [ ] Kolye için gizli delik / kapak
@@ -105,4 +126,7 @@ Yoğunluklar (g/cm³): Gümüş 925 = 10.36 · Saf gümüş = 10.49 · Altın 14
 | `scripts/hollow_spike_volume.py` | Voxel occupancy + ray-parity hacim |
 | `scripts/hollow_spike_gwn.py` | **GWN doğru hacim (kendi numpy implementasyonu)** |
 
-Test modeli: `C:\Users\Murat\Desktop\AurelleTr.stl` (150k üçgen, 75k vertex, 24.6×12.5×2.71mm, 0.83g Ag)
+Test modelleri:
+- `AurelleTr.stl` — 150k üçgen, 24.6×12.5×2.71mm, **0.83g Ag** (gerçek dökümle kalibre)
+- `remaura-ai-250420260005.stl` — Mesh AI, 1M üçgen 48MB, 95 çöp shell, cm ölçek →
+  temizle + 24mm'ye ölçekle → **8.03g Ag** (ham/normal-düzeltilmiş %0.05 fark)
