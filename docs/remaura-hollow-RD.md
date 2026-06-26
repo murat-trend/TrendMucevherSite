@@ -3,6 +3,14 @@
 > İç boşaltma + döküm ağırlığı aracının geliştirme yolculuğu.
 > Amaç: kuyumcu STL'ini al → temizle → doğru gramaj → içini boşalt → mum deliği → indir.
 
+## Kapsam & Konumlandırma (net sınır)
+
+- **İşimiz:** Kuyumcunun **ZBrush / Rhino / AI (Meshy, Tripo)** modellerini **döküme hazırlamak.** Hepsi bu.
+- **Girmiyoruz:** Tüm STL piyasası, endüstriyel mesh onarımı, destek yapıları, baskı dizilimi → o Magics'in işi.
+- **Tek başarı ölçütü:** **Döküm sorunsuz tutuyor mu?** "Magics paritesi" DEĞİL. Self-intersection döküme engel değilse umursamıyoruz.
+- **Fiyat/konum:** Magics $19.000, biz ~$500. Onun sahasında dövüşmeyiz; kuyumcuya-uygunluk + hız + fiyat + kurulumsuzlukta kazanırız.
+- **Pazarlama dürüstlüğü:** "Endüstriyel onarım için Magics gibi profesyonel paket kullanılır; biz döküm gramajı + temizlik + ürün listeleme yaparız." Bu cümle iadeyi önler, güveni kurar.
+
 ---
 
 ## Özet (nerede kaldık)
