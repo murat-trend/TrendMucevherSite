@@ -11,11 +11,14 @@ import { SynthEngine } from './_components/SynthEngine';
 const defaultConfig: HologramConfig = {
   objectType: 'customModel',
   color: '#00e5ff',
-  speed: 1.0,
+  speed: 0.5,
   scale: 1.0,
-  zoom: 1.0,
-  distance: 2.8,
-  opacity: 0.92,
+  cameraZ: 5.0,
+  distance: 2.0,
+  opacity: 0.95,
+  bloomStrength: 0.2,
+  bloomRadius: 0.4,
+  bloomThreshold: 0.85,
   renderStyle: 'solid',
   showGuide: true,
   guideType: 'crosshair',
@@ -267,9 +270,10 @@ export default function HologramPage() {
 
               {([
                 { key: 'speed' as const, label: 'Hız', min: 0, max: 3, step: 0.05 },
-                { key: 'scale' as const, label: 'Boyut', min: 0.1, max: 3, step: 0.05 },
-                { key: 'opacity' as const, label: 'Opaklık', min: 0.05, max: 1, step: 0.02 },
+                { key: 'scale' as const, label: 'Boyut', min: 0.1, max: 4, step: 0.05 },
+                { key: 'cameraZ' as const, label: 'Yakınlık', min: 1, max: 20, step: 0.1 },
                 { key: 'distance' as const, label: 'Mesafe', min: 0.5, max: 6, step: 0.1 },
+                { key: 'opacity' as const, label: 'Opaklık', min: 0.05, max: 1, step: 0.02 },
               ]).map(({ key, label, min, max, step }) => (
                 <div key={key} className="flex items-center gap-3">
                   <label className="text-xs text-white/50 w-20">{label}</label>
@@ -280,6 +284,25 @@ export default function HologramPage() {
                   <span className="text-xs font-mono text-white/35 w-8 text-right">{(config[key] as number).toFixed(1)}</span>
                 </div>
               ))}
+
+              {/* Işık Patlaması (Bloom) */}
+              <div className="pt-2 border-t border-white/[0.06] space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'rgba(183,110,121,0.7)' }}>Işık Patlaması</p>
+                {([
+                  { key: 'bloomStrength' as const, label: 'Güç', min: 0, max: 3, step: 0.05 },
+                  { key: 'bloomRadius' as const, label: 'Yarıçap', min: 0, max: 1, step: 0.02 },
+                  { key: 'bloomThreshold' as const, label: 'Eşik', min: 0, max: 1, step: 0.02 },
+                ]).map(({ key, label, min, max, step }) => (
+                  <div key={key} className="flex items-center gap-3">
+                    <label className="text-xs text-white/50 w-20">{label}</label>
+                    <input type="range" min={min} max={max} step={step} value={config[key] as number}
+                      onChange={e => update(key, parseFloat(e.target.value))}
+                      className="flex-1 h-1 rounded appearance-none cursor-pointer accent-[#b76e79]"
+                      style={{ background: 'rgba(183,110,121,0.3)' }} />
+                    <span className="text-xs font-mono text-white/35 w-8 text-right">{(config[key] as number).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
 
               <div className="flex items-center gap-3">
                 <label className="text-xs text-white/50 w-20">Klon</label>

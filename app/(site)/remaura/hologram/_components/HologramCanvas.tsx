@@ -14,9 +14,12 @@ export interface HologramConfig {
   color: string;
   speed: number;
   scale: number;
-  zoom: number;
+  cameraZ: number;
   distance: number;
   opacity: number;
+  bloomStrength: number;
+  bloomRadius: number;
+  bloomThreshold: number;
   renderStyle: 'wireframe' | 'points' | 'solid' | 'hybrid';
   showGuide: boolean;
   guideType: 'dot' | 'crosshair' | 'target' | 'none';
@@ -46,6 +49,8 @@ interface Props {
 export function HologramCanvas({ config, className, isFullScreen }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const bloomPassRef = useRef<UnrealBloomPass | null>(null);
   const groupsRef = useRef<THREE.Group[]>([]);
   const calibrationRef = useRef<THREE.Group | null>(null);
   const sparklesRef = useRef<THREE.Points[]>([]);
@@ -91,7 +96,8 @@ export function HologramCanvas({ config, className, isFullScreen }: Props) {
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(65, width / height, 0.1, 100);
-    camera.position.z = 10;
+    camera.position.z = configRef.current.cameraZ;
+    cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height);
@@ -133,7 +139,14 @@ export function HologramCanvas({ config, className, isFullScreen }: Props) {
     // Bloom post-processing
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(width, height), 0.55, 0.7, 0.85));
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(width, height),
+      configRef.current.bloomStrength,
+      configRef.current.bloomRadius,
+      configRef.current.bloomThreshold
+    );
+    bloomPassRef.current = bloomPass;
+    composer.addPass(bloomPass);
     composerRef.current = composer;
 
     const buildHologramMeshes = async () => {
@@ -347,8 +360,8 @@ export function HologramCanvas({ config, className, isFullScreen }: Props) {
       animationFrameId.current = requestAnimationFrame(animate);
       const ac = configRef.current;
 
-      let dynamicScale = ac.scale * ac.zoom;
-      if (ac.audioReactive) dynamicScale = ac.scale * ac.zoom * (1.0 + ac.audioValue * 0.7);
+      let dynamicScale = ac.scale;
+      if (ac.audioReactive) dynamicScale = ac.scale * (1.0 + ac.audioValue * 0.7);
 
       if (lastObjectType !== ac.objectType || lastColor !== ac.color || lastStyle !== ac.renderStyle || lastText !== ac.text || lastCustomModelUrl !== ac.customModelUrl || lastUseOriginalMaterials !== ac.useOriginalMaterials || lastCloneCount !== ac.cloneCount || lastSpecialEffect !== ac.specialEffect || lastShowroomMode !== ac.showroomMode || lastS1 !== ac.slot1Url || lastS2 !== ac.slot2Url || lastS3 !== ac.slot3Url || lastS4 !== ac.slot4Url || lastS5 !== ac.slot5Url) {
         buildHologramMeshes();
@@ -358,6 +371,14 @@ export function HologramCanvas({ config, className, isFullScreen }: Props) {
       if (lastGuideType !== ac.guideType || lastGuideShow !== ac.showGuide || lastGuideColor !== ac.guideColor) {
         buildCalibrationGuides();
         lastGuideType = ac.guideType; lastGuideShow = ac.showGuide; lastGuideColor = ac.guideColor;
+      }
+
+      // Canlı güncellenenler: kamera pozisyonu + bloom parametreleri
+      if (cameraRef.current) cameraRef.current.position.z = ac.cameraZ;
+      if (bloomPassRef.current) {
+        bloomPassRef.current.strength = ac.bloomStrength;
+        bloomPassRef.current.radius = ac.bloomRadius;
+        bloomPassRef.current.threshold = ac.bloomThreshold;
       }
 
       globalRotation += ac.speed * 0.015;
