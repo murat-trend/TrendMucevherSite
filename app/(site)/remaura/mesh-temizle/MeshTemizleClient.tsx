@@ -11,7 +11,7 @@ import {
 import { MeshCleanViewer } from "./MeshCleanViewer";
 import {
   analyzeGeometry, basicCleanup, keepLargestShell, deleteNonManifoldFaces,
-  computeWeight, type MeshAnalysis, type MetalWeight,
+  repairEdgesAndSmallHoles, computeWeight, type MeshAnalysis, type MetalWeight,
 } from "./lib/meshOps";
 
 type Log = { id: number; type: "info" | "ok" | "warn" | "err"; msg: string };
@@ -85,6 +85,15 @@ export function MeshTemizleClient() {
     addLog("info", "Yeşil (non-manifold) yüzler ve bağlı çöpler siliniyor…");
     try { apply(deleteNonManifoldFaces(geometry, 1), "Yeşil çöp temizliği"); }
     catch { addLog("err", "Non-manifold temizliği başarısız."); }
+  }
+  function runEdgeRepair() {
+    if (!geometry || !analysis) return;
+    addLog("info", `Açık kenar kapatma. Açık kenar: ${analysis.boundaryEdges}, non-manifold: ${analysis.nonManifoldEdges}.`);
+    try {
+      const before = { b: analysis.boundaryEdges, n: analysis.nonManifoldEdges };
+      const a = apply(repairEdgesAndSmallHoles(geometry), "Kenar onarımı");
+      addLog("ok", `Açık kenar ${before.b} → ${a.boundaryEdges}, non-manifold ${before.n} → ${a.nonManifoldEdges}.`);
+    } catch { addLog("err", "Kenar onarımı başarısız."); }
   }
 
   function runWeight() {
@@ -239,6 +248,7 @@ export function MeshTemizleClient() {
                 <OpBtn onClick={runBasicCleanup} disabled={!geometry} icon={<Wrench className="h-4 w-4" />}>Temel topoloji temizliği</OpBtn>
                 <OpBtn onClick={runKeepLargest} disabled={!analysis || analysis.shellCount < 2} icon={<Scissors className="h-4 w-4" />}>İzole parçaları sil (en büyüğü tut)</OpBtn>
                 <OpBtn onClick={runDeleteNM} disabled={!analysis || analysis.nonManifoldEdges === 0} icon={<Scissors className="h-4 w-4" />} green>Yeşil çöpleri temizle</OpBtn>
+                <OpBtn onClick={runEdgeRepair} disabled={!analysis || (analysis.boundaryEdges === 0 && analysis.nonManifoldEdges === 0)} icon={<AlertTriangle className="h-4 w-4" />}>Açık kenarları kapat (delik onarımı)</OpBtn>
               </div>
             </div>
 

@@ -228,6 +228,93 @@ export function deleteNonManifoldFaces(geometry: THREE.BufferGeometry, expandRin
 }
 
 // ---------------------------------------------------------------------------
+// Kenar onarımı: non-manifold yüzleri at + küçük/orta açık kenar deliklerini kapat
+// ---------------------------------------------------------------------------
+export function repairEdgesAndSmallHoles(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+  const source = basicCleanup(geometry, 5);
+  const position = source.attributes.position;
+  const vmap = new Map<string, number>();
+  const verts: THREE.Vector3[] = [];
+  const faces: [number, number, number][] = [];
+
+  const vid = (i: number) => {
+    const x = position.getX(i), y = position.getY(i), z = position.getZ(i);
+    const k = `${x.toFixed(4)},${y.toFixed(4)},${z.toFixed(4)}`;
+    const ex = vmap.get(k);
+    if (ex !== undefined) return ex;
+    const id = verts.length;
+    vmap.set(k, id);
+    verts.push(new THREE.Vector3(x, y, z));
+    return id;
+  };
+  for (let i = 0; i < position.count; i += 3) faces.push([vid(i), vid(i + 1), vid(i + 2)]);
+
+  const buildEdges = (list: [number, number, number][]) => {
+    const m = new Map<string, number[]>();
+    list.forEach((f, fi) => {
+      ([[f[0], f[1]], [f[1], f[2]], [f[2], f[0]]] as [number, number][]).forEach(([a, b]) => {
+        const k = edgeKeyNum(a, b);
+        const o = m.get(k);
+        if (o) o.push(fi); else m.set(k, [fi]);
+      });
+    });
+    return m;
+  };
+
+  // 1) non-manifold yaratan yüzleri at (sonraki kapatma daha güvenli olur)
+  const e1 = buildEdges(faces);
+  const bad = new Set<number>();
+  e1.forEach((o) => { if (o.length > 2) o.forEach((x) => bad.add(x)); });
+  const kept = faces.filter((_f, i) => !bad.has(i));
+
+  // 2) açık kenar döngülerini bul
+  const out: [number, number, number][] = [...kept];
+  const e2 = buildEdges(kept);
+  const boundary: [number, number][] = [];
+  e2.forEach((o, k) => { if (o.length === 1) { const [a, b] = k.split("|").map(Number); boundary.push([a, b]); } });
+
+  const adj = new Map<number, number[]>();
+  boundary.forEach(([a, b]) => {
+    adj.set(a, [...(adj.get(a) || []), b]);
+    adj.set(b, [...(adj.get(b) || []), a]);
+  });
+  const remaining = new Set(boundary.map(([a, b]) => edgeKeyNum(a, b)));
+  const take = (a: number, b: number) => remaining.delete(edgeKeyNum(a, b));
+
+  // 3) döngüleri yürü, küçük/orta delikleri merkeze üçgenleyerek kapat
+  boundary.forEach(([start, next]) => {
+    if (!remaining.has(edgeKeyNum(start, next))) return;
+    const loop = [start, next];
+    take(start, next);
+    let prev = start, cur = next;
+    for (let g = 0; g < 1000; g += 1) {
+      const cand = (adj.get(cur) || []).filter((c) => remaining.has(edgeKeyNum(cur, c)) && c !== prev)[0];
+      if (cand === undefined) break;
+      take(cur, cand);
+      if (cand === start) break;
+      loop.push(cand);
+      prev = cur; cur = cand;
+    }
+    // sadece küçük/orta delik: büyük açık sınırlar genelde kasıtlı kesik
+    if (loop.length >= 3 && loop.length <= 160) {
+      const center = new THREE.Vector3();
+      loop.forEach((v) => center.add(verts[v]));
+      center.multiplyScalar(1 / loop.length);
+      const cid = verts.length;
+      verts.push(center);
+      for (let i = 0; i < loop.length; i += 1) out.push([cid, loop[i], loop[(i + 1) % loop.length]]);
+    }
+  });
+
+  const arr: number[] = [];
+  out.forEach((f) => f.forEach((v) => arr.push(verts[v].x, verts[v].y, verts[v].z)));
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(arr, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+// ---------------------------------------------------------------------------
 // Non-manifold kenarları çizgi geometrisi olarak çıkar (yeşil görselleştirme)
 // ---------------------------------------------------------------------------
 export function nonManifoldEdgeLines(geometry: THREE.BufferGeometry | null): THREE.BufferGeometry | null {

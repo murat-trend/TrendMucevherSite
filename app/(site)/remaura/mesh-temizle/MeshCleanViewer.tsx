@@ -100,13 +100,16 @@ export function MeshCleanViewer({ geometry, wireframe, showBadEdges }: Props) {
 
     const group = new THREE.Group();
 
-    // normalize: ortala + ölçekle (görüntü için)
+    // Ortak transform: model bbox merkezi + ölçek. Hem mesh hem yeşil çizgiler
+    // AYNI dönüşümü kullanmalı, yoksa yeşil hatalar model üstüne oturmaz.
+    geometry.computeBoundingBox();
+    const box = geometry.boundingBox!;
+    const center = box.getCenter(new THREE.Vector3());
+    const sphereR = box.getSize(new THREE.Vector3()).length() / 2 || 1;
+    const scale = 2.35 / sphereR;
+
     const disp = geometry.clone();
-    disp.computeBoundingBox();
-    disp.center();
-    disp.computeBoundingSphere();
-    const radius = disp.boundingSphere?.radius || 1;
-    const scale = 2.35 / radius;
+    disp.translate(-center.x, -center.y, -center.z);
     disp.scale(scale, scale, scale);
     disp.computeVertexNormals();
 
@@ -117,10 +120,10 @@ export function MeshCleanViewer({ geometry, wireframe, showBadEdges }: Props) {
     meshRef.current = mesh;
     group.add(mesh);
 
-    // non-manifold kenarlar (aynı transform ile)
+    // non-manifold kenarlar — mesh ile BİREBİR aynı transform
     const lines = nonManifoldEdgeLines(geometry);
     if (lines) {
-      lines.center();
+      lines.translate(-center.x, -center.y, -center.z);
       lines.scale(scale, scale, scale);
       const lineMat = new THREE.LineBasicMaterial({ color: 0x00ff66, depthTest: false });
       const seg = new THREE.LineSegments(lines, lineMat);
