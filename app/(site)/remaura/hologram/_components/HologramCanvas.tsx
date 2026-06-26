@@ -68,7 +68,6 @@ export function HologramCanvas({ config, className, isFullScreen }: Props) {
     if (!mountRef.current) return;
 
     const container = mountRef.current;
-    const SIZE = Math.min(container.clientWidth, container.clientHeight);
 
     // ── Renderer ──────────────────────────────────────────────
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -89,8 +88,8 @@ export function HologramCanvas({ config, className, isFullScreen }: Props) {
     const fill = new THREE.DirectionalLight(0xe0f0ff, 1.5); fill.position.set(-5, 3, 4); scene.add(fill);
     const rim = new THREE.DirectionalLight(0xffffff, 2.8); rim.position.set(0, 4, -8); scene.add(rim);
     const bot = new THREE.DirectionalLight(0xffffff, 1.2); bot.position.set(0, -6, 2); scene.add(bot);
-    scene.add(Object.assign(new THREE.PointLight(0xffccaa, 3, 12), { position: new THREE.Vector3(2, 1, 3) }));
-    scene.add(Object.assign(new THREE.PointLight(0xaaccff, 3, 12), { position: new THREE.Vector3(-2, 1, -3) }));
+    const p1 = new THREE.PointLight(0xffccaa, 3, 12); p1.position.set(2, 1, 3); scene.add(p1);
+    const p2 = new THREE.PointLight(0xaaccff, 3, 12); p2.position.set(-2, 1, -3); scene.add(p2);
 
     // ── Object group ──────────────────────────────────────────
     const objectGroup = new THREE.Group();
