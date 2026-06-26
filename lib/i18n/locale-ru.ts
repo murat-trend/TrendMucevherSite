@@ -334,6 +334,8 @@ export const ruMessages = {
     sosyalPost: "Соцсети пост",
     etsyBoyut: "Etsy размер",
     hologram: "Remaura Hologram",
+    meshTemizle: "Очистка меша и вес",
+    hollow: "Выдалбливание",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",

@@ -334,6 +334,8 @@ export const deMessages = {
     sosyalPost: "Social Post",
     etsyBoyut: "Etsy Bildgröße",
     hologram: "Remaura Hologram",
+    meshTemizle: "Mesh-Bereinigung & Gewicht",
+    hollow: "Aushöhlung",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",

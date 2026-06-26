@@ -18,6 +18,8 @@ export type RemauraNavKey =
   | 'sosyalPost'
   | 'etsyBoyut'
   | 'hologram'
+  | 'meshTemizle'
+  | 'hollow'
 
 export type RemauraCategory = {
   id: string
@@ -184,6 +186,24 @@ export const REMAURA_CATEGORIES: RemauraCategory[] = [
     labelKey: 'hologram',
     icon: '🔮',
     path: '/remaura/hologram',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'mesh-temizle',
+    labelKey: 'meshTemizle',
+    icon: '🧼',
+    path: '/remaura/mesh-temizle',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'hollow',
+    labelKey: 'hollow',
+    icon: '🕳️',
+    path: '/remaura/hollow',
     accessType: 'restricted',
     isSuperAdminOnly: true,
     isActive: true,

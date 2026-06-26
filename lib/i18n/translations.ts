@@ -339,6 +339,8 @@ export const translations = {
       sosyalPost: "Sosyal Post",
       etsyBoyut: "Etsy Boyutlandırıcı",
       hologram: "Remaura Hologram",
+      meshTemizle: "Mesh Temizleme & Gramaj",
+      hollow: "İç Boşaltma",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",
@@ -1151,6 +1153,8 @@ export const translations = {
       sosyalPost: "Social Post",
       etsyBoyut: "Etsy Resizer",
       hologram: "Remaura Hologram",
+      meshTemizle: "Mesh Cleanup & Weight",
+      hollow: "Hollowing",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",
