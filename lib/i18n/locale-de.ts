@@ -331,6 +331,9 @@ export const deMessages = {
     isimKolye: "Name & Buchstabe Kette",
     koleksiyonLab: "Kollektion Lab",
     sosyalBoyut: "Social Bildgröße",
+    sosyalPost: "Social Post",
+    etsyBoyut: "Etsy Bildgröße",
+    hologram: "Remaura Hologram",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",

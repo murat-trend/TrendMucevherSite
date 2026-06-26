@@ -15,6 +15,9 @@ export type RemauraNavKey =
   | 'isimKolye'
   | 'koleksiyonLab'
   | 'sosyalBoyut'
+  | 'sosyalPost'
+  | 'etsyBoyut'
+  | 'hologram'
 
 export type RemauraCategory = {
   id: string
@@ -154,6 +157,33 @@ export const REMAURA_CATEGORIES: RemauraCategory[] = [
     labelKey: 'sosyalBoyut',
     icon: '📐',
     path: '/remaura/sosyal-boyut',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'sosyal-post',
+    labelKey: 'sosyalPost',
+    icon: '🖼️',
+    path: '/remaura/sosyal-post',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'etsy-boyut',
+    labelKey: 'etsyBoyut',
+    icon: '🛍️',
+    path: '/remaura/etsy-boyut',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'hologram',
+    labelKey: 'hologram',
+    icon: '🔮',
+    path: '/remaura/hologram',
     accessType: 'restricted',
     isSuperAdminOnly: true,
     isActive: true,
