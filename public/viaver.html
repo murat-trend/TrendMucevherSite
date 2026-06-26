@@ -341,38 +341,19 @@
         controls.autoRotate = true;
         controls.autoRotateSpeed = 2.0;
 
-        // Genel dolgu — sert gölgeleri yumuşatır
-        const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+        // Genel ortam — gölgeleri hafifçe yumuşatır
+        const ambient = new THREE.AmbientLight(0xffffff, 0.5);
         scene.add(ambient);
 
-        // Ana tepe kutusu — geniş, yumuşak, takı stüdyo tarzı
-        const topBox = new THREE.RectAreaLight(0xfff8f0, 7, 500, 250);
-        topBox.position.set(0, 380, 80);
-        topBox.lookAt(0, 0, 0);
-        scene.add(topBox);
+        // Ana tepe ışığı — altın/gümüş yüzeylerde kayan parıltı
+        const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight1.position.set(5, 10, 7);
+        scene.add(dirLight1);
 
-        // Sol dikey şerit — metalik kenarlarda uzun yansıma
-        const leftPanel = new THREE.RectAreaLight(0xfffaf5, 5, 25, 400);
-        leftPanel.position.set(-260, 130, 20);
-        leftPanel.lookAt(0, 0, 0);
-        scene.add(leftPanel);
-
-        // Sağ dikey şerit
-        const rightPanel = new THREE.RectAreaLight(0xfffaf5, 5, 25, 400);
-        rightPanel.position.set(260, 130, 20);
-        rightPanel.lookAt(0, 0, 0);
-        scene.add(rightPanel);
-
-        // Ön alt dolgu — alt tarafı karartmaz
-        const frontAreaLight = new THREE.RectAreaLight(0xffffff, 2.5, 350, 100);
-        frontAreaLight.position.set(0, 40, 320);
-        frontAreaLight.lookAt(0, 0, 0);
-        scene.add(frontAreaLight);
-
-        const backRimLight = new THREE.RectAreaLight(0xe8eeff, 3.5, 350, 180);
-        backRimLight.position.set(0, 160, -320);
-        backRimLight.lookAt(0, 0, 0);
-        scene.add(backRimLight);
+        // Dolgu ışığı — gölgelere soğuk derinlik katar
+        const dirLight2 = new THREE.DirectionalLight(0x00ffff, 0.8);
+        dirLight2.position.set(-5, -5, 5);
+        scene.add(dirLight2);
 
         gridHelper = new THREE.GridHelper(2000, 100, 0x333333, 0x222222);
         gridHelper.position.y = -0.01;
