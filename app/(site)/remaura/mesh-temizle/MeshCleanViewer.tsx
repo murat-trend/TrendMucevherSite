@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { nonManifoldEdgeLines } from "./lib/meshOps";
@@ -11,13 +11,49 @@ type Props = {
   showBadEdges: boolean;
 };
 
-export function MeshCleanViewer({ geometry, wireframe, showBadEdges }: Props) {
+export type MeshViewerHandle = {
+  /** Modelin kare anlık görüntüsünü (PNG dataURL) döndürür; model yoksa null. */
+  capture: (size?: number) => string | null;
+};
+
+export const MeshCleanViewer = forwardRef<MeshViewerHandle, Props>(function MeshCleanViewer(
+  { geometry, wireframe, showBadEdges }, ref,
+) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const groupRef = useRef<THREE.Group | null>(null);
   const meshRef = useRef<THREE.Mesh | null>(null);
   const edgesRef = useRef<THREE.LineSegments | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    capture: (size = 1100) => {
+      const renderer = rendererRef.current, scene = sceneRef.current, camera = cameraRef.current;
+      const host = mountRef.current;
+      if (!renderer || !scene || !camera || !host || !groupRef.current) return null;
+      const prevW = host.clientWidth || 1, prevH = host.clientHeight || 1;
+      const edges = edgesRef.current;
+      const edgesWasVisible = edges?.visible ?? false;
+      try {
+        if (edges) edges.visible = false; // satış görseli: yeşil hataları gizle
+        renderer.setSize(size, size, false);
+        camera.aspect = 1; camera.updateProjectionMatrix();
+        renderer.render(scene, camera);
+        const url = renderer.domElement.toDataURL("image/png");
+        // eski duruma dön
+        if (edges) edges.visible = edgesWasVisible;
+        renderer.setSize(prevW, prevH, false);
+        camera.aspect = prevW / prevH; camera.updateProjectionMatrix();
+        renderer.render(scene, camera);
+        return url;
+      } catch {
+        if (edges) edges.visible = edgesWasVisible;
+        return null;
+      }
+    },
+  }));
 
   // Sahne kurulumu
   useEffect(() => {
@@ -31,8 +67,10 @@ export function MeshCleanViewer({ geometry, wireframe, showBadEdges }: Props) {
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 5000);
     camera.position.set(0, 0, 4.2);
+    cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    rendererRef.current = renderer;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.domElement.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block";
     host.appendChild(renderer.domElement);
@@ -78,6 +116,7 @@ export function MeshCleanViewer({ geometry, wireframe, showBadEdges }: Props) {
       host.innerHTML = "";
       sceneRef.current = null; controlsRef.current = null;
       groupRef.current = null; meshRef.current = null; edgesRef.current = null;
+      rendererRef.current = null; cameraRef.current = null;
     };
   }, []);
 
@@ -157,4 +196,4 @@ export function MeshCleanViewer({ geometry, wireframe, showBadEdges }: Props) {
       )}
     </div>
   );
-}
+});

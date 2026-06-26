@@ -8,12 +8,13 @@ import {
   AlertTriangle, CheckCircle2, Download, FileText, ListChecks,
   RotateCcw, Scissors, Scale, Upload, Wrench,
 } from "lucide-react";
-import { MeshCleanViewer } from "./MeshCleanViewer";
+import { MeshCleanViewer, type MeshViewerHandle } from "./MeshCleanViewer";
 import {
   analyzeGeometry, basicCleanup, keepLargestShell, deleteNonManifoldFaces,
   repairEdgesAndSmallHoles, scaleGeometry, computeWeight, type MeshAnalysis, type MetalWeight,
 } from "./lib/meshOps";
-import { Ruler } from "lucide-react";
+import { buildEtsyCard } from "./lib/etsyCard";
+import { Ruler, ImageIcon } from "lucide-react";
 
 type Log = { id: number; type: "info" | "ok" | "warn" | "err"; msg: string };
 
@@ -28,6 +29,7 @@ export function MeshTemizleClient() {
   const [logs, setLogs] = useState<Log[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const logBoxRef = useRef<HTMLDivElement>(null);
+  const viewerRef = useRef<MeshViewerHandle>(null);
 
   const addLog = useCallback((type: Log["type"], msg: string) => {
     const t = new Date().toLocaleTimeString("tr-TR", { hour12: false });
@@ -159,6 +161,25 @@ export function MeshTemizleClient() {
     }
   }
 
+  async function exportEtsyCard() {
+    if (!geometry || !analysis) return;
+    addLog("info", "Etsy görseli hazırlanıyor…");
+    try {
+      const w = weight ?? computeWeight(geometry);
+      if (!weight) setWeight(w);
+      // model anlık görüntüsü (yeşil hataları gizleyip temiz çek)
+      const img = viewerRef.current?.capture(1100) ?? null;
+      const png = await buildEtsyCard({ modelImg: img, analysis, weight: w, fileName });
+      const a = document.createElement("a");
+      a.href = png;
+      a.download = (fileName.replace(/\.stl$/i, "") || "model") + "_etsy.png";
+      document.body.appendChild(a); a.click(); a.remove();
+      addLog("ok", "Etsy görseli indirildi (2000×2000 PNG).");
+    } catch (err) {
+      addLog("err", `Görsel üretilemedi: ${(err as Error).message}`);
+    }
+  }
+
   function reset() {
     setGeometry(null); setAnalysis(null); setWeight(null); setFileName("");
     addLog("info", "Sıfırlandı.");
@@ -187,7 +208,7 @@ export function MeshTemizleClient() {
           {/* SOL: sahne + log */}
           <div className="flex flex-col gap-4">
             <div className="relative h-[480px] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#07080a]">
-              <MeshCleanViewer geometry={geometry} wireframe={wireframe} showBadEdges={showBadEdges} />
+              <MeshCleanViewer ref={viewerRef} geometry={geometry} wireframe={wireframe} showBadEdges={showBadEdges} />
               <div className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white/60 backdrop-blur">
                 {fileName || "STL yüklenmedi"}
               </div>
@@ -244,6 +265,15 @@ export function MeshTemizleClient() {
                   ? <CheckCircle2 className="h-5 w-5 text-emerald-400" />
                   : <AlertTriangle className="h-5 w-5 text-amber-400" />)}
               </div>
+              {analysis && (
+                <div className={`mb-3 rounded-lg px-3 py-2 text-center text-sm font-semibold ${
+                  analysis.watertight
+                    ? "border border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+                    : "border border-amber-400/30 bg-amber-400/10 text-amber-300"
+                }`}>
+                  {analysis.watertight ? "✓ Watertight — Üretime / Döküme Hazır" : "⚠ Onarım gerekli — temizle"}
+                </div>
+              )}
               {analysis ? (
                 <div className="space-y-2 text-sm">
                   <Row label="Üçgen" value={analysis.triangleCount.toLocaleString()} />
@@ -331,6 +361,15 @@ export function MeshTemizleClient() {
                 </>
               ) : <p className="text-sm text-white/30">«Hesapla» ile gramajı gör.</p>}
             </div>
+
+            {/* Etsy / e-ticaret görseli */}
+            <button
+              onClick={exportEtsyCard}
+              disabled={!geometry}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#b76e79]/30 bg-[#b76e79]/10 px-4 py-3.5 text-sm font-semibold text-[#e6b3bb] transition-colors hover:bg-[#b76e79]/20 disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              <ImageIcon className="h-4 w-4" /> Etsy Görseli Oluştur (2000×2000)
+            </button>
           </div>
         </div>
       </div>
