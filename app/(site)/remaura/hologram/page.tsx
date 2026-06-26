@@ -167,19 +167,43 @@ export default function HologramPage() {
           {/* Controls Panel */}
           <div className="space-y-4">
 
-            {/* Model Yükle */}
+            {/* Nesne Tipi */}
             <div className="p-4 rounded-2xl border space-y-3" style={{ background: '#0a0b0e', borderColor: 'rgba(255,255,255,0.06)' }}>
-              <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: ROSE }}>3D Model</h3>
-              <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-dashed cursor-pointer transition hover:border-[#b76e79]" style={{ borderColor: 'rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.03)' }}>
-                <Upload className="w-4 h-4" style={{ color: ROSE }} />
-                <span className="text-xs text-white/60">{uploadedModelName ?? 'GLB / OBJ / STL yükle'}</span>
-                <input type="file" accept=".glb,.gltf,.obj,.stl" className="hidden" onChange={e => handleFileUpload(e)} />
-              </label>
-              {config.customModelUrl && (
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={config.useOriginalMaterials} onChange={e => update('useOriginalMaterials', e.target.checked)} className="accent-[#b76e79]" />
-                  <span className="text-xs text-white/50">Orijinal materyalleri koru</span>
-                </label>
+              <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: ROSE }}>Nesne Tipi</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { val: 'text', label: 'Metin', icon: '✦' },
+                  { val: 'customModel', label: '3D Model', icon: '📦' },
+                ] as const).map(opt => (
+                  <button key={opt.val} onClick={() => update('objectType', opt.val)}
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium transition-all border"
+                    style={{ background: config.objectType === opt.val ? ROSE_DIM : 'rgba(255,255,255,0.04)', color: config.objectType === opt.val ? ROSE : 'rgba(255,255,255,0.65)', borderColor: config.objectType === opt.val ? ROSE : 'rgba(255,255,255,0.08)' }}>
+                    <span>{opt.icon}</span>{opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {config.objectType === 'text' && (
+                <input type="text" value={config.text} onChange={e => update('text', e.target.value)}
+                  placeholder="Metin..." maxLength={20}
+                  className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
+                  style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.9)' }} />
+              )}
+
+              {config.objectType === 'customModel' && (
+                <div>
+                  <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-dashed cursor-pointer transition hover:border-[#b76e79]" style={{ borderColor: 'rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.03)' }}>
+                    <Upload className="w-4 h-4" style={{ color: ROSE }} />
+                    <span className="text-xs text-white/60">{uploadedModelName ?? 'GLB / OBJ / STL yükle'}</span>
+                    <input type="file" accept=".glb,.gltf,.obj,.stl" className="hidden" onChange={e => handleFileUpload(e)} />
+                  </label>
+                  {config.customModelUrl && (
+                    <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                      <input type="checkbox" checked={config.useOriginalMaterials} onChange={e => update('useOriginalMaterials', e.target.checked)} className="accent-[#b76e79]" />
+                      <span className="text-xs text-white/50">Orijinal materyalleri koru</span>
+                    </label>
+                  )}
+                </div>
               )}
             </div>
 
