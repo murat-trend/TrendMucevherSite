@@ -341,19 +341,35 @@
         controls.autoRotate = true;
         controls.autoRotateSpeed = 2.0;
 
-        // Genel ortam — gölgeleri hafifçe yumuşatır
-        const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+        // Ortam — tabana hafif sıcaklık
+        const ambient = new THREE.AmbientLight(0xfff8f0, 0.5);
         scene.add(ambient);
 
-        // Ana tepe ışığı — altın/gümüş yüzeylerde kayan parıltı
-        const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.2);
+        // Ana tepe ışığı (beyaz) — dönerken kayan parıltı
+        const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.4);
         dirLight1.position.set(5, 10, 7);
+        dirLight1.castShadow = true;
         scene.add(dirLight1);
 
-        // Dolgu ışığı — gölgelere soğuk derinlik katar
-        const dirLight2 = new THREE.DirectionalLight(0x00ffff, 0.8);
+        // Sıcak üst-ön ışık — altın tonunu besler, gümüşe krem rengi katar
+        const dirWarm = new THREE.DirectionalLight(0xfff0c8, 0.7);
+        dirWarm.position.set(-3, 8, 10);
+        scene.add(dirWarm);
+
+        // Cyan dolgu — gölgelere derinlik, intensite düşürüldü
+        const dirLight2 = new THREE.DirectionalLight(0x00e5ff, 0.35);
         dirLight2.position.set(-5, -5, 5);
         scene.add(dirLight2);
+
+        // Arka rim — modeli zeminden ayırır, soğuk mavi
+        const dirRim = new THREE.DirectionalLight(0xc8e0ff, 0.6);
+        dirRim.position.set(0, 4, -10);
+        scene.add(dirRim);
+
+        // Faset sparkle — tepeden sert nokta ışığı, taş kesimlerini aktive eder
+        const sparkle = new THREE.PointLight(0xffffff, 80, 800);
+        sparkle.position.set(20, 300, 80);
+        scene.add(sparkle);
 
         gridHelper = new THREE.GridHelper(2000, 100, 0x333333, 0x222222);
         gridHelper.position.y = -0.01;
