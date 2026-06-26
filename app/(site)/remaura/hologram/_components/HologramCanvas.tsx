@@ -10,7 +10,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
 export interface HologramConfig {
-  objectType: 'text' | 'jewelryRing' | 'jewelryDiamond' | 'customModel';
+  objectType: 'text' | 'customModel';
   color: string;
   speed: number;
   scale: number;
@@ -251,28 +251,6 @@ export function HologramCanvas({ config, className, isFullScreen }: Props) {
           else new GLTFLoader().load(activeConfig.customModelUrl, gltf => loadSingle(gltf.scene, false), undefined, onErr);
           return;
         } catch (e) { console.error("Model yükleme hatası:", e); }
-      }
-
-      if (activeConfig.objectType === 'jewelryRing') {
-        const rg = new THREE.Group();
-        const bandMat = new THREE.MeshStandardMaterial({ color: 0xffd700, roughness: 0.05, metalness: 0.98, transparent: true, opacity: activeConfig.opacity });
-        const band = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.16, 16, 100), bandMat);
-        band.rotation.x = Math.PI / 2; rg.add(band);
-        const prong = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.22, 0.45, 8), bandMat);
-        prong.position.set(0, 1.2, 0); rg.add(prong);
-        const diamond = new THREE.Mesh(new THREE.ConeGeometry(0.36, 0.52, 8, 1), new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.0, metalness: 0.0, transmission: 0.95, ior: 2.42, thickness: 0.5, transparent: true, opacity: activeConfig.opacity * 0.95, side: THREE.DoubleSide, clearcoat: 1.0 }));
-        diamond.rotation.x = Math.PI; diamond.position.set(0, 1.45, 0); rg.add(diamond);
-        buildFourWaySymmetry(rg); return;
-      }
-
-      if (activeConfig.objectType === 'jewelryDiamond') {
-        const dg = new THREE.Group();
-        const gemMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.0, metalness: 0.0, transmission: 0.95, ior: 2.42, thickness: 1.0, transparent: true, opacity: activeConfig.opacity * 0.9, flatShading: true, side: THREE.DoubleSide, clearcoat: 1.0 });
-        const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.4, 0.55, 12, 1), gemMat);
-        crown.position.y = 0.275; dg.add(crown);
-        const pavilion = new THREE.Mesh(new THREE.ConeGeometry(1.4, 1.45, 12, 1), gemMat);
-        pavilion.rotation.x = Math.PI; pavilion.position.y = -0.725; dg.add(pavilion);
-        buildFourWaySymmetry(dg); return;
       }
 
       if (activeConfig.objectType === 'text') {
