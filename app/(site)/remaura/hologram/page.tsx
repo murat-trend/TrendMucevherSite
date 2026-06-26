@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Upload, Play, Square, Mic, MicOff, Eye, EyeOff, Layers, RotateCcw,
-  Maximize2, Minimize2, Music,
+  Maximize2, Minimize2, Music, ZoomIn, ZoomOut,
 } from 'lucide-react';
 import { HologramCanvas, HologramConfig } from './_components/HologramCanvas';
 import { SynthEngine } from './_components/SynthEngine';
@@ -136,6 +136,18 @@ export default function HologramPage() {
             <div className="relative rounded-2xl overflow-hidden border" style={{ borderColor: 'rgba(255,255,255,0.06)', background: '#000' }}>
               <HologramCanvas config={config} className="w-full" isFullScreen={isFullScreen} />
               <div className="absolute top-3 right-3 flex gap-2">
+                <button onClick={() => update('cameraZ', Math.max(1, config.cameraZ - 1))}
+                  className="p-2 rounded-lg backdrop-blur-sm border text-white/70 hover:text-white transition"
+                  style={{ background: 'rgba(0,0,0,0.5)', borderColor: 'rgba(255,255,255,0.1)' }}
+                  title="Yaklaştır">
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+                <button onClick={() => update('cameraZ', Math.min(20, config.cameraZ + 1))}
+                  className="p-2 rounded-lg backdrop-blur-sm border text-white/70 hover:text-white transition"
+                  style={{ background: 'rgba(0,0,0,0.5)', borderColor: 'rgba(255,255,255,0.1)' }}
+                  title="Uzaklaştır">
+                  <ZoomOut className="w-4 h-4" />
+                </button>
                 <button onClick={() => setIsFullScreen(p => !p)}
                   className="p-2 rounded-lg backdrop-blur-sm border text-white/70 hover:text-white transition"
                   style={{ background: 'rgba(0,0,0,0.5)', borderColor: 'rgba(255,255,255,0.1)' }}>

@@ -356,6 +356,7 @@ export function HologramCanvas({ config, className, isFullScreen }: Props) {
     let lastObjectType = configRef.current.objectType;
     let lastColor = configRef.current.color;
     let lastStyle = configRef.current.renderStyle;
+    let lastOpacity = configRef.current.opacity;
     let lastGuideType = configRef.current.guideType;
     let lastGuideShow = configRef.current.showGuide;
     let lastGuideColor = configRef.current.guideColor;
@@ -380,9 +381,37 @@ export function HologramCanvas({ config, className, isFullScreen }: Props) {
       let dynamicScale = ac.scale;
       if (ac.audioReactive) dynamicScale = ac.scale * (1.0 + ac.audioValue * 0.7);
 
-      if (lastObjectType !== ac.objectType || lastColor !== ac.color || lastStyle !== ac.renderStyle || lastText !== ac.text || lastCustomModelUrl !== ac.customModelUrl || lastUseOriginalMaterials !== ac.useOriginalMaterials || lastCloneCount !== ac.cloneCount || lastSpecialEffect !== ac.specialEffect || lastShowroomMode !== ac.showroomMode || lastS1 !== ac.slot1Url || lastS2 !== ac.slot2Url || lastS3 !== ac.slot3Url || lastS4 !== ac.slot4Url || lastS5 !== ac.slot5Url) {
+      if (lastObjectType !== ac.objectType || lastColor !== ac.color || lastText !== ac.text || lastCustomModelUrl !== ac.customModelUrl || lastUseOriginalMaterials !== ac.useOriginalMaterials || lastCloneCount !== ac.cloneCount || lastSpecialEffect !== ac.specialEffect || lastShowroomMode !== ac.showroomMode || lastS1 !== ac.slot1Url || lastS2 !== ac.slot2Url || lastS3 !== ac.slot3Url || lastS4 !== ac.slot4Url || lastS5 !== ac.slot5Url) {
         buildHologramMeshes();
-        lastObjectType = ac.objectType; lastColor = ac.color; lastStyle = ac.renderStyle; lastText = ac.text; lastCustomModelUrl = ac.customModelUrl; lastUseOriginalMaterials = ac.useOriginalMaterials; lastCloneCount = ac.cloneCount; lastSpecialEffect = ac.specialEffect; lastShowroomMode = ac.showroomMode; lastS1 = ac.slot1Url; lastS2 = ac.slot2Url; lastS3 = ac.slot3Url; lastS4 = ac.slot4Url; lastS5 = ac.slot5Url;
+        lastObjectType = ac.objectType; lastColor = ac.color; lastText = ac.text; lastCustomModelUrl = ac.customModelUrl; lastUseOriginalMaterials = ac.useOriginalMaterials; lastCloneCount = ac.cloneCount; lastSpecialEffect = ac.specialEffect; lastShowroomMode = ac.showroomMode; lastS1 = ac.slot1Url; lastS2 = ac.slot2Url; lastS3 = ac.slot3Url; lastS4 = ac.slot4Url; lastS5 = ac.slot5Url;
+      }
+
+      // Opacity + renderStyle: rebuild gerekmez, tüm mesh'lere live uygula
+      if (lastOpacity !== ac.opacity || lastStyle !== ac.renderStyle) {
+        const isWire = ac.renderStyle === 'wireframe';
+        const isPoints = ac.renderStyle === 'points';
+        scene.traverse((obj) => {
+          if (obj instanceof THREE.Mesh) {
+            const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+            mats.forEach((m: THREE.Material) => {
+              m.transparent = true;
+              m.opacity = ac.opacity;
+              if ('wireframe' in m) (m as THREE.MeshStandardMaterial).wireframe = isWire;
+              if (isPoints) m.visible = false; // points mode için Mesh'leri gizle
+              else m.visible = true;
+              m.needsUpdate = true;
+            });
+          }
+          if (obj instanceof THREE.Points) {
+            const m = obj.material as THREE.PointsMaterial;
+            m.visible = isPoints;
+            m.opacity = ac.opacity;
+            m.transparent = true;
+            m.needsUpdate = true;
+          }
+        });
+        lastOpacity = ac.opacity;
+        lastStyle = ac.renderStyle;
       }
 
       if (lastGuideType !== ac.guideType || lastGuideShow !== ac.showGuide || lastGuideColor !== ac.guideColor) {
