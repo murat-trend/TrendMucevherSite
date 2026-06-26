@@ -5,10 +5,6 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 export interface HologramConfig {
   objectType: 'text' | 'customModel';
@@ -33,12 +29,12 @@ export interface HologramConfig {
   useOriginalMaterials: boolean;
   cloneCount: number;
   specialEffect: 'none' | 'sparkles' | 'scanlines' | 'flicker';
-  sparklesCount: number;    // 5-80
-  sparklesSpeed: number;    // 0.001-0.05
-  sparklesSize: number;     // 0.05-0.5
-  scanlinesSpeed: number;   // 1-20
-  scanlinesIntensity: number; // 0.01-0.15
-  flickerRate: number;      // 0.8-0.99 (ne kadar yüksekse o kadar az titrer)
+  sparklesCount: number;
+  sparklesSpeed: number;
+  sparklesSize: number;
+  scanlinesSpeed: number;
+  scanlinesIntensity: number;
+  flickerRate: number;
   showroomMode: boolean;
   slot1Url: string | null; slot1Format: 'gltf' | 'obj' | 'stl' | null;
   slot2Url: string | null; slot2Format: 'gltf' | 'obj' | 'stl' | null;
@@ -55,450 +51,283 @@ interface Props {
 
 export function HologramCanvas({ config, className, isFullScreen }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-  const bloomPassRef = useRef<UnrealBloomPass | null>(null);
-  const groupsRef = useRef<THREE.Group[]>([]);
-  const calibrationRef = useRef<THREE.Group | null>(null);
-  const sparklesRef = useRef<THREE.Points[]>([]);
-  const composerRef = useRef<EffectComposer | null>(null);
-  const animationFrameId = useRef<number | null>(null);
   const configRef = useRef(config);
 
   useEffect(() => { configRef.current = config; }, [config]);
 
-  const textTextureRef = useRef<THREE.CanvasTexture | null>(null);
-  const textCanvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  const updateTextTexture = (text: string, color: string) => {
-    if (!textCanvasRef.current) {
-      textCanvasRef.current = document.createElement('canvas');
-      textCanvasRef.current.width = 512;
-      textCanvasRef.current.height = 128;
-    }
-    const canvas = textCanvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const fontSize = text.length > 8 ? Math.max(30, 80 - text.length * 3) : 55;
-    ctx.font = `bold ${fontSize}px "Courier New", Courier, monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 15;
-    ctx.fillStyle = color;
-    ctx.fillText(text.toUpperCase(), canvas.width / 2, canvas.height / 2);
-    ctx.shadowBlur = 2;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(text.toUpperCase(), canvas.width / 2, canvas.height / 2);
-    if (textTextureRef.current) textTextureRef.current.needsUpdate = true;
-    else textTextureRef.current = new THREE.CanvasTexture(canvas);
-  };
-
   useEffect(() => {
     if (!mountRef.current) return;
 
-    const width = mountRef.current.clientWidth;
-    const height = mountRef.current.clientHeight;
+    const W = mountRef.current.clientWidth;
+    const H = mountRef.current.clientHeight;
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(65, width / height, 0.1, 100);
-    camera.position.z = configRef.current.cameraZ;
-    cameraRef.current = camera;
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(width, height);
+    // ── Renderer ──────────────────────────────────────────────
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(W, H);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMappingExposure = 1.2;
+    renderer.setClearColor(0x000000, 1);
+    renderer.autoClear = false;
     mountRef.current.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
 
-    // Orbit controls — sol tık: döndür, sağ tık/iki parmak: kaydır, scroll: zoom
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
-    controls.minDistance = 1;
-    controls.maxDistance = 30;
-    controls.enablePan = true;
-    controls.autoRotate = false;
+    // ── Scene & Object ────────────────────────────────────────
+    const scene = new THREE.Scene();
+    scene.background = null;
 
-    // 6-point cinematic jewelry studio lighting
-    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+    // 6-point jewelry lighting
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    const key = new THREE.DirectionalLight(0xfff8e7, 2.5); key.position.set(4, 8, 5); scene.add(key);
+    const fill = new THREE.DirectionalLight(0xe0f0ff, 1.5); fill.position.set(-5, 3, 4); scene.add(fill);
+    const rim = new THREE.DirectionalLight(0xffffff, 2.8); rim.position.set(0, 4, -8); scene.add(rim);
+    const bot = new THREE.DirectionalLight(0xffffff, 1.2); bot.position.set(0, -6, 2); scene.add(bot);
+    const p1 = new THREE.PointLight(0xffccaa, 3, 12); p1.position.set(2, 1, 3); scene.add(p1);
+    const p2 = new THREE.PointLight(0xaaccff, 3, 12); p2.position.set(-2, 1, -3); scene.add(p2);
 
-    const keyLight = new THREE.DirectionalLight(0xfff8e7, 2.8);
-    keyLight.position.set(5, 8, 6);
-    keyLight.castShadow = true;
-    scene.add(keyLight);
+    const objectGroup = new THREE.Group();
+    scene.add(objectGroup);
 
-    const fillLight = new THREE.DirectionalLight(0xe0f0ff, 1.8);
-    fillLight.position.set(-6, 3, 4);
-    scene.add(fillLight);
+    // Sparkles particles
+    let sparklesMesh: THREE.Points | null = null;
 
-    const rimLight = new THREE.DirectionalLight(0xffffff, 3.2);
-    rimLight.position.set(0, 4, -8);
-    scene.add(rimLight);
+    // ── 4 cameras for Pepper's Ghost ─────────────────────────
+    // Each camera looks at the object from a different side.
+    // They orbit around Y axis: 0°, 90°, 180°, 270°
+    const makeCamera = (angleY: number, dist: number) => {
+      const cam = new THREE.PerspectiveCamera(45, 1, 0.01, 200);
+      cam.position.set(
+        Math.sin(angleY) * dist,
+        0,
+        Math.cos(angleY) * dist
+      );
+      cam.lookAt(0, 0, 0);
+      return cam;
+    };
 
-    const bottomLight = new THREE.DirectionalLight(0xffffff, 1.6);
-    bottomLight.position.set(0, -6, 2);
-    scene.add(bottomLight);
+    const cameras = [
+      makeCamera(0, 5),           // bottom  → front view
+      makeCamera(Math.PI, 5),     // top     → back view
+      makeCamera(-Math.PI / 2, 5),// left    → left view
+      makeCamera(Math.PI / 2, 5), // right   → right view
+    ];
 
-    const accent1 = new THREE.PointLight(0xffccaa, 3.5, 12);
-    accent1.position.set(2, 1, 3);
-    scene.add(accent1);
+    // ── Load model ────────────────────────────────────────────
+    const loadModel = async () => {
+      // clear previous
+      while (objectGroup.children.length) objectGroup.remove(objectGroup.children[0]);
+      if (sparklesMesh) { scene.remove(sparklesMesh); sparklesMesh = null; }
 
-    const accent2 = new THREE.PointLight(0xaaccff, 3.5, 12);
-    accent2.position.set(-2, 1, -3);
-    scene.add(accent2);
+      const ac = configRef.current;
+      const parsedColor = new THREE.Color(ac.color);
 
-    // Bloom post-processing
-    const composer = new EffectComposer(renderer);
-    composer.addPass(new RenderPass(scene, camera));
-    const bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(width, height),
-      configRef.current.bloomStrength,
-      configRef.current.bloomRadius,
-      configRef.current.bloomThreshold
-    );
-    bloomPassRef.current = bloomPass;
-    composer.addPass(bloomPass);
-    composerRef.current = composer;
-
-    const buildHologramMeshes = async () => {
-      groupsRef.current.forEach(g => scene.remove(g));
-      groupsRef.current = [];
-      sparklesRef.current = [];
-
-      const activeConfig = configRef.current;
-      const parsedColor = new THREE.Color(activeConfig.color);
-      const isPoints = activeConfig.renderStyle === 'points';
-
-      let meshMaterial: THREE.Material;
-      if (isPoints) {
-        meshMaterial = new THREE.PointsMaterial({ color: parsedColor, size: 0.12, transparent: true, opacity: activeConfig.opacity, blending: THREE.AdditiveBlending });
-      } else if (activeConfig.renderStyle === 'hybrid') {
-        meshMaterial = new THREE.MeshStandardMaterial({ color: parsedColor, transparent: true, opacity: activeConfig.opacity * 0.45, roughness: 0.05, metalness: 0.95, side: THREE.DoubleSide, envMapIntensity: 1.5 });
-      } else {
-        meshMaterial = new THREE.MeshStandardMaterial({ color: parsedColor, transparent: true, opacity: activeConfig.opacity, wireframe: activeConfig.renderStyle === 'wireframe', side: THREE.DoubleSide, roughness: 0.05, metalness: 0.95, envMapIntensity: 1.5 });
-      }
-
-      const parseLoadedGeometry = (object: THREE.Object3D | THREE.BufferGeometry, isGeometry = false) => {
-        let mesh: THREE.Object3D;
-        if (isGeometry && object instanceof THREE.BufferGeometry) {
-          const stlMat = new THREE.MeshStandardMaterial({ color: activeConfig.useOriginalMaterials ? 0xeeeeee : parsedColor, metalness: 0.9, roughness: 0.08, side: THREE.DoubleSide, transparent: true, opacity: activeConfig.opacity });
-          mesh = new THREE.Mesh(object, stlMat);
-        } else {
-          mesh = object as THREE.Object3D;
-          mesh.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-              if (!activeConfig.useOriginalMaterials) {
-                child.material = meshMaterial;
-              } else if (child.material) {
-                (child.material as any).transparent = true;
-                (child.material as any).opacity = activeConfig.opacity;
-                (child.material as any).metalness = 0.9;
-                (child.material as any).roughness = 0.08;
-                (child.material as any).envMapIntensity = 1.5;
-              }
-            }
-          });
-        }
-        return mesh;
+      const applyMaterial = (obj: THREE.Object3D) => {
+        obj.traverse(child => {
+          if (!(child instanceof THREE.Mesh)) return;
+          if (!ac.useOriginalMaterials || !child.material) {
+            child.material = new THREE.MeshStandardMaterial({
+              color: parsedColor,
+              transparent: true,
+              opacity: ac.opacity,
+              wireframe: ac.renderStyle === 'wireframe',
+              side: THREE.DoubleSide,
+              roughness: 0.05,
+              metalness: 0.95,
+            });
+          } else {
+            const m = child.material as THREE.MeshStandardMaterial;
+            m.transparent = true;
+            m.opacity = ac.opacity;
+            m.needsUpdate = true;
+          }
+        });
       };
 
-      const centerAndScale = (mesh: THREE.Object3D, targetMaxSize = 2.8) => {
-        const box = new THREE.Box3().setFromObject(mesh);
-        const size = box.getSize(new THREE.Vector3());
-        const sf = targetMaxSize / (Math.max(size.x, size.y, size.z) || 1);
-        mesh.scale.set(sf, sf, sf);
+      const fitToBox = (obj: THREE.Object3D, size = 2.2) => {
+        const box = new THREE.Box3().setFromObject(obj);
+        const s = box.getSize(new THREE.Vector3());
+        const sf = size / Math.max(s.x, s.y, s.z, 0.001);
+        obj.scale.setScalar(sf);
         const center = box.getCenter(new THREE.Vector3());
-        mesh.position.sub(center.multiplyScalar(sf));
-        return mesh;
+        obj.position.sub(center.multiplyScalar(sf));
       };
 
-      if (activeConfig.showroomMode) {
-        const compositeGroup = new THREE.Group();
-        const gltfL = new GLTFLoader();
-        const objL = new OBJLoader();
-        const stlL = new STLLoader();
-
-        const loadModelPromise = (url: string | null, format: 'gltf' | 'obj' | 'stl' | null, position: THREE.Vector3, scaleSize: number, isLogo = false): Promise<THREE.Object3D> => {
-          return new Promise((resolve) => {
-            if (!url) {
-              const geo = isLogo ? new THREE.IcosahedronGeometry(0.4, 1) : new THREE.OctahedronGeometry(0.28, 0);
-              const mat = new THREE.MeshStandardMaterial({ color: isLogo ? 0xffd700 : parsedColor, wireframe: true, transparent: true, opacity: 0.8, metalness: 1.0, roughness: 0.05 });
-              const p = new THREE.Mesh(geo, mat); p.position.copy(position); resolve(p); return;
-            }
-            const onLoad = (obj: THREE.Object3D | THREE.BufferGeometry, isGeo: boolean) => {
-              const mesh = parseLoadedGeometry(obj, isGeo);
-              centerAndScale(mesh, scaleSize); mesh.position.copy(position); resolve(mesh);
-            };
-            const onErr = () => {
-              const f = new THREE.Mesh(new THREE.IcosahedronGeometry(scaleSize * 0.4, 0), meshMaterial);
-              f.position.copy(position); resolve(f);
-            };
-            if (format === 'obj') objL.load(url, o => onLoad(o, false), undefined, onErr);
-            else if (format === 'stl') stlL.load(url, g => onLoad(g, true), undefined, onErr);
-            else gltfL.load(url, gltf => onLoad(gltf.scene, false), undefined, onErr);
-          });
-        };
-
-        const loadedObjects = await Promise.all([
-          loadModelPromise(activeConfig.slot1Url, activeConfig.slot1Format, new THREE.Vector3(0, 0, -1.4), 0.7),
-          loadModelPromise(activeConfig.slot2Url, activeConfig.slot2Format, new THREE.Vector3(1.4, 0, 0), 0.7),
-          loadModelPromise(activeConfig.slot3Url, activeConfig.slot3Format, new THREE.Vector3(0, 0, 1.4), 0.7),
-          loadModelPromise(activeConfig.slot4Url, activeConfig.slot4Format, new THREE.Vector3(-1.4, 0, 0), 0.7),
-          loadModelPromise(activeConfig.slot5Url, activeConfig.slot5Format, new THREE.Vector3(0, 0, 0), 1.0, true),
-        ]);
-        loadedObjects.forEach(o => compositeGroup.add(o));
-
-        if (activeConfig.specialEffect === 'sparkles') {
-          const sg = new THREE.BufferGeometry();
-          const sp = new Float32Array(30 * 3);
-          for (let i = 0; i < 30; i++) { sp[i*3] = (Math.random()-0.5)*4; sp[i*3+1] = (Math.random()-0.5)*4; sp[i*3+2] = (Math.random()-0.5)*2.5; }
-          sg.setAttribute('position', new THREE.BufferAttribute(sp, 3));
-          const sparkles = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 0.15, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending }));
-          compositeGroup.add(sparkles);
-          sparklesRef.current.push(sparkles);
-        }
-
-        const wrapper = new THREE.Group(); wrapper.add(compositeGroup); wrapper.position.set(0, 0, 0);
-        scene.add(wrapper); groupsRef.current.push(wrapper);
+      if (ac.objectType === 'text') {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512; canvas.height = 128;
+        const ctx = canvas.getContext('2d')!;
+        const txt = ac.text || 'HOLO';
+        const fs = Math.max(32, 72 - txt.length * 3);
+        ctx.clearRect(0, 0, 512, 128);
+        ctx.font = `bold ${fs}px "Courier New", monospace`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.shadowColor = ac.color; ctx.shadowBlur = 18;
+        ctx.fillStyle = ac.color; ctx.fillText(txt.toUpperCase(), 256, 64);
+        ctx.shadowBlur = 2; ctx.fillStyle = '#ffffff'; ctx.fillText(txt.toUpperCase(), 256, 64);
+        const tex = new THREE.CanvasTexture(canvas);
+        const mesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(3.5, 0.9),
+          new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: ac.opacity, side: THREE.DoubleSide })
+        );
+        objectGroup.add(mesh);
         return;
       }
 
-      if (activeConfig.objectType === 'customModel' && activeConfig.customModelUrl) {
-        const loadSingle = (obj: THREE.Object3D | THREE.BufferGeometry, isGeo: boolean) => {
-          const mesh = parseLoadedGeometry(obj, isGeo); centerAndScale(mesh, 2.8);
-          const w = new THREE.Group(); w.add(mesh); buildFourWaySymmetry(w);
+      if (ac.objectType === 'customModel' && ac.customModelUrl) {
+        const onLoaded = (obj: THREE.Object3D) => {
+          applyMaterial(obj);
+          fitToBox(obj, 2.2);
+          objectGroup.add(obj);
         };
-        const onErr = () => { const g = new THREE.Group(); g.add(new THREE.Mesh(new THREE.IcosahedronGeometry(1, 0), meshMaterial)); buildFourWaySymmetry(g); };
-        try {
-          if (activeConfig.customModelFormat === 'obj') new OBJLoader().load(activeConfig.customModelUrl, o => loadSingle(o, false), undefined, onErr);
-          else if (activeConfig.customModelFormat === 'stl') new STLLoader().load(activeConfig.customModelUrl, g => loadSingle(g, true), undefined, onErr);
-          else new GLTFLoader().load(activeConfig.customModelUrl, gltf => loadSingle(gltf.scene, false), undefined, onErr);
-          return;
-        } catch (e) { console.error("Model yükleme hatası:", e); }
-      }
-
-      if (activeConfig.objectType === 'text') {
-        updateTextTexture(activeConfig.text || "HOLO", activeConfig.color);
-        const textMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 0.9), new THREE.MeshBasicMaterial({ map: textTextureRef.current, transparent: true, opacity: activeConfig.opacity, side: THREE.DoubleSide }));
-        buildFourWaySymmetry(textMesh);
-      }
-    };
-
-    const buildFourWaySymmetry = (templateMesh: THREE.Object3D) => {
-      const activeConfig = configRef.current;
-      const d = activeConfig.distance;
-      const allCfgs = [
-        { pos: [0, -d, 0] as [number,number,number], rotZ: 0, rotY: 0 },
-        { pos: [0, d, 0] as [number,number,number], rotZ: Math.PI, rotY: Math.PI },
-        { pos: [-d, 0, 0] as [number,number,number], rotZ: -Math.PI/2, rotY: -Math.PI/2 },
-        { pos: [d, 0, 0] as [number,number,number], rotZ: Math.PI/2, rotY: Math.PI/2 },
-      ];
-
-      allCfgs.slice(0, activeConfig.cloneCount).forEach(cfg => {
-        const clone = templateMesh.clone();
-        const gw = new THREE.Group();
-        gw.position.set(cfg.pos[0], cfg.pos[1], 0);
-        gw.rotation.z = cfg.rotZ;
-        clone.rotation.y = cfg.rotY;
-        gw.add(clone);
-
-        if (activeConfig.specialEffect === 'sparkles') {
-          const count = Math.floor(activeConfig.sparklesCount);
-          const sg = new THREE.BufferGeometry();
-          const sp = new Float32Array(count * 3);
-          for (let i = 0; i < count; i++) { sp[i*3] = (Math.random()-0.5)*2.2; sp[i*3+1] = (Math.random()-0.5)*2.2; sp[i*3+2] = (Math.random()-0.5)*1.5; }
-          sg.setAttribute('position', new THREE.BufferAttribute(sp, 3));
-          const sparkles = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: activeConfig.sparklesSize, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending }));
-          gw.add(sparkles); sparklesRef.current.push(sparkles);
+        const onErr = () => {
+          const fallback = new THREE.Mesh(
+            new THREE.IcosahedronGeometry(1, 1),
+            new THREE.MeshStandardMaterial({ color: parsedColor, wireframe: true, transparent: true, opacity: ac.opacity })
+          );
+          objectGroup.add(fallback);
+        };
+        if (ac.customModelFormat === 'obj') {
+          new OBJLoader().load(ac.customModelUrl, onLoaded, undefined, onErr);
+        } else if (ac.customModelFormat === 'stl') {
+          new STLLoader().load(ac.customModelUrl, geo => {
+            const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+              color: ac.useOriginalMaterials ? 0xeeeeee : parsedColor,
+              metalness: 0.9, roughness: 0.08, transparent: true, opacity: ac.opacity, side: THREE.DoubleSide
+            }));
+            fitToBox(m, 2.2);
+            objectGroup.add(m);
+          }, undefined, onErr);
+        } else {
+          new GLTFLoader().load(ac.customModelUrl, gltf => onLoaded(gltf.scene), undefined, onErr);
         }
-
-        scene.add(gw); groupsRef.current.push(gw);
-      });
-    };
-
-    const buildCalibrationGuides = () => {
-      if (calibrationRef.current) scene.remove(calibrationRef.current);
-      const activeConfig = configRef.current;
-      if (!activeConfig.showGuide) return;
-
-      const guideGroup = new THREE.Group();
-      const colorVal = new THREE.Color(activeConfig.guideColor);
-      const mat = new THREE.MeshBasicMaterial({ color: colorVal, transparent: true, opacity: 0.85 });
-
-      if (activeConfig.guideType === 'dot') {
-        guideGroup.add(new THREE.Mesh(new THREE.CircleGeometry(0.12, 32), mat));
-      } else if (activeConfig.guideType === 'crosshair') {
-        const ll = 1.6;
-        const lm = new THREE.LineBasicMaterial({ color: colorVal, transparent: true, opacity: 0.75 });
-        guideGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-ll/2,0,0), new THREE.Vector3(ll/2,0,0)]), lm));
-        guideGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,-ll/2,0), new THREE.Vector3(0,ll/2,0)]), lm));
-        const circ = new THREE.Mesh(new THREE.RingGeometry(0.4, 0.43, 32), mat);
-        circ.position.z = 0.01; guideGroup.add(circ);
-      } else if (activeConfig.guideType === 'target') {
-        [0.2, 0.6, 1.2].forEach((r, i) => guideGroup.add(new THREE.Mesh(new THREE.RingGeometry(r, r+0.02, 32), mat)));
-        const cl = 2.4;
-        const lm = new THREE.LineBasicMaterial({ color: colorVal, transparent: true, opacity: 0.5 });
-        guideGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-cl/2,0,0), new THREE.Vector3(cl/2,0,0)]), lm));
-        guideGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,-cl/2,0), new THREE.Vector3(0,cl/2,0)]), lm));
+        return;
       }
 
-      scene.add(guideGroup); calibrationRef.current = guideGroup;
+      // Fallback: placeholder
+      const placeholder = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(1, 1),
+        new THREE.MeshStandardMaterial({ color: parsedColor, wireframe: true, transparent: true, opacity: 0.7 })
+      );
+      objectGroup.add(placeholder);
     };
 
-    buildHologramMeshes();
-    buildCalibrationGuides();
+    loadModel();
 
-    let lastObjectType = configRef.current.objectType;
-    let lastColor = configRef.current.color;
-    let lastStyle = configRef.current.renderStyle;
-    let lastOpacity = configRef.current.opacity;
-    let lastGuideType = configRef.current.guideType;
-    let lastGuideShow = configRef.current.showGuide;
-    let lastGuideColor = configRef.current.guideColor;
+    // ── Animate ───────────────────────────────────────────────
+    let rafId: number;
+    let rotation = 0;
+    let lastUrl = configRef.current.customModelUrl;
+    let lastType = configRef.current.objectType;
     let lastText = configRef.current.text;
-    let lastCustomModelUrl = configRef.current.customModelUrl;
-    let lastUseOriginalMaterials = configRef.current.useOriginalMaterials;
-    let lastCloneCount = configRef.current.cloneCount;
-    let lastSpecialEffect = configRef.current.specialEffect;
-    let lastShowroomMode = configRef.current.showroomMode;
-    let lastS1 = configRef.current.slot1Url;
-    let lastS2 = configRef.current.slot2Url;
-    let lastS3 = configRef.current.slot3Url;
-    let lastS4 = configRef.current.slot4Url;
-    let lastS5 = configRef.current.slot5Url;
-
-    let globalRotation = 0;
+    let lastOpacity = configRef.current.opacity;
+    let lastStyle = configRef.current.renderStyle;
+    let lastColor = configRef.current.color;
 
     const animate = () => {
-      animationFrameId.current = requestAnimationFrame(animate);
+      rafId = requestAnimationFrame(animate);
       const ac = configRef.current;
 
-      let dynamicScale = ac.scale;
-      if (ac.audioReactive) dynamicScale = ac.scale * (1.0 + ac.audioValue * 0.7);
-
-      if (lastObjectType !== ac.objectType || lastColor !== ac.color || lastText !== ac.text || lastCustomModelUrl !== ac.customModelUrl || lastUseOriginalMaterials !== ac.useOriginalMaterials || lastCloneCount !== ac.cloneCount || lastSpecialEffect !== ac.specialEffect || lastShowroomMode !== ac.showroomMode || lastS1 !== ac.slot1Url || lastS2 !== ac.slot2Url || lastS3 !== ac.slot3Url || lastS4 !== ac.slot4Url || lastS5 !== ac.slot5Url) {
-        buildHologramMeshes();
-        lastObjectType = ac.objectType; lastColor = ac.color; lastText = ac.text; lastCustomModelUrl = ac.customModelUrl; lastUseOriginalMaterials = ac.useOriginalMaterials; lastCloneCount = ac.cloneCount; lastSpecialEffect = ac.specialEffect; lastShowroomMode = ac.showroomMode; lastS1 = ac.slot1Url; lastS2 = ac.slot2Url; lastS3 = ac.slot3Url; lastS4 = ac.slot4Url; lastS5 = ac.slot5Url;
+      // Reload trigger
+      if (lastUrl !== ac.customModelUrl || lastType !== ac.objectType || lastText !== ac.text || lastColor !== ac.color) {
+        loadModel();
+        lastUrl = ac.customModelUrl; lastType = ac.objectType; lastText = ac.text; lastColor = ac.color;
       }
 
-      // Opacity + renderStyle: rebuild gerekmez, tüm mesh'lere live uygula
+      // Live material updates
       if (lastOpacity !== ac.opacity || lastStyle !== ac.renderStyle) {
-        const isWire = ac.renderStyle === 'wireframe';
-        const isPoints = ac.renderStyle === 'points';
-        scene.traverse((obj) => {
+        objectGroup.traverse(obj => {
           if (obj instanceof THREE.Mesh) {
             const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
             mats.forEach((m: THREE.Material) => {
               m.transparent = true;
               m.opacity = ac.opacity;
-              if ('wireframe' in m) (m as THREE.MeshStandardMaterial).wireframe = isWire;
-              if (isPoints) m.visible = false; // points mode için Mesh'leri gizle
-              else m.visible = true;
+              if ('wireframe' in m) (m as any).wireframe = ac.renderStyle === 'wireframe';
               m.needsUpdate = true;
             });
           }
-          if (obj instanceof THREE.Points) {
-            const m = obj.material as THREE.PointsMaterial;
-            m.visible = isPoints;
-            m.opacity = ac.opacity;
-            m.transparent = true;
-            m.needsUpdate = true;
-          }
         });
-        lastOpacity = ac.opacity;
-        lastStyle = ac.renderStyle;
+        lastOpacity = ac.opacity; lastStyle = ac.renderStyle;
       }
 
-      if (lastGuideType !== ac.guideType || lastGuideShow !== ac.showGuide || lastGuideColor !== ac.guideColor) {
-        buildCalibrationGuides();
-        lastGuideType = ac.guideType; lastGuideShow = ac.showGuide; lastGuideColor = ac.guideColor;
+      // Rotation
+      let dynScale = ac.scale;
+      if (ac.audioReactive) dynScale = ac.scale * (1.0 + ac.audioValue * 0.7);
+
+      objectGroup.rotation.y = rotation;
+      objectGroup.scale.setScalar(dynScale);
+
+      if (ac.specialEffect === 'flicker' && Math.random() > ac.flickerRate) {
+        objectGroup.visible = false;
+      } else {
+        objectGroup.visible = true;
       }
 
-      // OrbitControls damping
-      controls.update();
+      rotation += ac.speed * 0.012;
 
-      // cameraZ slider ile orbit target'ı koruyarak kamera mesafesini güncelle
-      const dir = camera.position.clone().sub(controls.target).normalize();
-      camera.position.copy(controls.target).addScaledVector(dir, ac.cameraZ);
-      if (bloomPassRef.current) {
-        bloomPassRef.current.strength = ac.bloomStrength;
-        bloomPassRef.current.radius = ac.bloomRadius;
-        bloomPassRef.current.threshold = ac.bloomThreshold;
-      }
+      // ── Pepper's Ghost: 4-viewport render ─────────────────
+      const w = renderer.domElement.clientWidth;
+      const h = renderer.domElement.clientHeight;
+      const half = Math.floor(Math.min(w, h) / 2);
 
-      globalRotation += ac.speed * 0.015;
+      // viewport positions (x, y, w, h) — origin bottom-left in WebGL
+      const viewports: [number, number, number, number][] = [
+        [Math.floor(w / 2) - half, 0,            half, half],  // bottom
+        [Math.floor(w / 2) - half, half,          half, half],  // top
+        [Math.floor(w / 2) - half * 2, Math.floor(h / 2) - half, half, half], // left
+        [Math.floor(w / 2), Math.floor(h / 2) - half, half, half],            // right
+      ];
 
-      groupsRef.current.forEach((gw, index) => {
-        if (!ac.showroomMode) {
-          const positions = [[0,-ac.distance,0],[0,ac.distance,0],[-ac.distance,0,0],[ac.distance,0,0]];
-          const p = positions[index] ?? [0,0,0];
-          gw.position.set(p[0], p[1], 0);
-        } else {
-          gw.position.set(0, 0, 0);
-        }
-
-        const inner = gw.children[0];
-        if (inner) {
-          inner.scale.set(dynamicScale, dynamicScale, dynamicScale);
-          inner.rotation.y = globalRotation;
-          inner.rotation.x = globalRotation * 0.25;
-          if (ac.specialEffect === 'flicker' && Math.random() > ac.flickerRate) inner.scale.set(0, 0, 0);
-          if (ac.specialEffect === 'scanlines') {
-            const pulse = 1.0 + Math.sin(globalRotation * ac.scanlinesSpeed) * ac.scanlinesIntensity;
-            inner.scale.set(dynamicScale * pulse, dynamicScale, dynamicScale * pulse);
-          }
-        }
+      // Update camera distances
+      cameras.forEach((cam, i) => {
+        const angles = [0, Math.PI, -Math.PI / 2, Math.PI / 2];
+        cam.position.set(
+          Math.sin(angles[i]) * ac.cameraZ,
+          0,
+          Math.cos(angles[i]) * ac.cameraZ
+        );
+        cam.lookAt(0, 0, 0);
+        cam.aspect = 1;
+        cam.updateProjectionMatrix();
       });
 
-      if (ac.specialEffect === 'sparkles' && sparklesRef.current.length > 0) {
-        sparklesRef.current.forEach(sparkles => {
-          const mat = sparkles.material as THREE.PointsMaterial;
-          mat.size = ac.sparklesSize;
-          const positions = sparkles.geometry.attributes.position as THREE.BufferAttribute;
-          for (let i = 0; i < positions.count; i++) {
-            (positions.array as Float32Array)[i * 3 + 1] += ac.sparklesSpeed;
-            if ((positions.array as Float32Array)[i * 3 + 1] > 1.5) (positions.array as Float32Array)[i * 3 + 1] = -1.5;
-          }
-          positions.needsUpdate = true;
-          mat.opacity = 0.5 + Math.sin(globalRotation * 5.0) * 0.45;
-        });
-      }
+      renderer.clear();
+      renderer.setScissorTest(true);
 
-      if (composerRef.current) composerRef.current.render();
-      else renderer.render(scene, camera);
+      viewports.forEach(([x, y, vw, vh], i) => {
+        renderer.setViewport(x, y, vw, vh);
+        renderer.setScissor(x, y, vw, vh);
+        renderer.render(scene, cameras[i]);
+      });
+
+      renderer.setScissorTest(false);
     };
 
     animate();
 
-    const handleResize = () => {
-      if (!mountRef.current || !rendererRef.current) return;
+    // ── Resize ────────────────────────────────────────────────
+    const onResize = () => {
+      if (!mountRef.current) return;
       const w = mountRef.current.clientWidth;
       const h = mountRef.current.clientHeight;
-      camera.aspect = w / h; camera.updateProjectionMatrix();
       renderer.setSize(w, h);
-      composerRef.current?.setSize(w, h);
     };
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', onResize);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
-      if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
-      controls.dispose();
+      window.removeEventListener('resize', onResize);
+      cancelAnimationFrame(rafId);
       renderer.dispose();
-      if (mountRef.current && renderer.domElement) mountRef.current.removeChild(renderer.domElement);
+      if (mountRef.current?.contains(renderer.domElement)) {
+        mountRef.current.removeChild(renderer.domElement);
+      }
     };
   }, []);
 
   return (
     <div
       ref={mountRef}
-      className={`${className ?? ''} relative overflow-hidden bg-black select-none cursor-grab active:cursor-grabbing`}
-      style={{ minHeight: isFullScreen ? '100vh' : '450px' }}
+      className={`${className ?? ''} relative overflow-hidden bg-black select-none`}
+      style={{ minHeight: isFullScreen ? '100vh' : '520px' }}
     />
   );
 }
