@@ -656,18 +656,15 @@ export function MeshTemizleClient() {
                 <OpBtn onClick={runEdgeRepair} disabled={!analysis || (analysis.boundaryEdges === 0 && analysis.nonManifoldEdges === 0)} icon={<AlertTriangle className="h-4 w-4" />}>3 · Açık kenarları kapat (delik onarımı)</OpBtn>
                 <OpBtn onClick={runFixWinding} disabled={!analysis || analysis.windingConsistent} icon={<Compass className="h-4 w-4" />}>4 · Normalleri düzelt (ters yüz)</OpBtn>
                 <OpBtn onClick={runBasicCleanup} disabled={!geometry} icon={<Wrench className="h-4 w-4" />}>Temel topoloji temizliği</OpBtn>
+                <button
+                  onClick={runSolidify}
+                  disabled={!geometry}
+                  className="flex w-full items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm font-medium text-amber-300 transition-colors hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  <Wrench className="h-4 w-4" /> Katıya Çevir (açık/bozuk mesh onar)
+                </button>
               </div>
-              <div className="my-2 flex items-center gap-2 text-[11px] text-white/25">
-                <span className="h-px flex-1 bg-white/10" /> bozuk / açık mesh <span className="h-px flex-1 bg-white/10" />
-              </div>
-              <button
-                onClick={runSolidify}
-                disabled={!geometry}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-300 transition-colors hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                <Wrench className="h-4 w-4" /> Katıya Çevir (açık mesh onar)
-              </button>
-              <p className="mt-1 text-[10px] text-white/25">Açık/bozuk yüzeyi kapalı katıya sarar (hafif şişme olur). Sonra «Otomatik Temizle» çalıştır.</p>
+              <p className="mt-2 text-[10px] text-white/25">«Katıya Çevir»: açık yüzeyi kapalı katıya sarar (hafif şişme). Sonra «Otomatik Temizle» çalıştır.</p>
             </div>
 
             {/* Hacim & ağırlık */}
