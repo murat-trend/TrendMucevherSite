@@ -618,7 +618,7 @@ export function hollowShellSDF(
   wallMm: number,
   opts?: { maxGrid?: number; onProgress?: (p: number) => void },
 ): { shell: THREE.BufferGeometry; cavityMm3: number; resolutionMm: number; trappedRemoved: number } {
-  const maxGrid = opts?.maxGrid ?? 96; // eksen başına maksimum örnek (hız/bellek)
+  const maxGrid = opts?.maxGrid ?? 80; // eksen başına maksimum örnek (hız/bellek dengesi)
 
   // dış: normaller tutarlı + dışa
   const fixed = fixWinding(geometry);
@@ -642,17 +642,6 @@ export function hollowShellSDF(
   idxGeo.setIndex(fidx);
   const bvh = new MeshBVH(idxGeo);
 
-  // yüz normalleri (işaret için)
-  const nf = fidx.length / 3;
-  const fn = new Float32Array(nf * 3);
-  for (let f = 0; f < nf; f += 1) {
-    const a = fidx[f*3], b = fidx[f*3+1], c = fidx[f*3+2];
-    const ux = vx[b*3]-vx[a*3], uy = vx[b*3+1]-vx[a*3+1], uz = vx[b*3+2]-vx[a*3+2];
-    const wx = vx[c*3]-vx[a*3], wy = vx[c*3+1]-vx[a*3+1], wz = vx[c*3+2]-vx[a*3+2];
-    let nx = uy*wz-uz*wy, ny = uz*wx-ux*wz, nz = ux*wy-uy*wx;
-    const l = Math.hypot(nx,ny,nz) || 1; fn[f*3]=nx/l; fn[f*3+1]=ny/l; fn[f*3+2]=nz/l;
-  }
-
   // sınır kutusu + pay (wall + birkaç voxel)
   idxGeo.computeBoundingBox();
   const bb = idxGeo.boundingBox!;
@@ -670,21 +659,24 @@ export function hollowShellSDF(
   ];
   const scale = [(maxB[0]-minB[0])/M[0], (maxB[1]-minB[1])/M[1], (maxB[2]-minB[2])/M[2]];
 
-  // SDF örnekle (her grid noktası: işaretli mesafe)
+  // SDF örnekle: mesafe = en yakın nokta; İŞARET = ışın-parite (iç/dış).
+  // Tek yüz normali kenar/köşede gürültülü → watertight mesh'te ışın sayımı güvenilir.
   const sdf = new Float32Array(M[0]*M[1]*M[2]);
   const q = new THREE.Vector3();
-  const tgt: { point: THREE.Vector3; distance: number; faceIndex: number } =
-    { point: new THREE.Vector3(), distance: 0, faceIndex: 0 };
+  const tgt: { point: THREE.Vector3; distance: number; faceIndex: number } = { point: new THREE.Vector3(), distance: 0, faceIndex: 0 };
+  const ray = new THREE.Ray();
+  const rayDir = new THREE.Vector3(1, 0.1234, 0.0717).normalize(); // eksen-hizasından kaçın
   let idx = 0;
   for (let kz = 0; kz < M[2]; kz += 1) {
     for (let ky = 0; ky < M[1]; ky += 1) {
       for (let kx = 0; kx < M[0]; kx += 1, idx += 1) {
         q.set(minB[0]+kx*scale[0], minB[1]+ky*scale[1], minB[2]+kz*scale[2]);
         bvh.closestPointToPoint(q, tgt);
-        let d = tgt.distance;
-        const f = tgt.faceIndex;
-        const dot = (q.x-tgt.point.x)*fn[f*3] + (q.y-tgt.point.y)*fn[f*3+1] + (q.z-tgt.point.z)*fn[f*3+2];
-        sdf[idx] = dot < 0 ? -d : d;
+        const d = tgt.distance;
+        ray.origin.copy(q); ray.direction.copy(rayDir);
+        const hits = bvh.raycast(ray, THREE.DoubleSide);
+        const inside = (hits.length & 1) === 1;
+        sdf[idx] = inside ? -d : d;
       }
     }
     opts?.onProgress?.(kz / M[2]);
