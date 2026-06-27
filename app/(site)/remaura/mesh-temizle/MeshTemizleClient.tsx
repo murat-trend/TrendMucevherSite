@@ -25,12 +25,23 @@ export function MeshTemizleClient() {
   const [fileName, setFileName] = useState<string>("");
   const [targetMm, setTargetMm] = useState("");
   const [previewScale, setPreviewScale] = useState<[number, number, number]>([1, 1, 1]);
+  const [exportName, setExportName] = useState("");
+  const [gizmo, setGizmo] = useState(false);
   const [wireframe, setWireframe] = useState(false);
   const [showBadEdges, setShowBadEdges] = useState(true);
   const [logs, setLogs] = useState<Log[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const logBoxRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<MeshViewerHandle>(null);
+
+  function outputBaseName() {
+    const custom = exportName.trim().replace(/[^\p{L}\p{N}_-]+/gu, "-").replace(/^-+|-+$/g, "");
+    if (custom) return `remaura-clean-mesh-${custom}`;
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, "0");
+    const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+    return `remaura-clean-mesh-${stamp}`;
+  }
 
   const addLog = useCallback((type: Log["type"], msg: string) => {
     const t = new Date().toLocaleTimeString("tr-TR", { hour12: false });
@@ -153,7 +164,11 @@ export function MeshTemizleClient() {
   function exportStl() {
     if (!geometry) return;
     try {
-      const mesh = new THREE.Mesh(geometry);
+      // gumball ile yapılan döndürmeyi geometriye bake et
+      let geo = geometry;
+      const rot = viewerRef.current?.getOrientationMatrix?.();
+      if (rot) { geo = geometry.clone(); geo.applyMatrix4(rot); geo.computeVertexNormals(); }
+      const mesh = new THREE.Mesh(geo);
       mesh.updateMatrixWorld(true);
       // Binary çıktı three sürümüne göre DataView / ArrayBuffer / Uint8Array dönebilir.
       const result = new STLExporter().parse(mesh, { binary: true }) as unknown;
@@ -177,7 +192,7 @@ export function MeshTemizleClient() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = (fileName.replace(/\.stl$/i, "") || "model") + "_temiz.stl";
+      a.download = outputBaseName() + ".stl";
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -199,7 +214,7 @@ export function MeshTemizleClient() {
       const png = await buildEtsyCard({ modelImg: img, analysis, weight: w, fileName });
       const a = document.createElement("a");
       a.href = png;
-      a.download = (fileName.replace(/\.stl$/i, "") || "model") + "_etsy.png";
+      a.download = outputBaseName() + "_etsy.png";
       document.body.appendChild(a); a.click(); a.remove();
       addLog("ok", "Etsy görseli indirildi (2000×2000 PNG).");
     } catch (err) {
@@ -235,11 +250,14 @@ export function MeshTemizleClient() {
           {/* SOL: sahne + log */}
           <div className="flex flex-col gap-4">
             <div className="relative h-[480px] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#07080a]">
-              <MeshCleanViewer ref={viewerRef} geometry={geometry} wireframe={wireframe} showBadEdges={showBadEdges} previewScale={previewScale} />
+              <MeshCleanViewer ref={viewerRef} geometry={geometry} wireframe={wireframe} showBadEdges={showBadEdges} previewScale={previewScale} gizmo={gizmo} />
               <div className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white/60 backdrop-blur">
                 {fileName || "STL yüklenmedi"}
               </div>
               <div className="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-end gap-2">
+                <button onClick={() => setGizmo((v) => !v)} disabled={!geometry} className={`rounded-full px-3 py-1.5 text-xs font-medium disabled:opacity-40 ${gizmo ? "bg-[#b76e79] text-white" : "bg-white/10 hover:bg-white/15"}`}>
+                  {gizmo ? "Döndürme açık" : "Döndür (gumball)"}
+                </button>
                 <button onClick={() => setWireframe((v) => !v)} className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium hover:bg-white/15">
                   {wireframe ? "Katı" : "Tel kafes"}
                 </button>
@@ -434,14 +452,25 @@ export function MeshTemizleClient() {
               ) : <p className="text-sm text-white/30">«Hesapla» ile gramajı gör.</p>}
             </div>
 
-            {/* Etsy / e-ticaret görseli */}
-            <button
-              onClick={exportEtsyCard}
-              disabled={!geometry}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#b76e79]/30 bg-[#b76e79]/10 px-4 py-3.5 text-sm font-semibold text-[#e6b3bb] transition-colors hover:bg-[#b76e79]/20 disabled:cursor-not-allowed disabled:opacity-35"
-            >
-              <ImageIcon className="h-4 w-4" /> Etsy Görseli Oluştur (2000×2000)
-            </button>
+            {/* Dışa aktarım */}
+            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
+              <span className="mb-2 block text-sm font-medium text-white/70">Dışa Aktarım</span>
+              <input
+                type="text"
+                placeholder="Dosya adı (opsiyonel)"
+                value={exportName}
+                onChange={(e) => setExportName(e.target.value)}
+                className="mb-1 w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[#b76e79]/40 focus:outline-none"
+              />
+              <p className="mb-3 font-mono text-[11px] text-white/30">→ {outputBaseName()}.stl</p>
+              <button
+                onClick={exportEtsyCard}
+                disabled={!geometry}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#b76e79]/30 bg-[#b76e79]/10 px-4 py-3 text-sm font-semibold text-[#e6b3bb] transition-colors hover:bg-[#b76e79]/20 disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                <ImageIcon className="h-4 w-4" /> Etsy Görseli Oluştur (2000×2000)
+              </button>
+            </div>
           </div>
         </div>
       </div>
