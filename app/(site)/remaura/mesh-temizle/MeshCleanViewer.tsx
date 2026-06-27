@@ -39,6 +39,7 @@ export const MeshCleanViewer = forwardRef<MeshViewerHandle, Props>(function Mesh
   const clipPlaneRef = useRef<THREE.Plane>(new THREE.Plane(new THREE.Vector3(1, 0, 0), 0));
   const dispBoxRef = useRef<THREE.Box3 | null>(null);
   const outerMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const innerMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
 
   useImperativeHandle(ref, () => ({
     getOrientationMatrix: () => {
@@ -191,14 +192,25 @@ export const MeshCleanViewer = forwardRef<MeshViewerHandle, Props>(function Mesh
     disp.scale(scale, scale, scale);
     disp.computeVertexNormals();
 
+    // Dış yüzey: pembe (ön yüz)
     const mat = new THREE.MeshStandardMaterial({
-      color: 0xc4838b, roughness: 0.55, metalness: 0.1, side: THREE.DoubleSide, wireframe,
+      color: 0xc4838b, roughness: 0.55, metalness: 0.1, side: THREE.FrontSide, wireframe,
       clippingPlanes: [], clipShadows: true,
     });
     const mesh = new THREE.Mesh(disp, mat);
     meshRef.current = mesh;
     outerMatRef.current = mat;
     group.add(mesh);
+
+    // İç yüzey: altın (arka yüz) → kesitte iç boşluk net görünür
+    const innerMat = new THREE.MeshStandardMaterial({
+      color: 0xe4b56f, roughness: 0.4, metalness: 0.5, side: THREE.BackSide,
+      clippingPlanes: [], clipShadows: true,
+    });
+    const innerMesh = new THREE.Mesh(disp, innerMat);
+    innerMatRef.current = innerMat;
+    group.add(innerMesh);
+
     disp.computeBoundingBox();
     dispBoxRef.current = disp.boundingBox!.clone();
 
@@ -237,18 +249,19 @@ export const MeshCleanViewer = forwardRef<MeshViewerHandle, Props>(function Mesh
     g.scale.set(sx, sy, sz);
   }, [previewScale, geometry]);
 
-  // kesit (clipping plane) — modelin içini göster
+  // kesit (clipping plane) — modelin içini göster (dış pembe / iç altın)
   useEffect(() => {
-    const mat = outerMatRef.current, plane = clipPlaneRef.current, box = dispBoxRef.current;
-    if (!mat) return;
-    if (!clip || !clip.enabled || !box) { mat.clippingPlanes = []; mat.needsUpdate = true; return; }
-    const ai = clip.axis === "x" ? 0 : clip.axis === "y" ? 1 : 2;
-    plane.normal.set(0, 0, 0).setComponent(ai, clip.flip ? -1 : 1);
-    const lo = box.min.getComponent(ai), hi = box.max.getComponent(ai);
-    const px = lo + (hi - lo) * clip.position;
-    plane.constant = clip.flip ? px : -px;
-    mat.clippingPlanes = [plane];
-    mat.needsUpdate = true;
+    const mat = outerMatRef.current, inner = innerMatRef.current, plane = clipPlaneRef.current, box = dispBoxRef.current;
+    if (!mat || !inner) return;
+    const on = !!(clip && clip.enabled && box);
+    if (!on) { mat.clippingPlanes = []; inner.clippingPlanes = []; mat.needsUpdate = true; inner.needsUpdate = true; return; }
+    const ai = clip!.axis === "x" ? 0 : clip!.axis === "y" ? 1 : 2;
+    plane.normal.set(0, 0, 0).setComponent(ai, clip!.flip ? -1 : 1);
+    const lo = box!.min.getComponent(ai), hi = box!.max.getComponent(ai);
+    const px = lo + (hi - lo) * clip!.position;
+    plane.constant = clip!.flip ? px : -px;
+    mat.clippingPlanes = [plane]; inner.clippingPlanes = [plane];
+    mat.needsUpdate = true; inner.needsUpdate = true;
   }, [clip, geometry]);
 
   // gumball aç/kapa
