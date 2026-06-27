@@ -72,8 +72,17 @@ const lookup=(wx,wy,wz)=>{
   return sdf[ix+iy*M[0]+iz*M[0]*M[1]]+wall;
 };
 const res = surfaceNets(M, lookup, [minB,maxB]);
+// bağlı bileşen filtresi
+const np=res.positions.length; const par=new Int32Array(np); for(let i=0;i<np;i++)par[i]=i;
+const find=x=>{while(par[x]!==x){par[x]=par[par[x]];x=par[x];}return x;};
+const uni=(a,b)=>{const ra=find(a),rb=find(b);if(ra!==rb)par[rb]=ra;};
+for(const t of res.cells){uni(t[0],t[1]);uni(t[1],t[2]);}
+const cnt=new Map(); for(const t of res.cells){const r=find(t[0]);cnt.set(r,(cnt.get(r)||0)+1);}
+let maxC=0; cnt.forEach(v=>{if(v>maxC)maxC=v;}); const thr=Math.max(8,maxC*0.02);
+const kept=res.cells.filter(t=>(cnt.get(find(t[0]))||0)>=thr);
+console.log(`İç bileşen: ${cnt.size} parça → ${kept.length.toLocaleString()}/${res.cells.length.toLocaleString()} üçgen tutuldu (floater silindi)`);
 let c6=0;
-for (const t of res.cells){ const a=res.positions[t[0]],b=res.positions[t[1]],c=res.positions[t[2]];
+for (const t of kept){ const a=res.positions[t[0]],b=res.positions[t[1]],c=res.positions[t[2]];
   c6 += a[0]*(b[1]*c[2]-b[2]*c[1]) - a[1]*(b[0]*c[2]-b[2]*c[0]) + a[2]*(b[0]*c[1]-b[1]*c[0]); }
 const cavityCm3 = Math.abs(c6)/6/1000;
 const matCm3 = Math.max(solidCm3-cavityCm3,0);

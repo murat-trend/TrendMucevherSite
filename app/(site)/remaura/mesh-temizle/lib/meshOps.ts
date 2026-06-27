@@ -728,14 +728,31 @@ export function hollowShellSDF(
   };
   const res = surfaceNets(M, lookup, [minB, maxB]) as { positions: number[][]; cells: number[][] };
 
+  const P: number[][] = res.positions;
+  const cells: number[][] = res.cells;
+
+  // KÜÇÜK ARTIK (yeşil floater) TEMİZLİĞİ: iç yüzeyi bağlı bileşenlere ayır,
+  // en büyüğün %2'sinden küçük kopuk parçaları at. (Kesitte görünen yeşil çöpler)
+  const keptCells: number[][] = (() => {
+    const np = P.length;
+    const par = new Int32Array(np); for (let i = 0; i < np; i += 1) par[i] = i;
+    const find = (x: number): number => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
+    const uni = (a: number, b: number) => { const ra = find(a), rb = find(b); if (ra !== rb) par[rb] = ra; };
+    for (const t of cells) { uni(t[0], t[1]); uni(t[1], t[2]); }
+    const cnt = new Map<number, number>();
+    for (const t of cells) { const r = find(t[0]); cnt.set(r, (cnt.get(r) ?? 0) + 1); }
+    let maxC = 0; cnt.forEach((v) => { if (v > maxC) maxC = v; });
+    const thr = Math.max(8, maxC * 0.02);
+    return cells.filter((t) => (cnt.get(find(t[0])) ?? 0) >= thr);
+  })();
+
   // iç yüzey üçgenleri (ters winding → normaller kaviteye baksın) + kavite hacmi
   const out: number[] = [];
   // dış yüzey (orijinal detay)
   for (let i = 0; i < fpos.count; i += 1) out.push(fpos.getX(i), fpos.getY(i), fpos.getZ(i));
 
-  const P = res.positions;
   let cav6 = 0;
-  for (const t of res.cells) {
+  for (const t of keptCells) {
     const a = P[t[0]], b = P[t[1]], c = P[t[2]];
     // ters winding (a,c,b)
     out.push(a[0],a[1],a[2], c[0],c[1],c[2], b[0],b[1],b[2]);
