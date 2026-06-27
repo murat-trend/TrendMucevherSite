@@ -617,7 +617,7 @@ export function hollowShellSDF(
   geometry: THREE.BufferGeometry,
   wallMm: number,
   opts?: { maxGrid?: number; onProgress?: (p: number) => void },
-): { shell: THREE.BufferGeometry; cavityMm3: number; resolutionMm: number } {
+): { shell: THREE.BufferGeometry; cavityMm3: number; resolutionMm: number; trappedRemoved: number } {
   const maxGrid = opts?.maxGrid ?? 96; // eksen başına maksimum örnek (hız/bellek)
 
   // dış: normaller tutarlı + dışa
@@ -690,6 +690,43 @@ export function hollowShellSDF(
     opts?.onProgress?.(kz / M[2]);
   }
 
+  // KÖR HAVUZ TEMİZLİĞİ (Flood-Fill): kaviteyi bağlı bileşenlere ayır,
+  // ana boşluğa açılmayan küçük adacıkları (trapped voids) dolu bırak.
+  let trappedRemoved = 0;
+  {
+    const total = M[0]*M[1]*M[2];
+    const comp = new Int32Array(total).fill(-1);
+    const voxVol = scale[0]*scale[1]*scale[2];
+    const minVox = Math.max(2, Math.floor(2.0 / voxVol)); // <2 mm³ = kör havuz
+    const sizes: number[] = [];
+    const stack: number[] = [];
+    const isCav = (i: number) => sdf[i] < -wallMm;
+    let cid = 0;
+    for (let s = 0; s < total; s += 1) {
+      if (comp[s] !== -1 || !isCav(s)) continue;
+      comp[s] = cid; let cnt = 0; stack.length = 0; stack.push(s);
+      while (stack.length) {
+        const c = stack.pop()!; cnt += 1;
+        const ix = c % M[0], iy = ((c / M[0]) | 0) % M[1], iz = (c / (M[0]*M[1])) | 0;
+        if (ix > 0)        { const n = c-1;          if (comp[n]===-1 && isCav(n)) { comp[n]=cid; stack.push(n); } }
+        if (ix < M[0]-1)   { const n = c+1;          if (comp[n]===-1 && isCav(n)) { comp[n]=cid; stack.push(n); } }
+        if (iy > 0)        { const n = c-M[0];       if (comp[n]===-1 && isCav(n)) { comp[n]=cid; stack.push(n); } }
+        if (iy < M[1]-1)   { const n = c+M[0];       if (comp[n]===-1 && isCav(n)) { comp[n]=cid; stack.push(n); } }
+        if (iz > 0)        { const n = c-M[0]*M[1];  if (comp[n]===-1 && isCav(n)) { comp[n]=cid; stack.push(n); } }
+        if (iz < M[2]-1)   { const n = c+M[0]*M[1];  if (comp[n]===-1 && isCav(n)) { comp[n]=cid; stack.push(n); } }
+      }
+      sizes[cid] = cnt; cid += 1;
+    }
+    const removedComps = new Set<number>();
+    for (let c = 0; c < cid; c += 1) if (sizes[c] < minVox) removedComps.add(c);
+    if (removedComps.size) {
+      for (let i = 0; i < total; i += 1) {
+        if (comp[i] !== -1 && removedComps.has(comp[i])) { sdf[i] = 0; } // dolu bırak
+      }
+      trappedRemoved = removedComps.size;
+    }
+  }
+
   // İç yüzey: sdf = -wall eş-yüzeyi (potential = sdf + wall, 0-geçişi)
   const lookup = (wx: number, wy: number, wz: number) => {
     let ix = Math.round((wx-minB[0])/scale[0]); if (ix<0) ix=0; else if (ix>=M[0]) ix=M[0]-1;
@@ -716,7 +753,7 @@ export function hollowShellSDF(
   const shell = new THREE.BufferGeometry();
   shell.setAttribute("position", new THREE.Float32BufferAttribute(out, 3));
   shell.computeVertexNormals();
-  return { shell, cavityMm3: Math.abs(cav6) / 6, resolutionMm: Math.max(scale[0], scale[1], scale[2]) };
+  return { shell, cavityMm3: Math.abs(cav6) / 6, resolutionMm: Math.max(scale[0], scale[1], scale[2]), trappedRemoved };
 }
 
 // ---------------------------------------------------------------------------

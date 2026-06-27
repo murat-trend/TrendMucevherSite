@@ -15,6 +15,7 @@ import {
   computeWeight, METALS, type MeshAnalysis, type MetalWeight,
 } from "./lib/meshOps";
 import { buildEtsyCard } from "./lib/etsyCard";
+import { HollowMagicOverlay } from "./HollowMagicOverlay";
 import { Ruler, ImageIcon, Compass, Wand2, Egg } from "lucide-react";
 
 type HollowResult = {
@@ -43,6 +44,7 @@ export function MeshTemizleClient() {
   const [hollowMethod, setHollowMethod] = useState<"fast" | "sdf">("fast");
   const [hollow, setHollow] = useState<HollowResult | null>(null);
   const [showHollow, setShowHollow] = useState(false);
+  const [hollowBusy, setHollowBusy] = useState(false);
   const [wireframe, setWireframe] = useState(false);
   const [showBadEdges, setShowBadEdges] = useState(true);
   const [logs, setLogs] = useState<Log[]>([]);
@@ -269,25 +271,67 @@ export function MeshTemizleClient() {
     }
   }
 
+  function finishHollow(shell: THREE.BufferGeometry, cavityMm3: number, solidCm3: number, trapped: number, t0: number) {
+    const cavityCm3 = cavityMm3 / 1000;
+    const materialCm3 = Math.max(solidCm3 - cavityCm3, 0);
+    const savingPct = solidCm3 > 0 ? (cavityCm3 / solidCm3) * 100 : 0;
+    const weights = METALS.map((m) => ({ key: m.key, label: m.label, grams: materialCm3 * m.density }));
+    setHollow({ shell, wallMm: hollowWall, solidCm3, cavityCm3, materialCm3, savingPct, weights });
+    setShowHollow(true);
+    if (trapped > 0) addLog("ok", `🪄 ${trapped} kör havuz avlandı ve dolduruldu.`);
+    addLog("ok", `Boşaltıldı: dolu ${solidCm3.toFixed(3)} → boş ${materialCm3.toFixed(3)} cm³ · tasarruf %${savingPct.toFixed(0)} · gümüş ${(materialCm3 * 10.36).toFixed(2)} g`);
+    // sihir için minimum gösterim süresi
+    const elapsed = performance.now() - t0;
+    window.setTimeout(() => setHollowBusy(false), Math.max(0, 1500 - elapsed));
+  }
+
   function runHollow() {
     if (!geometry) return;
     const sdf = hollowMethod === "sdf";
+    const t0 = performance.now();
+    setHollowBusy(true);
     addLog("info", `İç boşaltma (${sdf ? "Sağlam / SDF" : "Hızlı"})… duvar ${hollowWall.toFixed(1)} mm${sdf ? " — birkaç saniye sürebilir" : ""}`);
+    const solidCm3 = Math.abs(computeWeight(geometry).volumeMm3) / 1000;
+
+    // Web Worker (akıcı animasyon); başarısız olursa ana thread'de çalış
+    let worker: Worker | null = null;
     try {
-      const solidCm3 = Math.abs(computeWeight(geometry).volumeMm3) / 1000;
-      const r = sdf ? hollowShellSDF(geometry, hollowWall) : hollowShell(geometry, hollowWall);
-      const { shell, cavityMm3 } = r;
-      if (sdf && "resolutionMm" in r) addLog("info", `SDF çözünürlük ~${(r as { resolutionMm: number }).resolutionMm.toFixed(2)} mm`);
-      const cavityCm3 = cavityMm3 / 1000;
-      const materialCm3 = Math.max(solidCm3 - cavityCm3, 0);
-      const savingPct = solidCm3 > 0 ? (cavityCm3 / solidCm3) * 100 : 0;
-      const weights = METALS.map((m) => ({ key: m.key, label: m.label, grams: materialCm3 * m.density }));
-      setHollow({ shell, wallMm: hollowWall, solidCm3, cavityCm3, materialCm3, savingPct, weights });
-      setShowHollow(true);
-      addLog("ok", `Boşaltıldı: dolu ${solidCm3.toFixed(3)} → boş ${materialCm3.toFixed(3)} cm³ · tasarruf %${savingPct.toFixed(0)} · gümüş ${(materialCm3 * 10.36).toFixed(2)} g`);
-    } catch (err) {
-      addLog("err", `İç boşaltma başarısız: ${(err as Error).message}`);
+      worker = new Worker(new URL("./lib/hollow.worker.ts", import.meta.url));
+    } catch {
+      worker = null;
     }
+
+    if (worker) {
+      const positions = (geometry.attributes.position.array as Float32Array).slice();
+      worker.onmessage = (e: MessageEvent) => {
+        const d = e.data as { type: string; positions?: Float32Array; cavityMm3?: number; resolutionMm?: number; trapped?: number; message?: string };
+        if (d.type === "progress") return;
+        if (d.type === "error") {
+          addLog("err", `İç boşaltma başarısız: ${d.message}`);
+          setHollowBusy(false); worker?.terminate(); return;
+        }
+        const shell = new THREE.BufferGeometry();
+        shell.setAttribute("position", new THREE.BufferAttribute(d.positions!, 3));
+        shell.computeVertexNormals();
+        if (sdf && d.resolutionMm) addLog("info", `SDF çözünürlük ~${d.resolutionMm.toFixed(2)} mm`);
+        finishHollow(shell, d.cavityMm3!, solidCm3, d.trapped ?? 0, t0);
+        worker?.terminate();
+      };
+      worker.postMessage({ positions, wall: hollowWall, method: hollowMethod }, [positions.buffer]);
+      return;
+    }
+
+    // Fallback: ana thread (animasyon donabilir)
+    setTimeout(() => {
+      try {
+        const r = sdf ? hollowShellSDF(geometry, hollowWall) : hollowShell(geometry, hollowWall);
+        if (sdf && "resolutionMm" in r) addLog("info", `SDF çözünürlük ~${(r as { resolutionMm: number }).resolutionMm.toFixed(2)} mm`);
+        finishHollow(r.shell, r.cavityMm3, solidCm3, "trappedRemoved" in r ? (r as { trappedRemoved: number }).trappedRemoved : 0, t0);
+      } catch (err) {
+        addLog("err", `İç boşaltma başarısız: ${(err as Error).message}`);
+        setHollowBusy(false);
+      }
+    }, 60);
   }
 
   function exportHollowStl() {
@@ -342,6 +386,7 @@ export function MeshTemizleClient() {
 
   return (
     <div className="min-h-screen bg-[#07080a] px-4 py-8 text-white">
+      <HollowMagicOverlay visible={hollowBusy} label={hollowMethod === "sdf" ? "Sanal sıvı dökülüyor · kör havuzlar avlanıyor…" : "İçi boşaltılıyor…"} />
       <div className="mx-auto max-w-6xl">
         {/* Başlık */}
         <div className="mb-6 flex items-center justify-between gap-4">
