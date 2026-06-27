@@ -472,6 +472,14 @@ export function scaleGeometry(geometry: THREE.BufferGeometry, factor: number): T
   return g;
 }
 
+// Eksen-bazlı (non-uniform) ölçek — X/Y/Z ayrı (kalınlık vb. manuel düzeltme)
+export function scaleGeometryXYZ(geometry: THREE.BufferGeometry, fx: number, fy: number, fz: number): THREE.BufferGeometry {
+  const g = geometry.clone();
+  g.scale(fx, fy, fz);
+  g.computeVertexNormals();
+  return g;
+}
+
 // En büyük boyut (mm) — ölçek mantık kontrolü için
 export function maxDimension(geometry: THREE.BufferGeometry): number {
   geometry.computeBoundingBox();

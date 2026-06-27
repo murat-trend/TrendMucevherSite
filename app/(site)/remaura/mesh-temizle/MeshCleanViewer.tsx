@@ -9,6 +9,7 @@ type Props = {
   geometry: THREE.BufferGeometry | null;
   wireframe: boolean;
   showBadEdges: boolean;
+  previewScale?: [number, number, number]; // canlı eksen ölçeği önizlemesi
 };
 
 export type MeshViewerHandle = {
@@ -17,7 +18,7 @@ export type MeshViewerHandle = {
 };
 
 export const MeshCleanViewer = forwardRef<MeshViewerHandle, Props>(function MeshCleanViewer(
-  { geometry, wireframe, showBadEdges }, ref,
+  { geometry, wireframe, showBadEdges, previewScale }, ref,
 ) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -185,6 +186,14 @@ export const MeshCleanViewer = forwardRef<MeshViewerHandle, Props>(function Mesh
     if (meshRef.current) (meshRef.current.material as THREE.MeshStandardMaterial).wireframe = wireframe;
     if (edgesRef.current) edgesRef.current.visible = showBadEdges;
   }, [wireframe, showBadEdges]);
+
+  // canlı eksen ölçeği önizlemesi (group transform — ucuz, yeniden mesh yok)
+  useEffect(() => {
+    const g = groupRef.current;
+    if (!g) return;
+    const [sx, sy, sz] = previewScale ?? [1, 1, 1];
+    g.scale.set(sx, sy, sz);
+  }, [previewScale, geometry]);
 
   return (
     <div className="relative h-full w-full">

@@ -11,7 +11,7 @@ import {
 import { MeshCleanViewer, type MeshViewerHandle } from "./MeshCleanViewer";
 import {
   analyzeGeometry, basicCleanup, keepLargestShell, deleteNonManifoldFaces,
-  repairEdgesAndSmallHoles, fixWinding, scaleGeometry, computeWeight, type MeshAnalysis, type MetalWeight,
+  repairEdgesAndSmallHoles, fixWinding, scaleGeometry, scaleGeometryXYZ, computeWeight, type MeshAnalysis, type MetalWeight,
 } from "./lib/meshOps";
 import { buildEtsyCard } from "./lib/etsyCard";
 import { Ruler, ImageIcon, Compass } from "lucide-react";
@@ -24,6 +24,7 @@ export function MeshTemizleClient() {
   const [weight, setWeight] = useState<MetalWeight | null>(null);
   const [fileName, setFileName] = useState<string>("");
   const [targetMm, setTargetMm] = useState("");
+  const [previewScale, setPreviewScale] = useState<[number, number, number]>([1, 1, 1]);
   const [wireframe, setWireframe] = useState(false);
   const [showBadEdges, setShowBadEdges] = useState(true);
   const [logs, setLogs] = useState<Log[]>([]);
@@ -42,6 +43,7 @@ export function MeshTemizleClient() {
     setGeometry(next);
     setAnalysis(a);
     setWeight(null); // geometri değişti, ağırlık tekrar hesaplanmalı
+    setPreviewScale([1, 1, 1]); // önizleme ölçeğini sıfırla
     addLog(a.watertight ? "ok" : "warn",
       `${label}: ${a.triangleCount.toLocaleString()} üçgen, ${a.shellCount} parça, ${a.boundaryEdges} açık kenar, ${a.nonManifoldEdges} non-manifold.`);
     return a;
@@ -120,6 +122,22 @@ export function MeshTemizleClient() {
     const cur = Math.max(...analysis.dimensions);
     if (cur <= 0 || targetMm <= 0) return;
     runScale(targetMm / cur, `en büyük boyut ${targetMm}mm`);
+  }
+
+  function setAxisFactor(axis: 0 | 1 | 2, factor: number) {
+    setPreviewScale((p) => {
+      const n: [number, number, number] = [...p];
+      n[axis] = factor;
+      return n;
+    });
+  }
+  function applyResize() {
+    if (!geometry) return;
+    const [fx, fy, fz] = previewScale;
+    if (fx === 1 && fy === 1 && fz === 1) return;
+    addLog("info", `Yeniden boyutlandırılıyor: X×${fx.toFixed(3)} Y×${fy.toFixed(3)} Z×${fz.toFixed(3)}`);
+    try { apply(scaleGeometryXYZ(geometry, fx, fy, fz), "Yeniden boyutlandırma"); }
+    catch { addLog("err", "Yeniden boyutlandırma başarısız."); }
   }
 
   function runWeight() {
@@ -217,7 +235,7 @@ export function MeshTemizleClient() {
           {/* SOL: sahne + log */}
           <div className="flex flex-col gap-4">
             <div className="relative h-[480px] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#07080a]">
-              <MeshCleanViewer ref={viewerRef} geometry={geometry} wireframe={wireframe} showBadEdges={showBadEdges} />
+              <MeshCleanViewer ref={viewerRef} geometry={geometry} wireframe={wireframe} showBadEdges={showBadEdges} previewScale={previewScale} />
               <div className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white/60 backdrop-blur">
                 {fileName || "STL yüklenmedi"}
               </div>
@@ -305,22 +323,17 @@ export function MeshTemizleClient() {
               )}
             </div>
 
-            {/* Birim / Ölçek */}
+            {/* Yeniden Boyutlandırma */}
             <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
-              <span className="mb-1 flex items-center gap-1.5 text-sm font-medium text-white/70">
-                <Ruler className="h-4 w-4" /> Birim / Ölçek
+              <span className="mb-3 flex items-center gap-1.5 text-sm font-medium text-white/70">
+                <Ruler className="h-4 w-4" /> Yeniden Boyutlandırma
               </span>
-              <p className="mb-3 text-xs text-white/35">
-                Mesh AI / Tripo ölçüsüne güvenme. Parçanın <strong className="text-white/55">gerçek en büyük boyutunu (mm)</strong> gir — model homojen olarak o boyuta ölçeklenir.
-              </p>
-              {analysis && (
-                <p className="mb-2 font-mono text-xs text-white/45">
-                  Şu an en büyük boyut: <span className="text-[#e6b3bb]">{Math.max(...analysis.dimensions).toFixed(2)} mm</span>
-                </p>
-              )}
-              <div className="flex items-center gap-2">
+
+              {/* Homojen (en büyük boyuta) */}
+              <p className="mb-2 text-xs text-white/35">Homojen — gerçek en büyük boyutu (mm) gir:</p>
+              <div className="mb-4 flex items-center gap-2">
                 <input
-                  type="number" inputMode="decimal" placeholder="Gerçek en büyük boyut (mm)"
+                  type="number" inputMode="decimal" placeholder="En büyük boyut (mm)"
                   value={targetMm} onChange={(e) => setTargetMm(e.target.value)}
                   className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[#b76e79]/40 focus:outline-none"
                 />
@@ -330,6 +343,50 @@ export function MeshTemizleClient() {
                   className="shrink-0 rounded-lg bg-[#b76e79]/20 px-4 py-2 text-sm font-medium text-[#e6b3bb] hover:bg-[#b76e79]/30 disabled:opacity-35"
                 >Uygula</button>
               </div>
+
+              {/* Manuel eksen (X/Y/Z) — canlı önizleme */}
+              <div className="mb-1 flex items-center justify-between">
+                <p className="text-xs text-white/35">Manuel eksen (kalınlık vb. düzeltme):</p>
+                {analysis && previewScale.some((s) => s !== 1) && (
+                  <button onClick={() => setPreviewScale([1, 1, 1])} className="text-[11px] text-white/30 hover:text-white/60">sıfırla</button>
+                )}
+              </div>
+              {analysis ? (
+                <div className="space-y-2.5">
+                  {(["X", "Y", "Z"] as const).map((ax, i) => {
+                    const base = analysis.dimensions[i];
+                    const cur = base * previewScale[i];
+                    return (
+                      <div key={ax} className="flex items-center gap-2">
+                        <span className="w-4 font-mono text-xs text-[#e6b3bb]">{ax}</span>
+                        <input
+                          type="range" min={0.3} max={3} step={0.01}
+                          value={previewScale[i]}
+                          onChange={(e) => setAxisFactor(i as 0 | 1 | 2, Number(e.target.value))}
+                          className="range-slider flex-1"
+                        />
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number" inputMode="decimal" step={0.1}
+                            value={cur.toFixed(2)}
+                            onChange={(e) => {
+                              const mm = parseFloat(e.target.value);
+                              if (mm > 0 && base > 0) setAxisFactor(i as 0 | 1 | 2, Math.min(3, Math.max(0.3, mm / base)));
+                            }}
+                            className="w-16 rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-1 text-right font-mono text-xs text-white focus:border-[#b76e79]/40 focus:outline-none"
+                          />
+                          <span className="text-[10px] text-white/30">mm</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <button
+                    onClick={applyResize}
+                    disabled={!geometry || previewScale.every((s) => s === 1)}
+                    className="mt-1 w-full rounded-lg bg-[#b76e79]/20 px-4 py-2 text-sm font-medium text-[#e6b3bb] hover:bg-[#b76e79]/30 disabled:opacity-35"
+                  >Boyutları Uygula</button>
+                </div>
+              ) : <p className="text-xs text-white/25">STL yüklenince eksen kontrolleri açılır.</p>}
             </div>
 
             {/* İşlemler */}
