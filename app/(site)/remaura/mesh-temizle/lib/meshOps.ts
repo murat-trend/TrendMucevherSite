@@ -489,6 +489,79 @@ export function maxDimension(geometry: THREE.BufferGeometry): number {
 }
 
 // ---------------------------------------------------------------------------
+// İç boşaltma (fast-shell): dış yüzey korunur + içe ofset ters kabuk eklenir.
+// Detay dış yüzeyde kalır; slicer iki iç içe kabuğu boşluk olarak basar.
+// Döndürür: { shell, cavityMm3 } (cavityMm3 = oluşan iç boşluk hacmi)
+// ---------------------------------------------------------------------------
+export function hollowShell(geometry: THREE.BufferGeometry, wallMm: number): { shell: THREE.BufferGeometry; cavityMm3: number } {
+  // normaller tutarlı + dışa bakmalı (offset yönü doğru olsun)
+  const fixed = fixWinding(geometry);
+  const pos = fixed.attributes.position;
+
+  // weld → indeksli (yumuşak vertex normali için)
+  const vmap = new Map<string, number>();
+  const vx: number[] = [];
+  const vid = (i: number) => {
+    const k = keyOf(pos, i);
+    const ex = vmap.get(k);
+    if (ex !== undefined) return ex;
+    const id = vx.length / 3;
+    vmap.set(k, id);
+    vx.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+    return id;
+  };
+  const faces: [number, number, number][] = [];
+  for (let i = 0; i < pos.count; i += 3) faces.push([vid(i), vid(i + 1), vid(i + 2)]);
+
+  const nv = vx.length / 3;
+  const nrm = new Float32Array(nv * 3);
+  // yumuşak vertex normali: yüz normallerini vertekslere topla
+  for (const [a, b, c] of faces) {
+    const ax = vx[a*3], ay = vx[a*3+1], az = vx[a*3+2];
+    const bx = vx[b*3], by = vx[b*3+1], bz = vx[b*3+2];
+    const cx = vx[c*3], cy = vx[c*3+1], cz = vx[c*3+2];
+    const ux = bx-ax, uy = by-ay, uz = bz-az;
+    const wx = cx-ax, wy = cy-ay, wz = cz-az;
+    const nx = uy*wz - uz*wy, ny = uz*wx - ux*wz, nz = ux*wy - uy*wx;
+    for (const v of [a, b, c]) { nrm[v*3]+=nx; nrm[v*3+1]+=ny; nrm[v*3+2]+=nz; }
+  }
+  for (let v = 0; v < nv; v += 1) {
+    const x=nrm[v*3], y=nrm[v*3+1], z=nrm[v*3+2];
+    const l = Math.hypot(x,y,z) || 1;
+    nrm[v*3]=x/l; nrm[v*3+1]=y/l; nrm[v*3+2]=z/l;
+  }
+
+  // iç vertexler: dış − normal*wall
+  const ix = new Float32Array(nv * 3);
+  for (let v = 0; v < nv; v += 1) {
+    ix[v*3]   = vx[v*3]   - nrm[v*3]*wallMm;
+    ix[v*3+1] = vx[v*3+1] - nrm[v*3+1]*wallMm;
+    ix[v*3+2] = vx[v*3+2] - nrm[v*3+2]*wallMm;
+  }
+
+  const out: number[] = [];
+  // dış yüzey (orijinal winding)
+  for (const [a, b, c] of faces) {
+    out.push(vx[a*3],vx[a*3+1],vx[a*3+2], vx[b*3],vx[b*3+1],vx[b*3+2], vx[c*3],vx[c*3+1],vx[c*3+2]);
+  }
+  // iç yüzey (ters winding → normaller içe baksın)
+  let cav6 = 0;
+  for (const [a, b, c] of faces) {
+    out.push(ix[a*3],ix[a*3+1],ix[a*3+2], ix[c*3],ix[c*3+1],ix[c*3+2], ix[b*3],ix[b*3+1],ix[b*3+2]);
+    // iç boşluk hacmi (orijinal winding ile)
+    const ax=ix[a*3],ay=ix[a*3+1],az=ix[a*3+2];
+    const bx=ix[b*3],by=ix[b*3+1],bz=ix[b*3+2];
+    const cx=ix[c*3],cy=ix[c*3+1],cz=ix[c*3+2];
+    cav6 += ax*(by*cz-bz*cy) - ay*(bx*cz-bz*cx) + az*(bx*cy-by*cx);
+  }
+
+  const shell = new THREE.BufferGeometry();
+  shell.setAttribute("position", new THREE.Float32BufferAttribute(out, 3));
+  shell.computeVertexNormals();
+  return { shell, cavityMm3: Math.abs(cav6) / 6 };
+}
+
+// ---------------------------------------------------------------------------
 // Metal ağırlığı: işaretli hacim (divergence teoremi) → mm³ → gram
 // ---------------------------------------------------------------------------
 export function computeWeight(geometry: THREE.BufferGeometry): MetalWeight {

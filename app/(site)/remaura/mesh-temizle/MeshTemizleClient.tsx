@@ -11,10 +11,21 @@ import {
 import { MeshCleanViewer, type MeshViewerHandle } from "./MeshCleanViewer";
 import {
   analyzeGeometry, basicCleanup, keepLargestShell, deleteNonManifoldFaces,
-  repairEdgesAndSmallHoles, fixWinding, scaleGeometry, scaleGeometryXYZ, computeWeight, type MeshAnalysis, type MetalWeight,
+  repairEdgesAndSmallHoles, fixWinding, scaleGeometry, scaleGeometryXYZ, hollowShell,
+  computeWeight, METALS, type MeshAnalysis, type MetalWeight,
 } from "./lib/meshOps";
 import { buildEtsyCard } from "./lib/etsyCard";
-import { Ruler, ImageIcon, Compass, Wand2 } from "lucide-react";
+import { Ruler, ImageIcon, Compass, Wand2, Egg } from "lucide-react";
+
+type HollowResult = {
+  shell: THREE.BufferGeometry;
+  wallMm: number;
+  solidCm3: number;
+  cavityCm3: number;
+  materialCm3: number;
+  savingPct: number;
+  weights: { key: string; label: string; grams: number }[];
+};
 
 type Log = { id: number; type: "info" | "ok" | "warn" | "err"; msg: string };
 
@@ -28,6 +39,9 @@ export function MeshTemizleClient() {
   const [exportName, setExportName] = useState("");
   const [gizmo, setGizmo] = useState(false);
   const [gizmoMode, setGizmoMode] = useState<"rotate" | "translate">("rotate");
+  const [hollowWall, setHollowWall] = useState(1.0);
+  const [hollow, setHollow] = useState<HollowResult | null>(null);
+  const [showHollow, setShowHollow] = useState(false);
   const [wireframe, setWireframe] = useState(false);
   const [showBadEdges, setShowBadEdges] = useState(true);
   const [logs, setLogs] = useState<Log[]>([]);
@@ -56,6 +70,7 @@ export function MeshTemizleClient() {
     setAnalysis(a);
     setWeight(null); // geometri değişti, ağırlık tekrar hesaplanmalı
     setPreviewScale([1, 1, 1]); // önizleme ölçeğini sıfırla
+    setHollow(null); setShowHollow(false); // boşaltma sonucu geçersiz
     addLog(a.watertight ? "ok" : "warn",
       `${label}: ${a.triangleCount.toLocaleString()} üçgen, ${a.shellCount} parça, ${a.boundaryEdges} açık kenar, ${a.nonManifoldEdges} non-manifold.`);
     return a;
@@ -253,6 +268,50 @@ export function MeshTemizleClient() {
     }
   }
 
+  function runHollow() {
+    if (!geometry) return;
+    addLog("info", `İç boşaltma… duvar ${hollowWall.toFixed(1)} mm`);
+    try {
+      const solidCm3 = Math.abs(computeWeight(geometry).volumeMm3) / 1000;
+      const { shell, cavityMm3 } = hollowShell(geometry, hollowWall);
+      const cavityCm3 = cavityMm3 / 1000;
+      const materialCm3 = Math.max(solidCm3 - cavityCm3, 0);
+      const savingPct = solidCm3 > 0 ? (cavityCm3 / solidCm3) * 100 : 0;
+      const weights = METALS.map((m) => ({ key: m.key, label: m.label, grams: materialCm3 * m.density }));
+      setHollow({ shell, wallMm: hollowWall, solidCm3, cavityCm3, materialCm3, savingPct, weights });
+      setShowHollow(true);
+      addLog("ok", `Boşaltıldı: dolu ${solidCm3.toFixed(3)} → boş ${materialCm3.toFixed(3)} cm³ · tasarruf %${savingPct.toFixed(0)} · gümüş ${(materialCm3 * 10.36).toFixed(2)} g`);
+    } catch (err) {
+      addLog("err", `İç boşaltma başarısız: ${(err as Error).message}`);
+    }
+  }
+
+  function exportHollowStl() {
+    if (!hollow) return;
+    try {
+      let geo = hollow.shell;
+      const rot = viewerRef.current?.getOrientationMatrix?.();
+      if (rot) { geo = hollow.shell.clone(); geo.applyMatrix4(rot); }
+      const mesh = new THREE.Mesh(geo);
+      mesh.updateMatrixWorld(true);
+      const result = new STLExporter().parse(mesh, { binary: true }) as unknown;
+      let blobPart: BlobPart;
+      if (typeof result === "string") blobPart = result;
+      else if (result instanceof ArrayBuffer) blobPart = new Uint8Array(result.slice(0));
+      else if (ArrayBuffer.isView(result)) { const v = result as ArrayBufferView; blobPart = new Uint8Array(new Uint8Array(v.buffer, v.byteOffset, v.byteLength)); }
+      else blobPart = new STLExporter().parse(mesh) as unknown as string;
+      const blob = new Blob([blobPart], { type: "model/stl" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = outputBaseName() + "_hollow.stl";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      addLog("ok", `Boşaltılmış STL indirildi (${(blob.size / 1024).toFixed(0)} KB).`);
+    } catch (err) {
+      addLog("err", `İndirme başarısız: ${(err as Error).message}`);
+    }
+  }
+
   async function exportEtsyCard() {
     if (!geometry || !analysis) return;
     addLog("info", "Etsy görseli hazırlanıyor…");
@@ -300,7 +359,7 @@ export function MeshTemizleClient() {
           {/* SOL: sahne + log */}
           <div className="flex flex-col gap-4">
             <div className="relative h-[480px] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#07080a]">
-              <MeshCleanViewer ref={viewerRef} geometry={geometry} wireframe={wireframe} showBadEdges={showBadEdges} previewScale={previewScale} gizmo={gizmo} gizmoMode={gizmoMode} />
+              <MeshCleanViewer ref={viewerRef} geometry={showHollow && hollow ? hollow.shell : geometry} wireframe={wireframe} showBadEdges={showBadEdges} previewScale={previewScale} gizmo={gizmo} gizmoMode={gizmoMode} />
               <div className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white/60 backdrop-blur">
                 {fileName || "STL yüklenmedi"}
               </div>
@@ -522,6 +581,60 @@ export function MeshTemizleClient() {
                   </div>
                 </>
               ) : <p className="text-sm text-white/30">«Hesapla» ile gramajı gör.</p>}
+            </div>
+
+            {/* İç Boşaltma */}
+            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
+              <span className="mb-1 flex items-center gap-1.5 text-sm font-medium text-white/70">
+                <Egg className="h-4 w-4" /> İç Boşaltma
+              </span>
+              <p className="mb-3 text-xs text-white/35">Dış yüzey korunur; içi boşaltılır, döküm gramajı düşer.</p>
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-sm text-white/60">Duvar kalınlığı</span>
+                <span className="font-mono text-sm text-[#e6b3bb]">{hollowWall.toFixed(1)} mm</span>
+              </div>
+              <input
+                type="range" min={0.5} max={3} step={0.1} value={hollowWall}
+                onChange={(e) => setHollowWall(Number(e.target.value))}
+                className="range-slider mb-2 w-full"
+              />
+              <div className="mb-3 flex justify-between text-[11px] text-white/25"><span>0.5 mm</span><span>3.0 mm</span></div>
+              <button
+                onClick={runHollow}
+                disabled={!geometry}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#c4838b,#b76e79,#a65f69)] px-4 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-35"
+              >
+                <Egg className="h-4 w-4" /> İç Boşalt
+              </button>
+
+              {hollow && (
+                <div className="mt-3 rounded-xl border border-[#b76e79]/20 bg-[#b76e79]/5 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs text-white/45">Tasarruf</span>
+                    <span className="font-mono text-lg font-semibold text-emerald-400">−%{hollow.savingPct.toFixed(0)}</span>
+                  </div>
+                  <p className="mb-2 font-mono text-[11px] text-white/40">
+                    dolu {hollow.solidCm3.toFixed(3)} → boş {hollow.materialCm3.toFixed(3)} cm³ · duvar {hollow.wallMm.toFixed(1)} mm
+                  </p>
+                  <div className="space-y-1">
+                    {hollow.weights.map((w) => (
+                      <div key={w.key} className="flex items-center justify-between text-xs">
+                        <span className="text-white/55">{w.label}</span>
+                        <span className="font-mono font-semibold text-[#e6b3bb]">{w.grams.toFixed(2)} g</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <button onClick={() => setShowHollow((v) => !v)} className="flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-medium text-white/70 hover:bg-white/[0.08]">
+                      {showHollow ? "Dolu göster" : "Boşaltılmışı göster"}
+                    </button>
+                    <button onClick={exportHollowStl} className="flex-1 rounded-lg bg-[#b76e79]/20 px-3 py-2 text-xs font-semibold text-[#e6b3bb] hover:bg-[#b76e79]/30">
+                      Boşaltılmış STL
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[10px] text-white/25">İpucu: reçine baskıda mum/reçine akması için slicer&apos;da drenaj deliği ekle.</p>
+                </div>
+              )}
             </div>
 
             {/* Dışa aktarım */}
