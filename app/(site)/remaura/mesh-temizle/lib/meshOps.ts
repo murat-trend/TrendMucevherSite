@@ -613,6 +613,96 @@ export function hollowShell(geometry: THREE.BufferGeometry, wallMm: number): { s
 // İç boşaltma (SDF + Surface Nets) — endüstri standardı, self-intersection YOK.
 // Dış yüzey korunur; iç yüzey mesafe alanından üretilir (dar bölgeyi dolu bırakır).
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// MESH ONAR / KATIYA ÇEVİR (Unsigned SDF Wrap) — açık/bozuk mesh'i kapalı katı yapar.
+// İç/dış testi GEREKMEZ (işaretsiz mesafe her zaman tanımlı). MatrixGold "repair
+// mesh" ile aynı mantık: yüzeyden 'offset' uzaktaki eş-yüzeyi yeniden ör.
+// ---------------------------------------------------------------------------
+export function solidifyWrap(
+  geometry: THREE.BufferGeometry,
+  opts?: { maxGrid?: number; offsetMm?: number; onProgress?: (p: number) => void },
+): { solid: THREE.BufferGeometry; resolutionMm: number } {
+  const maxGrid = opts?.maxGrid ?? 110; // wrap'te detay için biraz yüksek
+
+  const src = geometry.index ? geometry.toNonIndexed() : geometry.clone();
+  const pos = src.attributes.position;
+  const vmap = new Map<string, number>();
+  const vx: number[] = [];
+  const vid = (i: number) => {
+    const k = keyOf(pos, i);
+    const ex = vmap.get(k); if (ex !== undefined) return ex;
+    const id = vx.length / 3; vmap.set(k, id);
+    vx.push(pos.getX(i), pos.getY(i), pos.getZ(i)); return id;
+  };
+  const fidx: number[] = [];
+  for (let i = 0; i < pos.count; i += 3) fidx.push(vid(i), vid(i + 1), vid(i + 2));
+  const idxGeo = new THREE.BufferGeometry();
+  idxGeo.setAttribute("position", new THREE.Float32BufferAttribute(Array.from(vx), 3));
+  idxGeo.setIndex(fidx);
+  const bvh = new MeshBVH(idxGeo);
+
+  idxGeo.computeBoundingBox();
+  const bb = idxGeo.boundingBox!;
+  const ext = new THREE.Vector3().subVectors(bb.max, bb.min);
+  const pitch = Math.max(ext.x, ext.y, ext.z) / (maxGrid - 6);
+  const offset = opts?.offsetMm ?? Math.max(pitch * 1.1, 0.12); // sarma kalınlığı
+  const pad = offset + pitch * 3;
+  const minB = [bb.min.x - pad, bb.min.y - pad, bb.min.z - pad];
+  const maxB = [bb.max.x + pad, bb.max.y + pad, bb.max.z + pad];
+  const M = [
+    Math.max(8, Math.ceil((maxB[0]-minB[0]) / pitch)),
+    Math.max(8, Math.ceil((maxB[1]-minB[1]) / pitch)),
+    Math.max(8, Math.ceil((maxB[2]-minB[2]) / pitch)),
+  ];
+  const scale = [(maxB[0]-minB[0])/M[0], (maxB[1]-minB[1])/M[1], (maxB[2]-minB[2])/M[2]];
+
+  // İŞARETSİZ mesafe alanı (açık mesh'te bile çalışır)
+  const ud = new Float32Array(M[0]*M[1]*M[2]);
+  const q = new THREE.Vector3();
+  const tgt: { point: THREE.Vector3; distance: number; faceIndex: number } = { point: new THREE.Vector3(), distance: 0, faceIndex: 0 };
+  let idx = 0;
+  for (let kz = 0; kz < M[2]; kz += 1) {
+    for (let ky = 0; ky < M[1]; ky += 1) {
+      for (let kx = 0; kx < M[0]; kx += 1, idx += 1) {
+        q.set(minB[0]+kx*scale[0], minB[1]+ky*scale[1], minB[2]+kz*scale[2]);
+        bvh.closestPointToPoint(q, tgt);
+        ud[idx] = tgt.distance;
+      }
+    }
+    opts?.onProgress?.(kz / M[2]);
+  }
+
+  // d = offset eş-yüzeyi → yüzeyi saran kapalı katı
+  const lookup = (wx: number, wy: number, wz: number) => {
+    let ix = Math.round((wx-minB[0])/scale[0]); if (ix<0) ix=0; else if (ix>=M[0]) ix=M[0]-1;
+    let iy = Math.round((wy-minB[1])/scale[1]); if (iy<0) iy=0; else if (iy>=M[1]) iy=M[1]-1;
+    let iz = Math.round((wz-minB[2])/scale[2]); if (iz<0) iz=0; else if (iz>=M[2]) iz=M[2]-1;
+    return ud[ix + iy*M[0] + iz*M[0]*M[1]] - offset;
+  };
+  const res = surfaceNets(M, lookup, [minB, maxB]) as { positions: number[][]; cells: number[][] };
+
+  // en büyük bağlı bileşeni tut (varsa minik artıkları at)
+  const P = res.positions, cells = res.cells;
+  const np = P.length;
+  const par = new Int32Array(np); for (let i = 0; i < np; i += 1) par[i] = i;
+  const find = (x: number): number => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
+  for (const t of cells) { const a=find(t[0]),b=find(t[1]),c=find(t[2]); if(a!==b)par[b]=a; if(a!==c)par[c]=a; }
+  const cnt = new Map<number, number>();
+  for (const t of cells) { const r = find(t[0]); cnt.set(r, (cnt.get(r) ?? 0) + 1); }
+  let best = -1, bestN = 0; cnt.forEach((v, k) => { if (v > bestN) { bestN = v; best = k; } });
+
+  const out: number[] = [];
+  for (const t of cells) {
+    if (find(t[0]) !== best) continue;
+    const a = P[t[0]], b = P[t[1]], c = P[t[2]];
+    out.push(a[0],a[1],a[2], b[0],b[1],b[2], c[0],c[1],c[2]);
+  }
+  const solid = new THREE.BufferGeometry();
+  solid.setAttribute("position", new THREE.Float32BufferAttribute(out, 3));
+  solid.computeVertexNormals();
+  return { solid, resolutionMm: Math.max(scale[0], scale[1], scale[2]) };
+}
+
 export function hollowShellSDF(
   geometry: THREE.BufferGeometry,
   wallMm: number,

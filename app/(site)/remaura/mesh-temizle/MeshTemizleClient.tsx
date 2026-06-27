@@ -12,7 +12,7 @@ import { MeshCleanViewer, type MeshViewerHandle } from "./MeshCleanViewer";
 import {
   analyzeGeometry, basicCleanup, keepLargestShell, deleteNonManifoldFaces,
   repairEdgesAndSmallHoles, fixWinding, scaleGeometry, scaleGeometryXYZ, hollowShell, hollowShellSDF,
-  computeWeight, METALS, type MeshAnalysis, type MetalWeight,
+  solidifyWrap, computeWeight, METALS, type MeshAnalysis, type MetalWeight,
 } from "./lib/meshOps";
 import { buildEtsyCard } from "./lib/etsyCard";
 import { HollowMagicOverlay } from "./HollowMagicOverlay";
@@ -284,6 +284,42 @@ export function MeshTemizleClient() {
     // sihir için minimum gösterim süresi
     const elapsed = performance.now() - t0;
     window.setTimeout(() => setHollowBusy(false), Math.max(0, 1500 - elapsed));
+  }
+
+  function runSolidify() {
+    if (!geometry) return;
+    const t0 = performance.now();
+    setHollowBusy(true);
+    addLog("info", "Mesh onarılıyor (açık yüzey → katı)… birkaç saniye sürebilir");
+    let worker: Worker | null = null;
+    try { worker = new Worker(new URL("./lib/hollow.worker.ts", import.meta.url)); } catch { worker = null; }
+
+    const done = (positions: Float32Array, resMm: number) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      g.computeVertexNormals();
+      addLog("ok", `Mesh onarıldı (katı, çözünürlük ~${resMm.toFixed(2)} mm). Şimdi «Otomatik Temizle» çalıştır.`);
+      apply(g, "Katıya çevrildi");
+      const el = performance.now() - t0;
+      window.setTimeout(() => setHollowBusy(false), Math.max(0, 1500 - el));
+    };
+
+    if (worker) {
+      const positions = (geometry.attributes.position.array as Float32Array).slice();
+      worker.onmessage = (e: MessageEvent) => {
+        const d = e.data as { type: string; positions?: Float32Array; resolutionMm?: number; message?: string };
+        if (d.type === "progress") return;
+        if (d.type === "error") { addLog("err", `Mesh onarımı başarısız: ${d.message}`); setHollowBusy(false); worker?.terminate(); return; }
+        done(d.positions!, d.resolutionMm ?? 0);
+        worker?.terminate();
+      };
+      worker.postMessage({ positions, wall: 0, method: "solidify" }, [positions.buffer]);
+      return;
+    }
+    setTimeout(() => {
+      try { const r = solidifyWrap(geometry); done(r.solid.attributes.position.array as Float32Array, r.resolutionMm); }
+      catch (err) { addLog("err", `Mesh onarımı başarısız: ${(err as Error).message}`); setHollowBusy(false); }
+    }, 60);
   }
 
   function runHollow() {
@@ -621,6 +657,17 @@ export function MeshTemizleClient() {
                 <OpBtn onClick={runFixWinding} disabled={!analysis || analysis.windingConsistent} icon={<Compass className="h-4 w-4" />}>4 · Normalleri düzelt (ters yüz)</OpBtn>
                 <OpBtn onClick={runBasicCleanup} disabled={!geometry} icon={<Wrench className="h-4 w-4" />}>Temel topoloji temizliği</OpBtn>
               </div>
+              <div className="my-2 flex items-center gap-2 text-[11px] text-white/25">
+                <span className="h-px flex-1 bg-white/10" /> bozuk / açık mesh <span className="h-px flex-1 bg-white/10" />
+              </div>
+              <button
+                onClick={runSolidify}
+                disabled={!geometry}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-300 transition-colors hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                <Wrench className="h-4 w-4" /> Katıya Çevir (açık mesh onar)
+              </button>
+              <p className="mt-1 text-[10px] text-white/25">Açık/bozuk yüzeyi kapalı katıya sarar (hafif şişme olur). Sonra «Otomatik Temizle» çalıştır.</p>
             </div>
 
             {/* Hacim & ağırlık */}
