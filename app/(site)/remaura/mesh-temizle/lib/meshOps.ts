@@ -559,6 +559,32 @@ export function hollowShell(geometry: THREE.BufferGeometry, wallMm: number): { s
     ix[v*3+2] = vx[v*3+2] - nz*off;
   }
 
+  // İÇ YÜZEY YUMUŞATMA (Laplacian): detaylı/konkav bölgelerde kendi üstüne
+  // katlanan iç kabuğu gevşet. İç yüzey gizli olduğu için yumuşatma sorun değil.
+  {
+    const adj: number[][] = Array.from({ length: nv }, () => []);
+    for (const [a, b, c] of faces) {
+      adj[a].push(b, c); adj[b].push(a, c); adj[c].push(a, b);
+    }
+    const LAMBDA = 0.5, ITERS = 6;
+    let cur = ix;
+    for (let it = 0; it < ITERS; it += 1) {
+      const next = new Float32Array(nv * 3);
+      for (let v = 0; v < nv; v += 1) {
+        const ns = adj[v];
+        if (ns.length === 0) { next[v*3]=cur[v*3]; next[v*3+1]=cur[v*3+1]; next[v*3+2]=cur[v*3+2]; continue; }
+        let sx=0, sy=0, sz=0;
+        for (const n of ns) { sx+=cur[n*3]; sy+=cur[n*3+1]; sz+=cur[n*3+2]; }
+        const inv = 1 / ns.length;
+        next[v*3]   = cur[v*3]   * (1-LAMBDA) + (sx*inv) * LAMBDA;
+        next[v*3+1] = cur[v*3+1] * (1-LAMBDA) + (sy*inv) * LAMBDA;
+        next[v*3+2] = cur[v*3+2] * (1-LAMBDA) + (sz*inv) * LAMBDA;
+      }
+      cur = next;
+    }
+    ix.set(cur);
+  }
+
   const out: number[] = [];
   // dış yüzey (orijinal winding)
   for (const [a, b, c] of faces) {
