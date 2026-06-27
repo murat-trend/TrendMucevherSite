@@ -59,6 +59,7 @@
     "sharp": "^0.34.5",
     "simple-icons": "^16.12.0",
     "three": "^0.183.2",
+    "three-mesh-bvh": "^0.9.10",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

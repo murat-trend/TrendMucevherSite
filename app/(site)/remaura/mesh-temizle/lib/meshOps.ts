@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { MeshBVH } from "three-mesh-bvh";
 
 // ---------------------------------------------------------------------------
 // Tipler
@@ -531,12 +532,31 @@ export function hollowShell(geometry: THREE.BufferGeometry, wallMm: number): { s
     nrm[v*3]=x/l; nrm[v*3+1]=y/l; nrm[v*3+2]=z/l;
   }
 
-  // iç vertexler: dış − normal*wall
+  // iç vertexler: dış − normal*wall, ama CLAMP: ince bölgede karşı duvarı geçme
+  // Her vertex'te içe ışın at → yerel kalınlık T → offset ≤ T/2 (orta çizgiyi aşma)
+  const idxGeo = new THREE.BufferGeometry();
+  idxGeo.setAttribute("position", new THREE.Float32BufferAttribute(Array.from(vx), 3));
+  idxGeo.setIndex(faces.flat());
+  const bvh = new MeshBVH(idxGeo);
+  const ray = new THREE.Ray();
+  const EPS = 1e-3;
+
   const ix = new Float32Array(nv * 3);
   for (let v = 0; v < nv; v += 1) {
-    ix[v*3]   = vx[v*3]   - nrm[v*3]*wallMm;
-    ix[v*3+1] = vx[v*3+1] - nrm[v*3+1]*wallMm;
-    ix[v*3+2] = vx[v*3+2] - nrm[v*3+2]*wallMm;
+    const nx = nrm[v*3], ny = nrm[v*3+1], nz = nrm[v*3+2];
+    // başlangıcı hafif içeri al (kendine çarpmasın), içe doğru ışın
+    ray.origin.set(vx[v*3] - nx*EPS, vx[v*3+1] - ny*EPS, vx[v*3+2] - nz*EPS);
+    ray.direction.set(-nx, -ny, -nz);
+    const hit = bvh.raycastFirst(ray, THREE.DoubleSide);
+    let off = wallMm;
+    if (hit) {
+      const halfT = (hit.distance + EPS) * 0.5 - EPS; // orta çizgi (güvenli)
+      if (halfT < off) off = halfT;
+    }
+    if (off < 0) off = 0;
+    ix[v*3]   = vx[v*3]   - nx*off;
+    ix[v*3+1] = vx[v*3+1] - ny*off;
+    ix[v*3+2] = vx[v*3+2] - nz*off;
   }
 
   const out: number[] = [];
