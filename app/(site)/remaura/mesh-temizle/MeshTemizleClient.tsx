@@ -14,7 +14,7 @@ import {
   repairEdgesAndSmallHoles, fixWinding, scaleGeometry, scaleGeometryXYZ, computeWeight, type MeshAnalysis, type MetalWeight,
 } from "./lib/meshOps";
 import { buildEtsyCard } from "./lib/etsyCard";
-import { Ruler, ImageIcon, Compass } from "lucide-react";
+import { Ruler, ImageIcon, Compass, Wand2 } from "lucide-react";
 
 type Log = { id: number; type: "info" | "ok" | "warn" | "err"; msg: string };
 
@@ -84,6 +84,55 @@ export function MeshTemizleClient() {
   }
   function onDrop(e: React.DragEvent) {
     e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) loadFile(f);
+  }
+
+  function runAutoClean() {
+    if (!geometry) return;
+    addLog("info", "🪄 Otomatik temizlik başladı…");
+    try {
+      let g = geometry;
+      let a = analyzeGeometry(g);
+
+      // 1) temel temizlik (weld + duplicate/degenerate)
+      g = basicCleanup(g, 5); a = analyzeGeometry(g);
+      addLog("info", `Temel temizlik: ${a.triangleCount.toLocaleString()} üçgen.`);
+
+      // 2) non-manifold (yeşil çöp) sil
+      if (a.nonManifoldEdges > 0) {
+        g = deleteNonManifoldFaces(g, 1); a = analyzeGeometry(g);
+        addLog("info", `Yeşil çöp temizlendi → non-manifold ${a.nonManifoldEdges}.`);
+      }
+
+      // 3) izole parça — sadece artık kabuklar küçükse (gerçek parçaları silme)
+      if (a.shellCount > 1) {
+        const faces = Array.from(a.shellFaceGroups.values()).map((f) => f.length).sort((x, y) => y - x);
+        const dominant = faces[0] / faces.reduce((s, n) => s + n, 0);
+        if (dominant >= 0.95) {
+          g = keepLargestShell(g, a); a = analyzeGeometry(g);
+          addLog("info", `İzole çöp parçalar silindi → parça ${a.shellCount}.`);
+        } else {
+          addLog("warn", `${a.shellCount} parça var ama küçük değil — otomatik silmedim (gerçek parça olabilir).`);
+        }
+      }
+
+      // 4) açık kenar / küçük delik kapat
+      if (a.boundaryEdges > 0 || a.nonManifoldEdges > 0) {
+        g = repairEdgesAndSmallHoles(g); a = analyzeGeometry(g);
+        addLog("info", `Kenar onarımı → açık kenar ${a.boundaryEdges}, non-manifold ${a.nonManifoldEdges}.`);
+      }
+
+      // 5) normalleri düzelt
+      if (!a.windingConsistent) {
+        g = fixWinding(g); a = analyzeGeometry(g);
+        addLog("info", `Normaller düzeltildi → ters normal ${a.flippedEdges}.`);
+      }
+
+      apply(g, "🪄 Otomatik temizlik tamam");
+      addLog(a.productionReady ? "ok" : "warn",
+        a.productionReady ? "✓ Üretime/döküme hazır." : "⚠ Bazı sorunlar kaldı — manuel kontrol et.");
+    } catch {
+      addLog("err", "Otomatik temizlik başarısız.");
+    }
   }
 
   function runBasicCleanup() {
@@ -422,11 +471,23 @@ export function MeshTemizleClient() {
             <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
               <span className="mb-3 block text-sm font-medium text-white/70">Temizleme İşlemleri</span>
               <div className="flex flex-col gap-2">
+                {/* En üstte: tek tıkla tüm sırayı çalıştır */}
+                <button
+                  onClick={runAutoClean}
+                  disabled={!geometry}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#c4838b,#b76e79,#a65f69)] px-4 py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  <Wand2 className="h-4 w-4" /> Otomatik Temizle (tek tık)
+                </button>
+                <div className="my-1 flex items-center gap-2 text-[11px] text-white/25">
+                  <span className="h-px flex-1 bg-white/10" /> veya adım adım <span className="h-px flex-1 bg-white/10" />
+                </div>
+                {/* Kullanım sırasına göre (yukarıdan aşağıya) */}
+                <OpBtn onClick={runDeleteNM} disabled={!analysis || analysis.nonManifoldEdges === 0} icon={<Scissors className="h-4 w-4" />} green>1 · Yeşil çöpleri temizle</OpBtn>
+                <OpBtn onClick={runKeepLargest} disabled={!analysis || analysis.shellCount < 2} icon={<Scissors className="h-4 w-4" />}>2 · İzole parçaları sil (en büyüğü tut)</OpBtn>
+                <OpBtn onClick={runEdgeRepair} disabled={!analysis || (analysis.boundaryEdges === 0 && analysis.nonManifoldEdges === 0)} icon={<AlertTriangle className="h-4 w-4" />}>3 · Açık kenarları kapat (delik onarımı)</OpBtn>
+                <OpBtn onClick={runFixWinding} disabled={!analysis || analysis.windingConsistent} icon={<Compass className="h-4 w-4" />}>4 · Normalleri düzelt (ters yüz)</OpBtn>
                 <OpBtn onClick={runBasicCleanup} disabled={!geometry} icon={<Wrench className="h-4 w-4" />}>Temel topoloji temizliği</OpBtn>
-                <OpBtn onClick={runKeepLargest} disabled={!analysis || analysis.shellCount < 2} icon={<Scissors className="h-4 w-4" />}>İzole parçaları sil (en büyüğü tut)</OpBtn>
-                <OpBtn onClick={runDeleteNM} disabled={!analysis || analysis.nonManifoldEdges === 0} icon={<Scissors className="h-4 w-4" />} green>Yeşil çöpleri temizle</OpBtn>
-                <OpBtn onClick={runEdgeRepair} disabled={!analysis || (analysis.boundaryEdges === 0 && analysis.nonManifoldEdges === 0)} icon={<AlertTriangle className="h-4 w-4" />}>Açık kenarları kapat (delik onarımı)</OpBtn>
-                <OpBtn onClick={runFixWinding} disabled={!analysis || analysis.windingConsistent} icon={<Compass className="h-4 w-4" />}>Normalleri düzelt (ters yüz)</OpBtn>
               </div>
             </div>
 
