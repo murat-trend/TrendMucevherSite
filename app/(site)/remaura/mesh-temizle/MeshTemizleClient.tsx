@@ -40,6 +40,7 @@ export function MeshTemizleClient() {
   const [exportName, setExportName] = useState("");
   const [gizmo, setGizmo] = useState(false);
   const [gizmoMode, setGizmoMode] = useState<"rotate" | "translate">("rotate");
+  const [clip, setClip] = useState<{ enabled: boolean; axis: "x" | "y" | "z"; position: number; flip: boolean }>({ enabled: false, axis: "x", position: 0.5, flip: false });
   const [hollowWall, setHollowWall] = useState(1.0);
   const [hollowMethod, setHollowMethod] = useState<"fast" | "sdf">("fast");
   const [hollow, setHollow] = useState<HollowResult | null>(null);
@@ -408,7 +409,7 @@ export function MeshTemizleClient() {
           {/* SOL: sahne + log */}
           <div className="flex flex-col gap-4">
             <div className="relative h-[480px] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#07080a]">
-              <MeshCleanViewer ref={viewerRef} geometry={showHollow && hollow ? hollow.shell : geometry} wireframe={wireframe} showBadEdges={showBadEdges} previewScale={previewScale} gizmo={gizmo} gizmoMode={gizmoMode} />
+              <MeshCleanViewer ref={viewerRef} geometry={showHollow && hollow ? hollow.shell : geometry} wireframe={wireframe} showBadEdges={showBadEdges} previewScale={previewScale} gizmo={gizmo} gizmoMode={gizmoMode} clip={clip} />
               <div className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white/60 backdrop-blur">
                 {fileName || "STL yüklenmedi"}
               </div>
@@ -426,6 +427,9 @@ export function MeshTemizleClient() {
                     </button>
                   </>
                 )}
+                <button onClick={() => setClip((c) => ({ ...c, enabled: !c.enabled }))} disabled={!geometry} className={`rounded-full px-3 py-1.5 text-xs font-medium disabled:opacity-40 ${clip.enabled ? "bg-[#b76e79] text-white" : "bg-white/10 hover:bg-white/15"}`}>
+                  {clip.enabled ? "Kesit açık" : "Kesit (içini gör)"}
+                </button>
                 <button onClick={() => setWireframe((v) => !v)} className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium hover:bg-white/15">
                   {wireframe ? "Katı" : "Tel kafes"}
                 </button>
@@ -437,6 +441,26 @@ export function MeshTemizleClient() {
                 </button>
               </div>
             </div>
+
+            {/* Kesit kontrolleri */}
+            {clip.enabled && (
+              <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#b76e79]/20 bg-[#b76e79]/[0.06] px-4 py-3">
+                <span className="text-xs font-medium text-[#e6b3bb]">Kesit:</span>
+                <div className="flex gap-1">
+                  {(["x", "y", "z"] as const).map((ax) => (
+                    <button key={ax} onClick={() => setClip((c) => ({ ...c, axis: ax }))}
+                      className={`rounded-md px-2.5 py-1 font-mono text-xs ${clip.axis === ax ? "bg-[#b76e79] text-white" : "bg-white/10 text-white/60 hover:bg-white/15"}`}>
+                      {ax.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+                <input type="range" min={0} max={1} step={0.01} value={clip.position}
+                  onChange={(e) => setClip((c) => ({ ...c, position: Number(e.target.value) }))}
+                  className="range-slider flex-1 min-w-[120px]" />
+                <button onClick={() => setClip((c) => ({ ...c, flip: !c.flip }))}
+                  className="rounded-md bg-white/10 px-2.5 py-1 text-xs text-white/70 hover:bg-white/15">↔ Yön</button>
+              </div>
+            )}
 
             {/* Log */}
             <div className="rounded-2xl border border-white/[0.06] bg-[#030712] p-3">

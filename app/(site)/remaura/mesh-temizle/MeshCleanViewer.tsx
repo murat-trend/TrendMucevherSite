@@ -13,6 +13,7 @@ type Props = {
   previewScale?: [number, number, number]; // canlı eksen ölçeği önizlemesi
   gizmo?: boolean;                          // gumball açık/kapalı
   gizmoMode?: "rotate" | "translate";       // döndür / taşı
+  clip?: { enabled: boolean; axis: "x" | "y" | "z"; position: number; flip: boolean }; // kesit
 };
 
 export type MeshViewerHandle = {
@@ -23,7 +24,7 @@ export type MeshViewerHandle = {
 };
 
 export const MeshCleanViewer = forwardRef<MeshViewerHandle, Props>(function MeshCleanViewer(
-  { geometry, wireframe, showBadEdges, previewScale, gizmo, gizmoMode }, ref,
+  { geometry, wireframe, showBadEdges, previewScale, gizmo, gizmoMode, clip }, ref,
 ) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -35,6 +36,9 @@ export const MeshCleanViewer = forwardRef<MeshViewerHandle, Props>(function Mesh
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const tcRef = useRef<TransformControls | null>(null);
   const tcHelperRef = useRef<THREE.Object3D | null>(null);
+  const clipPlaneRef = useRef<THREE.Plane>(new THREE.Plane(new THREE.Vector3(1, 0, 0), 0));
+  const dispBoxRef = useRef<THREE.Box3 | null>(null);
+  const outerMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
 
   useImperativeHandle(ref, () => ({
     getOrientationMatrix: () => {
@@ -89,6 +93,7 @@ export const MeshCleanViewer = forwardRef<MeshViewerHandle, Props>(function Mesh
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     rendererRef.current = renderer;
+    renderer.localClippingEnabled = true;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.domElement.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block";
     host.appendChild(renderer.domElement);
@@ -188,10 +193,14 @@ export const MeshCleanViewer = forwardRef<MeshViewerHandle, Props>(function Mesh
 
     const mat = new THREE.MeshStandardMaterial({
       color: 0xc4838b, roughness: 0.55, metalness: 0.1, side: THREE.DoubleSide, wireframe,
+      clippingPlanes: [], clipShadows: true,
     });
     const mesh = new THREE.Mesh(disp, mat);
     meshRef.current = mesh;
+    outerMatRef.current = mat;
     group.add(mesh);
+    disp.computeBoundingBox();
+    dispBoxRef.current = disp.boundingBox!.clone();
 
     // non-manifold kenarlar — mesh ile BİREBİR aynı transform
     const lines = nonManifoldEdgeLines(geometry);
@@ -227,6 +236,20 @@ export const MeshCleanViewer = forwardRef<MeshViewerHandle, Props>(function Mesh
     const [sx, sy, sz] = previewScale ?? [1, 1, 1];
     g.scale.set(sx, sy, sz);
   }, [previewScale, geometry]);
+
+  // kesit (clipping plane) — modelin içini göster
+  useEffect(() => {
+    const mat = outerMatRef.current, plane = clipPlaneRef.current, box = dispBoxRef.current;
+    if (!mat) return;
+    if (!clip || !clip.enabled || !box) { mat.clippingPlanes = []; mat.needsUpdate = true; return; }
+    const ai = clip.axis === "x" ? 0 : clip.axis === "y" ? 1 : 2;
+    plane.normal.set(0, 0, 0).setComponent(ai, clip.flip ? -1 : 1);
+    const lo = box.min.getComponent(ai), hi = box.max.getComponent(ai);
+    const px = lo + (hi - lo) * clip.position;
+    plane.constant = clip.flip ? px : -px;
+    mat.clippingPlanes = [plane];
+    mat.needsUpdate = true;
+  }, [clip, geometry]);
 
   // gumball aç/kapa
   useEffect(() => {
