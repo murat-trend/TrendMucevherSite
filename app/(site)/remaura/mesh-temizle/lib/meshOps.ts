@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { MeshBVH } from "three-mesh-bvh";
+// @ts-expect-error - isosurface tip tanımı yok
+import { surfaceNets } from "isosurface";
 
 // ---------------------------------------------------------------------------
 // Tipler
@@ -605,6 +607,116 @@ export function hollowShell(geometry: THREE.BufferGeometry, wallMm: number): { s
   shell.setAttribute("position", new THREE.Float32BufferAttribute(out, 3));
   shell.computeVertexNormals();
   return { shell, cavityMm3: Math.abs(cav6) / 6 };
+}
+
+// ---------------------------------------------------------------------------
+// İç boşaltma (SDF + Surface Nets) — endüstri standardı, self-intersection YOK.
+// Dış yüzey korunur; iç yüzey mesafe alanından üretilir (dar bölgeyi dolu bırakır).
+// ---------------------------------------------------------------------------
+export function hollowShellSDF(
+  geometry: THREE.BufferGeometry,
+  wallMm: number,
+  opts?: { maxGrid?: number; onProgress?: (p: number) => void },
+): { shell: THREE.BufferGeometry; cavityMm3: number; resolutionMm: number } {
+  const maxGrid = opts?.maxGrid ?? 96; // eksen başına maksimum örnek (hız/bellek)
+
+  // dış: normaller tutarlı + dışa
+  const fixed = fixWinding(geometry);
+  const fpos = fixed.attributes.position;
+
+  // weld → indeksli (BVH + yüz normalleri için)
+  const vmap = new Map<string, number>();
+  const vx: number[] = [];
+  const vid = (i: number) => {
+    const k = keyOf(fpos, i);
+    const ex = vmap.get(k);
+    if (ex !== undefined) return ex;
+    const id = vx.length / 3; vmap.set(k, id);
+    vx.push(fpos.getX(i), fpos.getY(i), fpos.getZ(i)); return id;
+  };
+  const fidx: number[] = [];
+  for (let i = 0; i < fpos.count; i += 3) { fidx.push(vid(i), vid(i + 1), vid(i + 2)); }
+
+  const idxGeo = new THREE.BufferGeometry();
+  idxGeo.setAttribute("position", new THREE.Float32BufferAttribute(Array.from(vx), 3));
+  idxGeo.setIndex(fidx);
+  const bvh = new MeshBVH(idxGeo);
+
+  // yüz normalleri (işaret için)
+  const nf = fidx.length / 3;
+  const fn = new Float32Array(nf * 3);
+  for (let f = 0; f < nf; f += 1) {
+    const a = fidx[f*3], b = fidx[f*3+1], c = fidx[f*3+2];
+    const ux = vx[b*3]-vx[a*3], uy = vx[b*3+1]-vx[a*3+1], uz = vx[b*3+2]-vx[a*3+2];
+    const wx = vx[c*3]-vx[a*3], wy = vx[c*3+1]-vx[a*3+1], wz = vx[c*3+2]-vx[a*3+2];
+    let nx = uy*wz-uz*wy, ny = uz*wx-ux*wz, nz = ux*wy-uy*wx;
+    const l = Math.hypot(nx,ny,nz) || 1; fn[f*3]=nx/l; fn[f*3+1]=ny/l; fn[f*3+2]=nz/l;
+  }
+
+  // sınır kutusu + pay (wall + birkaç voxel)
+  idxGeo.computeBoundingBox();
+  const bb = idxGeo.boundingBox!;
+  const ext = new THREE.Vector3().subVectors(bb.max, bb.min);
+  const maxExt = Math.max(ext.x, ext.y, ext.z);
+  // çözünürlük: maxGrid örneğe sığacak pitch
+  let pitch = maxExt / (maxGrid - 6);
+  const pad = wallMm + pitch * 3;
+  const minB = [bb.min.x - pad, bb.min.y - pad, bb.min.z - pad];
+  const maxB = [bb.max.x + pad, bb.max.y + pad, bb.max.z + pad];
+  const M = [
+    Math.max(8, Math.ceil((maxB[0]-minB[0]) / pitch)),
+    Math.max(8, Math.ceil((maxB[1]-minB[1]) / pitch)),
+    Math.max(8, Math.ceil((maxB[2]-minB[2]) / pitch)),
+  ];
+  const scale = [(maxB[0]-minB[0])/M[0], (maxB[1]-minB[1])/M[1], (maxB[2]-minB[2])/M[2]];
+
+  // SDF örnekle (her grid noktası: işaretli mesafe)
+  const sdf = new Float32Array(M[0]*M[1]*M[2]);
+  const q = new THREE.Vector3();
+  const tgt: { point: THREE.Vector3; distance: number; faceIndex: number } =
+    { point: new THREE.Vector3(), distance: 0, faceIndex: 0 };
+  let idx = 0;
+  for (let kz = 0; kz < M[2]; kz += 1) {
+    for (let ky = 0; ky < M[1]; ky += 1) {
+      for (let kx = 0; kx < M[0]; kx += 1, idx += 1) {
+        q.set(minB[0]+kx*scale[0], minB[1]+ky*scale[1], minB[2]+kz*scale[2]);
+        bvh.closestPointToPoint(q, tgt);
+        let d = tgt.distance;
+        const f = tgt.faceIndex;
+        const dot = (q.x-tgt.point.x)*fn[f*3] + (q.y-tgt.point.y)*fn[f*3+1] + (q.z-tgt.point.z)*fn[f*3+2];
+        sdf[idx] = dot < 0 ? -d : d;
+      }
+    }
+    opts?.onProgress?.(kz / M[2]);
+  }
+
+  // İç yüzey: sdf = -wall eş-yüzeyi (potential = sdf + wall, 0-geçişi)
+  const lookup = (wx: number, wy: number, wz: number) => {
+    let ix = Math.round((wx-minB[0])/scale[0]); if (ix<0) ix=0; else if (ix>=M[0]) ix=M[0]-1;
+    let iy = Math.round((wy-minB[1])/scale[1]); if (iy<0) iy=0; else if (iy>=M[1]) iy=M[1]-1;
+    let iz = Math.round((wz-minB[2])/scale[2]); if (iz<0) iz=0; else if (iz>=M[2]) iz=M[2]-1;
+    return sdf[ix + iy*M[0] + iz*M[0]*M[1]] + wallMm;
+  };
+  const res = surfaceNets(M, lookup, [minB, maxB]) as { positions: number[][]; cells: number[][] };
+
+  // iç yüzey üçgenleri (ters winding → normaller kaviteye baksın) + kavite hacmi
+  const out: number[] = [];
+  // dış yüzey (orijinal detay)
+  for (let i = 0; i < fpos.count; i += 1) out.push(fpos.getX(i), fpos.getY(i), fpos.getZ(i));
+
+  const P = res.positions;
+  let cav6 = 0;
+  for (const t of res.cells) {
+    const a = P[t[0]], b = P[t[1]], c = P[t[2]];
+    // ters winding (a,c,b)
+    out.push(a[0],a[1],a[2], c[0],c[1],c[2], b[0],b[1],b[2]);
+    cav6 += a[0]*(b[1]*c[2]-b[2]*c[1]) - a[1]*(b[0]*c[2]-b[2]*c[0]) + a[2]*(b[0]*c[1]-b[1]*c[0]);
+  }
+
+  const shell = new THREE.BufferGeometry();
+  shell.setAttribute("position", new THREE.Float32BufferAttribute(out, 3));
+  shell.computeVertexNormals();
+  return { shell, cavityMm3: Math.abs(cav6) / 6, resolutionMm: Math.max(scale[0], scale[1], scale[2]) };
 }
 
 // ---------------------------------------------------------------------------

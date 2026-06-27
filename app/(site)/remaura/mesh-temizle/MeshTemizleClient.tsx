@@ -11,7 +11,7 @@ import {
 import { MeshCleanViewer, type MeshViewerHandle } from "./MeshCleanViewer";
 import {
   analyzeGeometry, basicCleanup, keepLargestShell, deleteNonManifoldFaces,
-  repairEdgesAndSmallHoles, fixWinding, scaleGeometry, scaleGeometryXYZ, hollowShell,
+  repairEdgesAndSmallHoles, fixWinding, scaleGeometry, scaleGeometryXYZ, hollowShell, hollowShellSDF,
   computeWeight, METALS, type MeshAnalysis, type MetalWeight,
 } from "./lib/meshOps";
 import { buildEtsyCard } from "./lib/etsyCard";
@@ -40,6 +40,7 @@ export function MeshTemizleClient() {
   const [gizmo, setGizmo] = useState(false);
   const [gizmoMode, setGizmoMode] = useState<"rotate" | "translate">("rotate");
   const [hollowWall, setHollowWall] = useState(1.0);
+  const [hollowMethod, setHollowMethod] = useState<"fast" | "sdf">("fast");
   const [hollow, setHollow] = useState<HollowResult | null>(null);
   const [showHollow, setShowHollow] = useState(false);
   const [wireframe, setWireframe] = useState(false);
@@ -270,10 +271,13 @@ export function MeshTemizleClient() {
 
   function runHollow() {
     if (!geometry) return;
-    addLog("info", `İç boşaltma… duvar ${hollowWall.toFixed(1)} mm`);
+    const sdf = hollowMethod === "sdf";
+    addLog("info", `İç boşaltma (${sdf ? "Sağlam / SDF" : "Hızlı"})… duvar ${hollowWall.toFixed(1)} mm${sdf ? " — birkaç saniye sürebilir" : ""}`);
     try {
       const solidCm3 = Math.abs(computeWeight(geometry).volumeMm3) / 1000;
-      const { shell, cavityMm3 } = hollowShell(geometry, hollowWall);
+      const r = sdf ? hollowShellSDF(geometry, hollowWall) : hollowShell(geometry, hollowWall);
+      const { shell, cavityMm3 } = r;
+      if (sdf && "resolutionMm" in r) addLog("info", `SDF çözünürlük ~${(r as { resolutionMm: number }).resolutionMm.toFixed(2)} mm`);
       const cavityCm3 = cavityMm3 / 1000;
       const materialCm3 = Math.max(solidCm3 - cavityCm3, 0);
       const savingPct = solidCm3 > 0 ? (cavityCm3 / solidCm3) * 100 : 0;
@@ -599,6 +603,25 @@ export function MeshTemizleClient() {
                 className="range-slider mb-2 w-full"
               />
               <div className="mb-3 flex justify-between text-[11px] text-white/25"><span>0.5 mm</span><span>3.0 mm</span></div>
+
+              {/* Yöntem seçimi */}
+              <div className="mb-3 grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setHollowMethod("fast")}
+                  className={`rounded-lg border px-3 py-2 text-left transition-colors ${hollowMethod === "fast" ? "border-[#b76e79]/40 bg-[#b76e79]/15" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}
+                >
+                  <span className={`block text-xs font-medium ${hollowMethod === "fast" ? "text-[#e6b3bb]" : "text-white/70"}`}>Hızlı</span>
+                  <span className="block text-[10px] text-white/35">basit parçalar</span>
+                </button>
+                <button
+                  onClick={() => setHollowMethod("sdf")}
+                  className={`rounded-lg border px-3 py-2 text-left transition-colors ${hollowMethod === "sdf" ? "border-[#b76e79]/40 bg-[#b76e79]/15" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}
+                >
+                  <span className={`block text-xs font-medium ${hollowMethod === "sdf" ? "text-[#e6b3bb]" : "text-white/70"}`}>Sağlam (SDF)</span>
+                  <span className="block text-[10px] text-white/35">zor modeller · yavaş</span>
+                </button>
+              </div>
+
               <button
                 onClick={runHollow}
                 disabled={!geometry}
