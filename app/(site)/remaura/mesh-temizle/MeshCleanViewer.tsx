@@ -11,7 +11,8 @@ type Props = {
   wireframe: boolean;
   showBadEdges: boolean;
   previewScale?: [number, number, number]; // canlı eksen ölçeği önizlemesi
-  gizmo?: boolean;                          // döndürme gumball'ı
+  gizmo?: boolean;                          // gumball açık/kapalı
+  gizmoMode?: "rotate" | "translate";       // döndür / taşı
 };
 
 export type MeshViewerHandle = {
@@ -22,7 +23,7 @@ export type MeshViewerHandle = {
 };
 
 export const MeshCleanViewer = forwardRef<MeshViewerHandle, Props>(function MeshCleanViewer(
-  { geometry, wireframe, showBadEdges, previewScale, gizmo }, ref,
+  { geometry, wireframe, showBadEdges, previewScale, gizmo, gizmoMode }, ref,
 ) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -232,13 +233,14 @@ export const MeshCleanViewer = forwardRef<MeshViewerHandle, Props>(function Mesh
     const tc = tcRef.current, helper = tcHelperRef.current, g = groupRef.current;
     if (!tc) return;
     if (gizmo && g) {
+      tc.setMode(gizmoMode ?? "rotate");
       tc.attach(g); tc.enabled = true;
       if (helper) helper.visible = true;
     } else {
       tc.detach(); tc.enabled = false;
       if (helper) helper.visible = false;
     }
-  }, [gizmo, geometry]);
+  }, [gizmo, gizmoMode, geometry]);
 
   return (
     <div className="relative h-full w-full">

@@ -27,6 +27,7 @@ export function MeshTemizleClient() {
   const [previewScale, setPreviewScale] = useState<[number, number, number]>([1, 1, 1]);
   const [exportName, setExportName] = useState("");
   const [gizmo, setGizmo] = useState(false);
+  const [gizmoMode, setGizmoMode] = useState<"rotate" | "translate">("rotate");
   const [wireframe, setWireframe] = useState(false);
   const [showBadEdges, setShowBadEdges] = useState(true);
   const [logs, setLogs] = useState<Log[]>([]);
@@ -250,14 +251,24 @@ export function MeshTemizleClient() {
           {/* SOL: sahne + log */}
           <div className="flex flex-col gap-4">
             <div className="relative h-[480px] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#07080a]">
-              <MeshCleanViewer ref={viewerRef} geometry={geometry} wireframe={wireframe} showBadEdges={showBadEdges} previewScale={previewScale} gizmo={gizmo} />
+              <MeshCleanViewer ref={viewerRef} geometry={geometry} wireframe={wireframe} showBadEdges={showBadEdges} previewScale={previewScale} gizmo={gizmo} gizmoMode={gizmoMode} />
               <div className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white/60 backdrop-blur">
                 {fileName || "STL yüklenmedi"}
               </div>
               <div className="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-end gap-2">
                 <button onClick={() => setGizmo((v) => !v)} disabled={!geometry} className={`rounded-full px-3 py-1.5 text-xs font-medium disabled:opacity-40 ${gizmo ? "bg-[#b76e79] text-white" : "bg-white/10 hover:bg-white/15"}`}>
-                  {gizmo ? "Döndürme açık" : "Döndür (gumball)"}
+                  {gizmo ? "Gumball açık" : "Gumball"}
                 </button>
+                {gizmo && (
+                  <>
+                    <button onClick={() => setGizmoMode("rotate")} className={`rounded-full px-3 py-1.5 text-xs font-medium ${gizmoMode === "rotate" ? "bg-[#b76e79] text-white" : "bg-white/10 hover:bg-white/15"}`}>
+                      Döndür
+                    </button>
+                    <button onClick={() => setGizmoMode("translate")} className={`rounded-full px-3 py-1.5 text-xs font-medium ${gizmoMode === "translate" ? "bg-[#b76e79] text-white" : "bg-white/10 hover:bg-white/15"}`}>
+                      Taşı
+                    </button>
+                  </>
+                )}
                 <button onClick={() => setWireframe((v) => !v)} className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium hover:bg-white/15">
                   {wireframe ? "Katı" : "Tel kafes"}
                 </button>
