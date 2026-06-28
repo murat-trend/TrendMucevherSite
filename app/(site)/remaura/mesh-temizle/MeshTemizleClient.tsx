@@ -43,9 +43,14 @@ export function MeshTemizleClient() {
   const [clip, setClip] = useState<{ enabled: boolean; axis: "x" | "y" | "z"; position: number; flip: boolean }>({ enabled: false, axis: "x", position: 0.5, flip: false });
   const [hollowWall, setHollowWall] = useState(1.0);
   const [hollowMethod, setHollowMethod] = useState<"fast" | "sdf">("fast");
+  const [detail, setDetail] = useState<"med" | "high" | "ultra">("med");
+  const detailGrid = detail === "med" ? 110 : detail === "high" ? 160 : 220;
   const [hollow, setHollow] = useState<HollowResult | null>(null);
   const [showHollow, setShowHollow] = useState(false);
   const [hollowBusy, setHollowBusy] = useState(false);
+  const [magic, setMagic] = useState<{ title: string; label: string }>({ title: "", label: "" });
+  const [checkResult, setCheckResult] = useState<{ verdict: string; summary: string; checks: { id: string; label: string; status: string; detail: string }[] } | null>(null);
+  const [checkBusy, setCheckBusy] = useState(false);
   const [wireframe, setWireframe] = useState(false);
   const [showBadEdges, setShowBadEdges] = useState(true);
   const [logs, setLogs] = useState<Log[]>([]);
@@ -75,6 +80,7 @@ export function MeshTemizleClient() {
     setWeight(null); // geometri değişti, ağırlık tekrar hesaplanmalı
     setPreviewScale([1, 1, 1]); // önizleme ölçeğini sıfırla
     setHollow(null); setShowHollow(false); // boşaltma sonucu geçersiz
+    setCheckResult(null); // önceki kontrol geçersiz
     addLog(a.watertight ? "ok" : "warn",
       `${label}: ${a.triangleCount.toLocaleString()} üçgen, ${a.shellCount} parça, ${a.boundaryEdges} açık kenar, ${a.nonManifoldEdges} non-manifold.`);
     return a;
@@ -289,6 +295,7 @@ export function MeshTemizleClient() {
   function runSolidify() {
     if (!geometry) return;
     const t0 = performance.now();
+    setMagic({ title: "🔧 Sihirli Onarım", label: "Açık yüzey kapalı katıya sarılıyor…" });
     setHollowBusy(true);
     addLog("info", "Mesh onarılıyor (açık yüzey → katı)… birkaç saniye sürebilir");
     let worker: Worker | null = null;
@@ -313,11 +320,11 @@ export function MeshTemizleClient() {
         done(d.positions!, d.resolutionMm ?? 0);
         worker?.terminate();
       };
-      worker.postMessage({ positions, wall: 0, method: "solidify" }, [positions.buffer]);
+      worker.postMessage({ positions, wall: 0, method: "solidify", maxGrid: detailGrid }, [positions.buffer]);
       return;
     }
     setTimeout(() => {
-      try { const r = solidifyWrap(geometry); done(r.solid.attributes.position.array as Float32Array, r.resolutionMm); }
+      try { const r = solidifyWrap(geometry, { maxGrid: detailGrid }); done(r.solid.attributes.position.array as Float32Array, r.resolutionMm); }
       catch (err) { addLog("err", `Mesh onarımı başarısız: ${(err as Error).message}`); setHollowBusy(false); }
     }, 60);
   }
@@ -326,6 +333,7 @@ export function MeshTemizleClient() {
     if (!geometry) return;
     const sdf = hollowMethod === "sdf";
     const t0 = performance.now();
+    setMagic({ title: "✨ Sihirli Boşaltma", label: sdf ? "Sanal sıvı dökülüyor · kör havuzlar avlanıyor…" : "İçi boşaltılıyor…" });
     setHollowBusy(true);
     addLog("info", `İç boşaltma (${sdf ? "Sağlam / SDF" : "Hızlı"})… duvar ${hollowWall.toFixed(1)} mm${sdf ? " — birkaç saniye sürebilir" : ""}`);
     const solidCm3 = Math.abs(computeWeight(geometry).volumeMm3) / 1000;
@@ -354,14 +362,14 @@ export function MeshTemizleClient() {
         finishHollow(shell, d.cavityMm3!, solidCm3, d.trapped ?? 0, t0);
         worker?.terminate();
       };
-      worker.postMessage({ positions, wall: hollowWall, method: hollowMethod }, [positions.buffer]);
+      worker.postMessage({ positions, wall: hollowWall, method: hollowMethod, maxGrid: detailGrid }, [positions.buffer]);
       return;
     }
 
     // Fallback: ana thread (animasyon donabilir)
     setTimeout(() => {
       try {
-        const r = sdf ? hollowShellSDF(geometry, hollowWall) : hollowShell(geometry, hollowWall);
+        const r = sdf ? hollowShellSDF(geometry, hollowWall, { maxGrid: detailGrid }) : hollowShell(geometry, hollowWall);
         if (sdf && "resolutionMm" in r) addLog("info", `SDF çözünürlük ~${(r as { resolutionMm: number }).resolutionMm.toFixed(2)} mm`);
         finishHollow(r.shell, r.cavityMm3, solidCm3, "trappedRemoved" in r ? (r as { trappedRemoved: number }).trappedRemoved : 0, t0);
       } catch (err) {
@@ -403,9 +411,19 @@ export function MeshTemizleClient() {
     try {
       const w = weight ?? computeWeight(geometry);
       if (!weight) setWeight(w);
+      // Boşaltıldıysa boşaltılmış ağırlığı göster; değilse dolu (ince model)
+      let cardWeight: MetalWeight = w;
+      const hollowed = !!hollow;
+      if (hollow) {
+        cardWeight = {
+          volumeMm3: hollow.materialCm3 * 1000,
+          volumeCm3: hollow.materialCm3,
+          weights: METALS.map((m) => ({ key: m.key, label: m.label, density: m.density, grams: hollow.materialCm3 * m.density })),
+        };
+      }
       // model anlık görüntüsü (yeşil hataları gizleyip temiz çek)
       const img = viewerRef.current?.capture(1100) ?? null;
-      const png = await buildEtsyCard({ modelImg: img, analysis, weight: w, fileName });
+      const png = await buildEtsyCard({ modelImg: img, analysis, weight: cardWeight, fileName, hollowed });
       const a = document.createElement("a");
       a.href = png;
       a.download = outputBaseName() + "_etsy.png";
@@ -416,6 +434,38 @@ export function MeshTemizleClient() {
     }
   }
 
+  async function runCheck() {
+    if (!geometry || !analysis) return;
+    setCheckBusy(true);
+    addLog("info", "Check Mesh — kuyumculuk standartları kontrol ediliyor…");
+    try {
+      const vol = weight?.volumeMm3 ?? computeWeight(geometry).volumeMm3;
+      const body = {
+        watertight: analysis.watertight,
+        windingConsistent: analysis.windingConsistent,
+        shellCount: analysis.shellCount,
+        boundaryEdges: analysis.boundaryEdges,
+        nonManifoldEdges: analysis.nonManifoldEdges,
+        flippedEdges: analysis.flippedEdges,
+        dimensionsMm: analysis.dimensions,
+        volumeMm3: vol,
+        metal: "ag925",
+        ...(hollow ? { hollow: { wallMm: hollow.wallMm, minWallMm: hollow.wallMm } } : {}),
+      };
+      const res = await fetch("/api/remaura/mesh-temizle/check/", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "kontrol başarısız");
+      setCheckResult({ verdict: data.verdict, summary: data.summary, checks: data.checks });
+      addLog(data.verdict === "pass" ? "ok" : data.verdict === "warn" ? "warn" : "err", `Check Mesh: ${data.summary}`);
+    } catch (err) {
+      addLog("err", `Check Mesh başarısız: ${(err as Error).message}`);
+    } finally {
+      setCheckBusy(false);
+    }
+  }
+
   function reset() {
     setGeometry(null); setAnalysis(null); setWeight(null); setFileName("");
     addLog("info", "Sıfırlandı.");
@@ -423,7 +473,7 @@ export function MeshTemizleClient() {
 
   return (
     <div className="min-h-screen bg-[#07080a] px-4 py-8 text-white">
-      <HollowMagicOverlay visible={hollowBusy} label={hollowMethod === "sdf" ? "Sanal sıvı dökülüyor · kör havuzlar avlanıyor…" : "İçi boşaltılıyor…"} />
+      <HollowMagicOverlay visible={hollowBusy} title={magic.title} label={magic.label} />
       <div className="mx-auto max-w-6xl">
         {/* Başlık */}
         <div className="mb-6 flex items-center justify-between gap-4">
@@ -545,10 +595,10 @@ export function MeshTemizleClient() {
                     : "border border-amber-400/30 bg-amber-400/10 text-amber-300"
                 }`}>
                   {analysis.productionReady
-                    ? "✓ Üretime / Döküme Hazır (kapalı + normaller tutarlı)"
+                    ? "✓ WATERTIGHT — Üretime / Döküme Hazır"
                     : analysis.watertight
                       ? "⚠ Kapalı ama normaller ters — «Normalleri düzelt»"
-                      : "⚠ Onarım gerekli — temizle"}
+                      : "⚠ Onarım gerekli — henüz watertight değil"}
                 </div>
               )}
               {analysis ? (
@@ -735,6 +785,18 @@ export function MeshTemizleClient() {
                 </button>
               </div>
 
+              {/* Çözünürlük / Detay — SDF ve Katıya Çevir'i etkiler (ZBrush dynamesh res mantığı) */}
+              <p className="mb-1 text-[11px] text-white/35">Detay (çözünürlük) — SDF &amp; Katıya Çevir için:</p>
+              <div className="mb-3 grid grid-cols-3 gap-2">
+                {([["med", "Orta", "hızlı"], ["high", "Yüksek", "yavaş"], ["ultra", "Çok Yüksek", "çok yavaş"]] as const).map(([k, lbl, sub]) => (
+                  <button key={k} onClick={() => setDetail(k)}
+                    className={`rounded-lg border px-2 py-1.5 text-center transition-colors ${detail === k ? "border-[#b76e79]/40 bg-[#b76e79]/15" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}>
+                    <span className={`block text-xs font-medium ${detail === k ? "text-[#e6b3bb]" : "text-white/70"}`}>{lbl}</span>
+                    <span className="block text-[9px] text-white/30">{sub}</span>
+                  </button>
+                ))}
+              </div>
+
               <button
                 onClick={runHollow}
                 disabled={!geometry}
@@ -791,6 +853,41 @@ export function MeshTemizleClient() {
               >
                 <ImageIcon className="h-4 w-4" /> Etsy Görseli Oluştur (2000×2000)
               </button>
+            </div>
+
+            {/* Check Mesh — son adım: döküme hazır mı? */}
+            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.04] p-4">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="inline-flex items-center gap-1.5 text-sm font-medium text-white/80">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" /> Check Mesh
+                </span>
+                <button onClick={runCheck} disabled={!geometry || checkBusy}
+                  className="rounded-full bg-emerald-500/90 px-4 py-1.5 text-xs font-semibold text-black hover:bg-emerald-400 disabled:opacity-40">
+                  {checkBusy ? "Kontrol…" : "Kontrol Et"}
+                </button>
+              </div>
+              <p className="mb-3 text-xs text-white/35">Son adım: kuyumculuk döküm standartları kontrolü.</p>
+              {checkResult ? (
+                <div>
+                  <div className={`mb-2 rounded-lg px-3 py-2 text-center text-sm font-semibold ${
+                    checkResult.verdict === "pass" ? "border border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+                    : checkResult.verdict === "warn" ? "border border-amber-400/30 bg-amber-400/10 text-amber-300"
+                    : "border border-red-400/30 bg-red-400/10 text-red-300"}`}>
+                    {checkResult.summary}
+                  </div>
+                  <div className="space-y-1">
+                    {checkResult.checks.map((c) => (
+                      <div key={c.id} className="flex items-start gap-2 text-xs">
+                        <span className={c.status === "pass" ? "text-emerald-400" : c.status === "warn" ? "text-amber-400" : "text-red-400"}>
+                          {c.status === "pass" ? "✓" : c.status === "warn" ? "!" : "✕"}
+                        </span>
+                        <span className="text-white/45">{c.label}:</span>
+                        <span className="flex-1 text-white/60">{c.detail}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : <p className="text-sm text-white/30">«Kontrol Et» ile döküme hazırlık raporu al.</p>}
             </div>
           </div>
         </div>

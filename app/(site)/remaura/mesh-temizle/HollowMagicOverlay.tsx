@@ -5,7 +5,7 @@
  * Pembe ışıltılı sıvı yükselir (flood-fill), cadı süpürgeyle uçar,
  * asasının ucundan yıldız havai fişekleri çıkar. Remaura pembesi.
  */
-export function HollowMagicOverlay({ visible, label }: { visible: boolean; label?: string }) {
+export function HollowMagicOverlay({ visible, label, title }: { visible: boolean; label?: string; title?: string }) {
   if (!visible) return null;
   return (
     <div className="rm-magic-root">
@@ -52,8 +52,8 @@ export function HollowMagicOverlay({ visible, label }: { visible: boolean; label
           </div>
         </div>
 
-        <div className="rm-title">✨ Sihirli Boşaltma</div>
-        <div className="rm-sub">{label ?? "Sanal sıvı dökülüyor · kör havuzlar avlanıyor…"}</div>
+        <div className="rm-title">{title ?? "✨ Sihirli İşlem"}</div>
+        <div className="rm-sub">{label ?? "İşleniyor…"}</div>
       </div>
     </div>
   );
