@@ -362,14 +362,14 @@ export function MeshTemizleClient() {
         finishHollow(shell, d.cavityMm3!, solidCm3, d.trapped ?? 0, t0);
         worker?.terminate();
       };
-      worker.postMessage({ positions, wall: hollowWall, method: hollowMethod, maxGrid: detailGrid }, [positions.buffer]);
+      worker.postMessage({ positions, wall: hollowWall, method: hollowMethod }, [positions.buffer]);
       return;
     }
 
     // Fallback: ana thread (animasyon donabilir)
     setTimeout(() => {
       try {
-        const r = sdf ? hollowShellSDF(geometry, hollowWall, { maxGrid: detailGrid }) : hollowShell(geometry, hollowWall);
+        const r = sdf ? hollowShellSDF(geometry, hollowWall) : hollowShell(geometry, hollowWall);
         if (sdf && "resolutionMm" in r) addLog("info", `SDF çözünürlük ~${(r as { resolutionMm: number }).resolutionMm.toFixed(2)} mm`);
         finishHollow(r.shell, r.cavityMm3, solidCm3, "trappedRemoved" in r ? (r as { trappedRemoved: number }).trappedRemoved : 0, t0);
       } catch (err) {
@@ -706,15 +706,32 @@ export function MeshTemizleClient() {
                 <OpBtn onClick={runEdgeRepair} disabled={!analysis || (analysis.boundaryEdges === 0 && analysis.nonManifoldEdges === 0)} icon={<AlertTriangle className="h-4 w-4" />}>3 · Açık kenarları kapat (delik onarımı)</OpBtn>
                 <OpBtn onClick={runFixWinding} disabled={!analysis || analysis.windingConsistent} icon={<Compass className="h-4 w-4" />}>4 · Normalleri düzelt (ters yüz)</OpBtn>
                 <OpBtn onClick={runBasicCleanup} disabled={!geometry} icon={<Wrench className="h-4 w-4" />}>Temel topoloji temizliği</OpBtn>
-                <button
-                  onClick={runSolidify}
-                  disabled={!geometry}
-                  className="flex w-full items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm font-medium text-amber-300 transition-colors hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-35"
-                >
-                  <Wrench className="h-4 w-4" /> Katıya Çevir (açık/bozuk mesh onar)
-                </button>
               </div>
-              <p className="mt-2 text-[10px] text-white/25">«Katıya Çevir»: açık yüzeyi kapalı katıya sarar (hafif şişme). Sonra «Otomatik Temizle» çalıştır.</p>
+            </div>
+
+            {/* Mesh Örme — Katıya Çevir (ayrı panel) */}
+            <div className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.04] p-4">
+              <span className="mb-1 flex items-center gap-1.5 text-sm font-medium text-white/80">
+                <Wrench className="h-4 w-4 text-amber-300" /> Mesh Örme (Katıya Çevir)
+              </span>
+              <p className="mb-3 text-xs text-white/35">Açık/bozuk yüzeyi kapalı katıya sarar (yeniden örer). Sonra «Otomatik Temizle» çalıştır.</p>
+              <p className="mb-1 text-[11px] text-white/35">Detay (çözünürlük):</p>
+              <div className="mb-3 grid grid-cols-3 gap-2">
+                {([["med", "Orta", "hızlı"], ["high", "Yüksek", "yavaş"], ["ultra", "Çok Yüksek", "çok yavaş"]] as const).map(([k, lbl, sub]) => (
+                  <button key={k} onClick={() => setDetail(k)}
+                    className={`rounded-lg border px-2 py-1.5 text-center transition-colors ${detail === k ? "border-amber-400/40 bg-amber-400/15" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}>
+                    <span className={`block text-xs font-medium ${detail === k ? "text-amber-300" : "text-white/70"}`}>{lbl}</span>
+                    <span className="block text-[9px] text-white/30">{sub}</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={runSolidify}
+                disabled={!geometry}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-300 transition-colors hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                <Wrench className="h-4 w-4" /> Katıya Çevir
+              </button>
             </div>
 
             {/* Hacim & ağırlık */}
@@ -783,18 +800,6 @@ export function MeshTemizleClient() {
                   <span className={`block text-xs font-medium ${hollowMethod === "sdf" ? "text-[#e6b3bb]" : "text-white/70"}`}>Sağlam (SDF)</span>
                   <span className="block text-[10px] text-white/35">zor modeller · yavaş</span>
                 </button>
-              </div>
-
-              {/* Çözünürlük / Detay — SDF ve Katıya Çevir'i etkiler (ZBrush dynamesh res mantığı) */}
-              <p className="mb-1 text-[11px] text-white/35">Detay (çözünürlük) — SDF &amp; Katıya Çevir için:</p>
-              <div className="mb-3 grid grid-cols-3 gap-2">
-                {([["med", "Orta", "hızlı"], ["high", "Yüksek", "yavaş"], ["ultra", "Çok Yüksek", "çok yavaş"]] as const).map(([k, lbl, sub]) => (
-                  <button key={k} onClick={() => setDetail(k)}
-                    className={`rounded-lg border px-2 py-1.5 text-center transition-colors ${detail === k ? "border-[#b76e79]/40 bg-[#b76e79]/15" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}>
-                    <span className={`block text-xs font-medium ${detail === k ? "text-[#e6b3bb]" : "text-white/70"}`}>{lbl}</span>
-                    <span className="block text-[9px] text-white/30">{sub}</span>
-                  </button>
-                ))}
               </div>
 
               <button
