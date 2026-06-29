@@ -43,7 +43,7 @@ export function MeshTemizleClient() {
   const [clip, setClip] = useState<{ enabled: boolean; axis: "x" | "y" | "z"; position: number; flip: boolean }>({ enabled: false, axis: "x", position: 0.5, flip: false });
   const [hollowWall, setHollowWall] = useState(1.0);
   const [shrinkPct, setShrinkPct] = useState(2.0);
-  const [hollowMethod, setHollowMethod] = useState<"fast" | "sdf">("fast");
+  const hollowMethod = "sdf" as const; // tek motor: REMAURA (sağlam)
   const [hollow, setHollow] = useState<HollowResult | null>(null);
   const [showHollow, setShowHollow] = useState(false);
   const [hollowBusy, setHollowBusy] = useState(false);
@@ -342,7 +342,7 @@ export function MeshTemizleClient() {
     const t0 = performance.now();
     setMagic({ title: "✨ Sihirli Boşaltma", label: sdf ? "Sanal sıvı dökülüyor · kör havuzlar avlanıyor…" : "İçi boşaltılıyor…" });
     setHollowBusy(true);
-    addLog("info", `İç boşaltma (${sdf ? "Sağlam / SDF" : "Hızlı"})… duvar ${hollowWall.toFixed(2)} mm${sdf ? " — birkaç saniye sürebilir" : ""}`);
+    addLog("info", `İç boşaltma (REMAURA)… duvar ${hollowWall.toFixed(2)} mm — birkaç saniye sürebilir`);
     const solidCm3 = Math.abs(computeWeight(geometry).volumeMm3) / 1000;
 
     // Web Worker (akıcı animasyon); başarısız olursa ana thread'de çalış
@@ -365,7 +365,7 @@ export function MeshTemizleClient() {
         const shell = new THREE.BufferGeometry();
         shell.setAttribute("position", new THREE.BufferAttribute(d.positions!, 3));
         shell.computeVertexNormals();
-        if (sdf && d.resolutionMm) addLog("info", `SDF çözünürlük ~${d.resolutionMm.toFixed(2)} mm`);
+        if (sdf && d.resolutionMm) addLog("info", `Çözünürlük ~${d.resolutionMm.toFixed(2)} mm`);
         finishHollow(shell, d.cavityMm3!, solidCm3, d.trapped ?? 0, t0);
         worker?.terminate();
       };
@@ -377,7 +377,7 @@ export function MeshTemizleClient() {
     setTimeout(() => {
       try {
         const r = sdf ? hollowShellSDF(geometry, hollowWall) : hollowShell(geometry, hollowWall);
-        if (sdf && "resolutionMm" in r) addLog("info", `SDF çözünürlük ~${(r as { resolutionMm: number }).resolutionMm.toFixed(2)} mm`);
+        if (sdf && "resolutionMm" in r) addLog("info", `Çözünürlük ~${(r as { resolutionMm: number }).resolutionMm.toFixed(2)} mm`);
         finishHollow(r.shell, r.cavityMm3, solidCm3, "trappedRemoved" in r ? (r as { trappedRemoved: number }).trappedRemoved : 0, t0);
       } catch (err) {
         addLog("err", `İç boşaltma başarısız: ${(err as Error).message}`);
@@ -801,22 +801,10 @@ export function MeshTemizleClient() {
               />
               <div className="mb-3 flex justify-between text-[11px] text-white/25"><span>0.10 mm</span><span>3.0 mm</span></div>
 
-              {/* Yöntem seçimi */}
-              <div className="mb-3 grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setHollowMethod("fast")}
-                  className={`rounded-lg border px-3 py-2 text-left transition-colors ${hollowMethod === "fast" ? "border-[#b76e79]/40 bg-[#b76e79]/15" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}
-                >
-                  <span className={`block text-xs font-medium ${hollowMethod === "fast" ? "text-[#e6b3bb]" : "text-white/70"}`}>Hızlı</span>
-                  <span className="block text-[10px] text-white/35">basit parçalar</span>
-                </button>
-                <button
-                  onClick={() => setHollowMethod("sdf")}
-                  className={`rounded-lg border px-3 py-2 text-left transition-colors ${hollowMethod === "sdf" ? "border-[#b76e79]/40 bg-[#b76e79]/15" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}
-                >
-                  <span className={`block text-xs font-medium ${hollowMethod === "sdf" ? "text-[#e6b3bb]" : "text-white/70"}`}>Sağlam (SDF)</span>
-                  <span className="block text-[10px] text-white/35">zor modeller · yavaş</span>
-                </button>
+              {/* Motor: REMAURA (tek motor) */}
+              <div className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-[#b76e79]/30 bg-[#b76e79]/10 px-3 py-1.5">
+                <span className="text-[11px] font-medium text-[#e6b3bb]">REMAURA motoru</span>
+                <span className="text-[10px] text-white/35">· tüm modeller</span>
               </div>
 
               <button
