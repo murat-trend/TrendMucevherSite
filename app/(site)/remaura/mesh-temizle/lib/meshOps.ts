@@ -38,8 +38,22 @@ export const METALS = [
 // ---------------------------------------------------------------------------
 // Yardımcı: konumdan vertex anahtarı (kaynak/weld için)
 // ---------------------------------------------------------------------------
-const keyOf = (pos: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, i: number, p = 4) =>
-  `${pos.getX(i).toFixed(p)},${pos.getY(i).toFixed(p)},${pos.getZ(i).toFixed(p)}`;
+// Ölçek-duyarlı weld toleransı. Sabit ondalık yuvarlama (toFixed) ölçeğe bağımlıydı:
+// küçük modelde ayrı vertisleri yapıştırıp HAYALET non-manifold/ters üretiyordu
+// (3mm modelde 42 nm). eps = en büyük boyut × 1e-6 → her ölçekte exact-weld gibi davranır.
+const weldEps = (pos: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): number => {
+  let mnx = Infinity, mny = Infinity, mnz = Infinity, mxx = -Infinity, mxy = -Infinity, mxz = -Infinity;
+  for (let i = 0; i < pos.count; i += 1) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    if (x < mnx) mnx = x; if (y < mny) mny = y; if (z < mnz) mnz = z;
+    if (x > mxx) mxx = x; if (y > mxy) mxy = y; if (z > mxz) mxz = z;
+  }
+  const d = Math.max(mxx - mnx, mxy - mny, mxz - mnz);
+  return (d > 0 ? d : 1) * 1e-6;
+};
+
+const keyOf = (pos: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, i: number, eps: number) =>
+  `${Math.round(pos.getX(i) / eps)},${Math.round(pos.getY(i) / eps)},${Math.round(pos.getZ(i) / eps)}`;
 
 const edgeKeyStr = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 const edgeKeyNum = (a: number, b: number) => (a < b ? `${a}|${b}` : `${b}|${a}`);
@@ -51,6 +65,7 @@ export function analyzeGeometry(geometry: THREE.BufferGeometry): MeshAnalysis {
   const source = geometry.index ? geometry.toNonIndexed() : geometry.clone();
   const position = source.attributes.position;
   const triangleCount = Math.floor(position.count / 3);
+  const eps = weldEps(position);
 
   const parent = Array.from({ length: triangleCount }, (_, i) => i);
   const find = (v: number): number => {
@@ -79,7 +94,7 @@ export function analyzeGeometry(geometry: THREE.BufferGeometry): MeshAnalysis {
 
   for (let f = 0; f < triangleCount; f += 1) {
     const base = f * 3;
-    const a = keyOf(position, base), b = keyOf(position, base + 1), c = keyOf(position, base + 2);
+    const a = keyOf(position, base, eps), b = keyOf(position, base + 1, eps), c = keyOf(position, base + 2, eps);
     addEdge(a, b, f); addEdge(b, c, f); addEdge(c, a, f);
   }
 
@@ -110,7 +125,7 @@ export function analyzeGeometry(geometry: THREE.BufferGeometry): MeshAnalysis {
 
   // weld sonrası gerçek vertex sayısı
   const uniq = new Set<string>();
-  for (let i = 0; i < position.count; i += 1) uniq.add(keyOf(position, i));
+  for (let i = 0; i < position.count; i += 1) uniq.add(keyOf(position, i, eps));
 
   const watertight = boundaryEdges === 0 && nonManifoldEdges === 0;
   const windingConsistent = flippedEdges === 0;
@@ -198,11 +213,12 @@ export function deleteNonManifoldFaces(geometry: THREE.BufferGeometry, expandRin
   const source = geometry.index ? geometry.toNonIndexed() : geometry.clone();
   const position = source.attributes.position;
   const faces = Math.floor(position.count / 3);
+  const eps = weldEps(position);
   const edgeOwners = new Map<string, number[]>();
   const neighbors = new Map<number, Set<number>>();
 
   const addEdge = (ia: number, ib: number, f: number) => {
-    const k = edgeKeyStr(keyOf(position, ia), keyOf(position, ib));
+    const k = edgeKeyStr(keyOf(position, ia, eps), keyOf(position, ib, eps));
     const o = edgeOwners.get(k);
     if (o) o.push(f); else edgeOwners.set(k, [f]);
   };
@@ -254,13 +270,14 @@ export function deleteNonManifoldFaces(geometry: THREE.BufferGeometry, expandRin
 export function repairEdgesAndSmallHoles(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
   const source = basicCleanup(geometry, 5);
   const position = source.attributes.position;
+  const eps = weldEps(position);
   const vmap = new Map<string, number>();
   const verts: THREE.Vector3[] = [];
   const faces: [number, number, number][] = [];
 
   const vid = (i: number) => {
     const x = position.getX(i), y = position.getY(i), z = position.getZ(i);
-    const k = `${x.toFixed(4)},${y.toFixed(4)},${z.toFixed(4)}`;
+    const k = `${Math.round(x / eps)},${Math.round(y / eps)},${Math.round(z / eps)}`;
     const ex = vmap.get(k);
     if (ex !== undefined) return ex;
     const id = verts.length;
@@ -342,10 +359,11 @@ export function nonManifoldEdgeLines(geometry: THREE.BufferGeometry | null): THR
   if (!geometry) return null;
   const source = geometry.index ? geometry.toNonIndexed() : geometry.clone();
   const position = source.attributes.position;
+  const eps = weldEps(position);
   const edges = new Map<string, { n: number; ax: number; ay: number; az: number; bx: number; by: number; bz: number }>();
 
   const addEdge = (ia: number, ib: number) => {
-    const k = edgeKeyStr(keyOf(position, ia), keyOf(position, ib));
+    const k = edgeKeyStr(keyOf(position, ia, eps), keyOf(position, ib, eps));
     const ex = edges.get(k);
     if (ex) { ex.n += 1; return; }
     edges.set(k, {
@@ -375,12 +393,13 @@ export function fixWinding(geometry: THREE.BufferGeometry): THREE.BufferGeometry
   const src = geometry.index ? geometry.toNonIndexed() : geometry.clone();
   const pos = src.attributes.position;
   const triCount = Math.floor(pos.count / 3);
+  const eps = weldEps(pos);
 
   // weld
   const vmap = new Map<string, number>();
   const verts: number[] = [];
   const vid = (i: number) => {
-    const k = keyOf(pos, i);
+    const k = keyOf(pos, i, eps);
     const ex = vmap.get(k);
     if (ex !== undefined) return ex;
     const id = verts.length / 3;
@@ -500,12 +519,13 @@ export function hollowShell(geometry: THREE.BufferGeometry, wallMm: number): { s
   // normaller tutarlı + dışa bakmalı (offset yönü doğru olsun)
   const fixed = fixWinding(geometry);
   const pos = fixed.attributes.position;
+  const eps = weldEps(pos);
 
   // weld → indeksli (yumuşak vertex normali için)
   const vmap = new Map<string, number>();
   const vx: number[] = [];
   const vid = (i: number) => {
-    const k = keyOf(pos, i);
+    const k = keyOf(pos, i, eps);
     const ex = vmap.get(k);
     if (ex !== undefined) return ex;
     const id = vx.length / 3;
@@ -626,10 +646,11 @@ export function solidifyWrap(
 
   const src = geometry.index ? geometry.toNonIndexed() : geometry.clone();
   const pos = src.attributes.position;
+  const eps = weldEps(pos);
   const vmap = new Map<string, number>();
   const vx: number[] = [];
   const vid = (i: number) => {
-    const k = keyOf(pos, i);
+    const k = keyOf(pos, i, eps);
     const ex = vmap.get(k); if (ex !== undefined) return ex;
     const id = vx.length / 3; vmap.set(k, id);
     vx.push(pos.getX(i), pos.getY(i), pos.getZ(i)); return id;
@@ -713,12 +734,13 @@ export function hollowShellSDF(
   // dış: normaller tutarlı + dışa
   const fixed = fixWinding(geometry);
   const fpos = fixed.attributes.position;
+  const eps = weldEps(fpos);
 
   // weld → indeksli (BVH + yüz normalleri için)
   const vmap = new Map<string, number>();
   const vx: number[] = [];
   const vid = (i: number) => {
-    const k = keyOf(fpos, i);
+    const k = keyOf(fpos, i, eps);
     const ex = vmap.get(k);
     if (ex !== undefined) return ex;
     const id = vx.length / 3; vmap.set(k, id);

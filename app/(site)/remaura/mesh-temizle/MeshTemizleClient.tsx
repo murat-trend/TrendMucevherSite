@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
@@ -12,11 +12,11 @@ import { MeshCleanViewer, type MeshViewerHandle } from "./MeshCleanViewer";
 import {
   analyzeGeometry, basicCleanup, keepLargestShell, deleteNonManifoldFaces,
   repairEdgesAndSmallHoles, fixWinding, scaleGeometry, scaleGeometryXYZ, hollowShell, hollowShellSDF,
-  solidifyWrap, computeWeight, METALS, type MeshAnalysis, type MetalWeight,
+  computeWeight, METALS, type MeshAnalysis, type MetalWeight,
 } from "./lib/meshOps";
 import { buildEtsyCard } from "./lib/etsyCard";
 import { HollowMagicOverlay } from "./HollowMagicOverlay";
-import { Ruler, ImageIcon, Compass, Wand2, Egg } from "lucide-react";
+import { Ruler, ImageIcon, Compass, Wand2, Egg, Undo2, Redo2 } from "lucide-react";
 
 type HollowResult = {
   shell: THREE.BufferGeometry;
@@ -42,9 +42,8 @@ export function MeshTemizleClient() {
   const [gizmoMode, setGizmoMode] = useState<"rotate" | "translate">("rotate");
   const [clip, setClip] = useState<{ enabled: boolean; axis: "x" | "y" | "z"; position: number; flip: boolean }>({ enabled: false, axis: "x", position: 0.5, flip: false });
   const [hollowWall, setHollowWall] = useState(1.0);
+  const [shrinkPct, setShrinkPct] = useState(2.0);
   const [hollowMethod, setHollowMethod] = useState<"fast" | "sdf">("fast");
-  const [detail, setDetail] = useState<"med" | "high" | "ultra">("med");
-  const detailGrid = detail === "med" ? 110 : detail === "high" ? 160 : 220;
   const [hollow, setHollow] = useState<HollowResult | null>(null);
   const [showHollow, setShowHollow] = useState(false);
   const [hollowBusy, setHollowBusy] = useState(false);
@@ -57,6 +56,8 @@ export function MeshTemizleClient() {
   const inputRef = useRef<HTMLInputElement>(null);
   const logBoxRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<MeshViewerHandle>(null);
+  // geri/ileri al geçmişi (geometri yığını + mevcut indeks)
+  const [hist, setHist] = useState<{ stack: THREE.BufferGeometry[]; idx: number }>({ stack: [], idx: -1 });
 
   function outputBaseName() {
     const custom = exportName.trim().replace(/[^\p{L}\p{N}_-]+/gu, "-").replace(/^-+|-+$/g, "");
@@ -73,7 +74,9 @@ export function MeshTemizleClient() {
     requestAnimationFrame(() => logBoxRef.current?.scrollTo({ top: logBoxRef.current.scrollHeight }));
   }, []);
 
-  function apply(next: THREE.BufferGeometry, label: string) {
+  const MAX_HIST = 24;
+  // Geometriyi aktif yap (analiz + bağlı state'leri sıfırla). Geçmişe YAZMAZ.
+  function setActive(next: THREE.BufferGeometry, label: string) {
     const a = analyzeGeometry(next);
     setGeometry(next);
     setAnalysis(a);
@@ -85,10 +88,51 @@ export function MeshTemizleClient() {
       `${label}: ${a.triangleCount.toLocaleString()} üçgen, ${a.shellCount} parça, ${a.boundaryEdges} açık kenar, ${a.nonManifoldEdges} non-manifold.`);
     return a;
   }
+  // İşlem uygula + geçmişe kaydet (ileri dal kesilir)
+  function apply(next: THREE.BufferGeometry, label: string) {
+    const a = setActive(next, label);
+    setHist((prev) => {
+      let stack = prev.stack.slice(0, prev.idx + 1);
+      stack.push(next);
+      if (stack.length > MAX_HIST) stack = stack.slice(stack.length - MAX_HIST);
+      return { stack, idx: stack.length - 1 };
+    });
+    return a;
+  }
+  function undo() {
+    if (hist.idx <= 0) return;
+    const idx = hist.idx - 1;
+    setActive(hist.stack[idx], "↩ Geri al");
+    setHist((prev) => ({ ...prev, idx }));
+  }
+  function redo() {
+    if (hist.idx >= hist.stack.length - 1) return;
+    const idx = hist.idx + 1;
+    setActive(hist.stack[idx], "↪ İleri al");
+    setHist((prev) => ({ ...prev, idx }));
+  }
+  const canUndo = hist.idx > 0;
+  const canRedo = hist.idx < hist.stack.length - 1;
+
+  // Klavye: Ctrl/Cmd+Z geri, Ctrl+Shift+Z / Ctrl+Y ileri
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return; // form alanlarına dokunma
+      if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); redo(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hist]);
 
   function loadFile(file: File) {
     setFileName(file.name);
     setWeight(null);
+    setHist({ stack: [], idx: -1 }); // yeni dosya → geçmişi sıfırla
     addLog("info", `Yükleniyor: ${file.name} (${(file.size / 1024).toFixed(0)} KB)`);
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -292,50 +336,13 @@ export function MeshTemizleClient() {
     window.setTimeout(() => setHollowBusy(false), Math.max(0, 1500 - elapsed));
   }
 
-  function runSolidify() {
-    if (!geometry) return;
-    const t0 = performance.now();
-    setMagic({ title: "🔧 Sihirli Onarım", label: "Açık yüzey kapalı katıya sarılıyor…" });
-    setHollowBusy(true);
-    addLog("info", "Mesh onarılıyor (açık yüzey → katı)… birkaç saniye sürebilir");
-    let worker: Worker | null = null;
-    try { worker = new Worker(new URL("./lib/hollow.worker.ts", import.meta.url)); } catch { worker = null; }
-
-    const done = (positions: Float32Array, resMm: number) => {
-      const g = new THREE.BufferGeometry();
-      g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-      g.computeVertexNormals();
-      addLog("ok", `Mesh onarıldı (katı, çözünürlük ~${resMm.toFixed(2)} mm). Şimdi «Otomatik Temizle» çalıştır.`);
-      apply(g, "Katıya çevrildi");
-      const el = performance.now() - t0;
-      window.setTimeout(() => setHollowBusy(false), Math.max(0, 1500 - el));
-    };
-
-    if (worker) {
-      const positions = (geometry.attributes.position.array as Float32Array).slice();
-      worker.onmessage = (e: MessageEvent) => {
-        const d = e.data as { type: string; positions?: Float32Array; resolutionMm?: number; message?: string };
-        if (d.type === "progress") return;
-        if (d.type === "error") { addLog("err", `Mesh onarımı başarısız: ${d.message}`); setHollowBusy(false); worker?.terminate(); return; }
-        done(d.positions!, d.resolutionMm ?? 0);
-        worker?.terminate();
-      };
-      worker.postMessage({ positions, wall: 0, method: "solidify", maxGrid: detailGrid }, [positions.buffer]);
-      return;
-    }
-    setTimeout(() => {
-      try { const r = solidifyWrap(geometry, { maxGrid: detailGrid }); done(r.solid.attributes.position.array as Float32Array, r.resolutionMm); }
-      catch (err) { addLog("err", `Mesh onarımı başarısız: ${(err as Error).message}`); setHollowBusy(false); }
-    }, 60);
-  }
-
   function runHollow() {
     if (!geometry) return;
     const sdf = hollowMethod === "sdf";
     const t0 = performance.now();
     setMagic({ title: "✨ Sihirli Boşaltma", label: sdf ? "Sanal sıvı dökülüyor · kör havuzlar avlanıyor…" : "İçi boşaltılıyor…" });
     setHollowBusy(true);
-    addLog("info", `İç boşaltma (${sdf ? "Sağlam / SDF" : "Hızlı"})… duvar ${hollowWall.toFixed(1)} mm${sdf ? " — birkaç saniye sürebilir" : ""}`);
+    addLog("info", `İç boşaltma (${sdf ? "Sağlam / SDF" : "Hızlı"})… duvar ${hollowWall.toFixed(2)} mm${sdf ? " — birkaç saniye sürebilir" : ""}`);
     const solidCm3 = Math.abs(computeWeight(geometry).volumeMm3) / 1000;
 
     // Web Worker (akıcı animasyon); başarısız olursa ana thread'de çalış
@@ -468,6 +475,7 @@ export function MeshTemizleClient() {
 
   function reset() {
     setGeometry(null); setAnalysis(null); setWeight(null); setFileName("");
+    setHist({ stack: [], idx: -1 });
     addLog("info", "Sıfırlandı.");
   }
 
@@ -513,7 +521,18 @@ export function MeshTemizleClient() {
                     </button>
                   </>
                 )}
-                <button onClick={() => setClip((c) => ({ ...c, enabled: !c.enabled }))} disabled={!geometry} className={`rounded-full px-3 py-1.5 text-xs font-medium disabled:opacity-40 ${clip.enabled ? "bg-[#b76e79] text-white" : "bg-white/10 hover:bg-white/15"}`}>
+                <button onClick={undo} disabled={!canUndo} title="Geri al (Ctrl+Z)" className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium hover:bg-white/15 disabled:opacity-40">
+                  <Undo2 className="h-3.5 w-3.5" /> Geri
+                </button>
+                <button onClick={redo} disabled={!canRedo} title="İleri al (Ctrl+Shift+Z)" className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium hover:bg-white/15 disabled:opacity-40">
+                  <Redo2 className="h-3.5 w-3.5" /> İleri
+                </button>
+                <button onClick={() => setClip((c) => {
+                  if (c.enabled) return { ...c, enabled: false };
+                  // Kesiti aç: kameraya bakan eksende yakın yarıyı kes → kesit yüzü sana döner
+                  const v = viewerRef.current?.getViewClip();
+                  return { enabled: true, position: 0.5, axis: v?.axis ?? c.axis, flip: v?.flip ?? c.flip };
+                })} disabled={!geometry} className={`rounded-full px-3 py-1.5 text-xs font-medium disabled:opacity-40 ${clip.enabled ? "bg-[#b76e79] text-white" : "bg-white/10 hover:bg-white/15"}`}>
                   {clip.enabled ? "Kesit açık" : "Kesit (içini gör)"}
                 </button>
                 <button onClick={() => setWireframe((v) => !v)} className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium hover:bg-white/15">
@@ -709,29 +728,27 @@ export function MeshTemizleClient() {
               </div>
             </div>
 
-            {/* Mesh Örme — Katıya Çevir (ayrı panel) */}
-            <div className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.04] p-4">
-              <span className="mb-1 flex items-center gap-1.5 text-sm font-medium text-white/80">
-                <Wrench className="h-4 w-4 text-amber-300" /> Mesh Örme (Katıya Çevir)
+            {/* Çekme Payı (döküm telafisi) */}
+            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
+              <span className="mb-1 flex items-center gap-1.5 text-sm font-medium text-white/70">
+                <Ruler className="h-4 w-4" /> Çekme Payı (Döküm Telafisi)
               </span>
-              <p className="mb-3 text-xs text-white/35">Açık/bozuk yüzeyi kapalı katıya sarar (yeniden örer). Sonra «Otomatik Temizle» çalıştır.</p>
-              <p className="mb-1 text-[11px] text-white/35">Detay (çözünürlük):</p>
-              <div className="mb-3 grid grid-cols-3 gap-2">
-                {([["med", "Orta", "hızlı"], ["high", "Yüksek", "yavaş"], ["ultra", "Çok Yüksek", "çok yavaş"]] as const).map(([k, lbl, sub]) => (
-                  <button key={k} onClick={() => setDetail(k)}
-                    className={`rounded-lg border px-2 py-1.5 text-center transition-colors ${detail === k ? "border-amber-400/40 bg-amber-400/15" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}>
-                    <span className={`block text-xs font-medium ${detail === k ? "text-amber-300" : "text-white/70"}`}>{lbl}</span>
-                    <span className="block text-[9px] text-white/30">{sub}</span>
-                  </button>
-                ))}
+              <p className="mb-3 text-xs text-white/35">Döküm soğurken metal çeker; modeli telafi için homojen büyütür. Temizlik bittikten sonra, dışa aktarmadan önce uygula.</p>
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-sm text-white/60">Pay oranı</span>
+                <span className="font-mono text-sm text-[#e6b3bb]">+%{shrinkPct.toFixed(1)}</span>
               </div>
+              <input
+                type="range" min={1} max={5} step={0.1} value={shrinkPct}
+                onChange={(e) => setShrinkPct(Number(e.target.value))}
+                className="range-slider mb-2 w-full"
+              />
+              <div className="mb-3 flex justify-between text-[11px] text-white/25"><span>%1</span><span>%5</span></div>
               <button
-                onClick={runSolidify}
+                onClick={() => runScale(1 + shrinkPct / 100, `çekme payı +%${shrinkPct.toFixed(1)}`)}
                 disabled={!geometry}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-300 transition-colors hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                <Wrench className="h-4 w-4" /> Katıya Çevir
-              </button>
+                className="w-full rounded-lg bg-[#b76e79]/20 px-4 py-2 text-sm font-medium text-[#e6b3bb] hover:bg-[#b76e79]/30 disabled:opacity-35"
+              >Çekme Payını Uygula</button>
             </div>
 
             {/* Hacim & ağırlık */}
@@ -775,14 +792,14 @@ export function MeshTemizleClient() {
               <p className="mb-3 text-xs text-white/35">Dış yüzey korunur; içi boşaltılır, döküm gramajı düşer.</p>
               <div className="mb-3 flex items-center justify-between">
                 <span className="text-sm text-white/60">Duvar kalınlığı</span>
-                <span className="font-mono text-sm text-[#e6b3bb]">{hollowWall.toFixed(1)} mm</span>
+                <span className="font-mono text-sm text-[#e6b3bb]">{hollowWall.toFixed(2)} mm</span>
               </div>
               <input
-                type="range" min={0.5} max={3} step={0.1} value={hollowWall}
+                type="range" min={0.1} max={3} step={0.01} value={hollowWall}
                 onChange={(e) => setHollowWall(Number(e.target.value))}
                 className="range-slider mb-2 w-full"
               />
-              <div className="mb-3 flex justify-between text-[11px] text-white/25"><span>0.5 mm</span><span>3.0 mm</span></div>
+              <div className="mb-3 flex justify-between text-[11px] text-white/25"><span>0.10 mm</span><span>3.0 mm</span></div>
 
               {/* Yöntem seçimi */}
               <div className="mb-3 grid grid-cols-2 gap-2">
@@ -817,7 +834,7 @@ export function MeshTemizleClient() {
                     <span className="font-mono text-lg font-semibold text-emerald-400">−%{hollow.savingPct.toFixed(0)}</span>
                   </div>
                   <p className="mb-2 font-mono text-[11px] text-white/40">
-                    dolu {hollow.solidCm3.toFixed(3)} → boş {hollow.materialCm3.toFixed(3)} cm³ · duvar {hollow.wallMm.toFixed(1)} mm
+                    dolu {hollow.solidCm3.toFixed(3)} → boş {hollow.materialCm3.toFixed(3)} cm³ · duvar {hollow.wallMm.toFixed(2)} mm
                   </p>
                   <div className="space-y-1">
                     {hollow.weights.map((w) => (

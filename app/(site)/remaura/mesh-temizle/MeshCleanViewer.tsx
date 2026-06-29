@@ -21,6 +21,8 @@ export type MeshViewerHandle = {
   capture: (size?: number) => string | null;
   /** Gumball ile uygulanan döndürme matrisi (export'a bake için); yoksa null. */
   getOrientationMatrix: () => THREE.Matrix4 | null;
+  /** Kamerayı baz alarak kesit için en uygun eksen + yön (yakın yarıyı kes → kesit yüzü kameraya baksın). */
+  getViewClip: () => { axis: "x" | "y" | "z"; flip: boolean };
 };
 
 export const MeshCleanViewer = forwardRef<MeshViewerHandle, Props>(function MeshCleanViewer(
@@ -46,6 +48,18 @@ export const MeshCleanViewer = forwardRef<MeshViewerHandle, Props>(function Mesh
       const g = groupRef.current;
       if (!g) return null;
       return new THREE.Matrix4().makeRotationFromQuaternion(g.quaternion);
+    },
+    getViewClip: () => {
+      // Kamera→merkez (hedef 0,0,0) yön vektörü; en baskın eksen = kesit ekseni.
+      // O eksende kameranın bulunduğu (yakın) yarıyı keseriz → kesit yüzü kameraya bakar.
+      const cam = cameraRef.current;
+      const p = cam ? cam.position : new THREE.Vector3(0, 0, 1);
+      const ax = Math.abs(p.x), ay = Math.abs(p.y), az = Math.abs(p.z);
+      let axis: "x" | "y" | "z" = "z"; let comp = p.z;
+      if (ax >= ay && ax >= az) { axis = "x"; comp = p.x; }
+      else if (ay >= ax && ay >= az) { axis = "y"; comp = p.y; }
+      // mevcut clip mantığı: flip=true → yüksek (+) yarıyı kaldırır. Kamera + tarafındaysa flip=true.
+      return { axis, flip: comp > 0 };
     },
     capture: (size = 1100) => {
       const renderer = rendererRef.current, scene = sceneRef.current, camera = cameraRef.current;
@@ -258,11 +272,13 @@ export const MeshCleanViewer = forwardRef<MeshViewerHandle, Props>(function Mesh
     const ai = clip!.axis === "x" ? 0 : clip!.axis === "y" ? 1 : 2;
     plane.normal.set(0, 0, 0).setComponent(ai, clip!.flip ? -1 : 1);
     const lo = box!.min.getComponent(ai), hi = box!.max.getComponent(ai);
-    const px = lo + (hi - lo) * clip!.position;
+    // group.scale = previewScale (dünya-uzayı); kesit düzlemi de o ölçeği hesaba katmalı
+    const ps = (previewScale ?? [1, 1, 1])[ai] || 1;
+    const px = (lo + (hi - lo) * clip!.position) * ps;
     plane.constant = clip!.flip ? px : -px;
     mat.clippingPlanes = [plane]; inner.clippingPlanes = [plane];
     mat.needsUpdate = true; inner.needsUpdate = true;
-  }, [clip, geometry]);
+  }, [clip, geometry, previewScale]);
 
   // gumball aç/kapa
   useEffect(() => {
