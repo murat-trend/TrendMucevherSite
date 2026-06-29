@@ -75,6 +75,8 @@ export function MeshTemizleClient() {
   }, []);
 
   const MAX_HIST = 24;
+  const histRef = useRef(hist);
+  histRef.current = hist; // her render'da güncel tut → undo/redo bayat closure okumaz
   // Geometriyi aktif yap (analiz + bağlı state'leri sıfırla). Geçmişe YAZMAZ.
   function setActive(next: THREE.BufferGeometry, label: string) {
     const a = analyzeGeometry(next);
@@ -100,34 +102,37 @@ export function MeshTemizleClient() {
     return a;
   }
   function undo() {
-    if (hist.idx <= 0) return;
-    const idx = hist.idx - 1;
-    setActive(hist.stack[idx], "↩ Geri al");
-    setHist((prev) => ({ ...prev, idx }));
+    const h = histRef.current;
+    if (h.idx <= 0) { addLog("info", "↩ Geri alınacak işlem yok."); return; }
+    const idx = h.idx - 1;
+    setActive(h.stack[idx], "↩ Geri al");
+    setHist({ stack: h.stack, idx });
   }
   function redo() {
-    if (hist.idx >= hist.stack.length - 1) return;
-    const idx = hist.idx + 1;
-    setActive(hist.stack[idx], "↪ İleri al");
-    setHist((prev) => ({ ...prev, idx }));
+    const h = histRef.current;
+    if (h.idx >= h.stack.length - 1) { addLog("info", "↪ İleri alınacak işlem yok."); return; }
+    const idx = h.idx + 1;
+    setActive(h.stack[idx], "↪ İleri al");
+    setHist({ stack: h.stack, idx });
   }
   const canUndo = hist.idx > 0;
   const canRedo = hist.idx < hist.stack.length - 1;
 
-  // Klavye: Ctrl/Cmd+Z geri, Ctrl+Shift+Z / Ctrl+Y ileri
+  // Klavye: Ctrl/Cmd+Z geri, Ctrl+Shift+Z / Ctrl+Y ileri. Bir kez bağla; undo/redo histRef okur.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
       const k = e.key.toLowerCase();
+      if (k !== "z" && k !== "y") return;
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return; // form alanlarına dokunma
-      if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
-      else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); redo(); }
+      e.preventDefault();
+      if (k === "y" || e.shiftKey) redo(); else undo();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hist]);
+  }, []);
 
   function loadFile(file: File) {
     setFileName(file.name);

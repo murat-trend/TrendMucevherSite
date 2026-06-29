@@ -11,7 +11,6 @@ type CardInput = {
 const ROSE = "#b76e79";
 const ROSE_LT = "#e6b3bb";
 const GOLD = "#c9a227";
-const BG = "#0a0b0e";
 const PANEL = "rgba(255,255,255,0.035)";
 const BORDER = "rgba(255,255,255,0.10)";
 
@@ -35,20 +34,71 @@ export async function buildEtsyCard({ modelImg, analysis, weight, fileName, holl
   canvas.width = S; canvas.height = S;
   const ctx = canvas.getContext("2d")!;
 
-  // --- Arka plan + hafif gül parıltı ---
-  ctx.fillStyle = BG;
+  // --- Mermer / taş zemin (lüks algı: kalite + şıklık + sağlamlık) ---
+  let _seed = 0x9e3779b9; // sabit tohum → her seferinde aynı desen
+  const rand = () => {
+    _seed = (_seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(_seed ^ (_seed >>> 15), 1 | _seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+
+  const base = ctx.createLinearGradient(0, 0, S, S);
+  base.addColorStop(0, "#0c0d12");
+  base.addColorStop(0.5, "#131419");
+  base.addColorStop(1, "#0a0b0e");
+  ctx.fillStyle = base;
   ctx.fillRect(0, 0, S, S);
+
+  // mermer benekleri (yumuşak bulutlanma)
+  for (let i = 0; i < 7; i++) {
+    const x = rand() * S, y = rand() * S, r = 320 + rand() * 540;
+    const rg = ctx.createRadialGradient(x, y, 0, x, y, r);
+    rg.addColorStop(0, `rgba(255,255,255,${(0.010 + rand() * 0.018).toFixed(4)})`);
+    rg.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = rg;
+    ctx.fillRect(0, 0, S, S);
+  }
+
+  // mermer damarları (altın + gül + fildişi, yumuşak)
+  ctx.save();
+  const veinCols = ["rgba(201,162,39,0.10)", "rgba(230,179,187,0.09)", "rgba(245,243,240,0.055)"];
+  for (let v = 0; v < 16; v++) {
+    ctx.beginPath();
+    let x = rand() * S, y = -60;
+    ctx.moveTo(x, y);
+    const steps = 9, dy = (S + 120) / steps;
+    for (let s = 0; s < steps; s++) {
+      const nx = x + (rand() - 0.5) * 460, ny = y + dy;
+      ctx.quadraticCurveTo((x + nx) / 2 + (rand() - 0.5) * 220, (y + ny) / 2, nx, ny);
+      x = nx; y = ny;
+    }
+    const col = veinCols[v % veinCols.length];
+    ctx.strokeStyle = col; ctx.lineWidth = 1 + rand() * 3.2;
+    ctx.shadowColor = col; ctx.shadowBlur = 7;
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // üstte gül parıltısı
   const glow = ctx.createRadialGradient(S / 2, 280, 60, S / 2, 280, 1100);
-  glow.addColorStop(0, "rgba(183,110,121,0.18)");
+  glow.addColorStop(0, "rgba(183,110,121,0.16)");
   glow.addColorStop(1, "rgba(183,110,121,0)");
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, S, S);
 
-  // --- Dış çerçeve ---
-  ctx.strokeStyle = "rgba(183,110,121,0.35)";
-  ctx.lineWidth = 3;
-  roundRect(ctx, 40, 40, S - 80, S - 80, 36);
-  ctx.stroke();
+  // kenar karartma (vignette) → ortadaki içerik öne çıkar
+  const vg = ctx.createRadialGradient(S / 2, S / 2, S * 0.32, S / 2, S / 2, S * 0.78);
+  vg.addColorStop(0, "rgba(0,0,0,0)");
+  vg.addColorStop(1, "rgba(0,0,0,0.5)");
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, S, S);
+
+  // --- Çift çerçeve (mermer kakma kenarı: altın + gül hairline) ---
+  ctx.strokeStyle = "rgba(201,162,39,0.38)"; ctx.lineWidth = 3;
+  roundRect(ctx, 40, 40, S - 80, S - 80, 36); ctx.stroke();
+  ctx.strokeStyle = "rgba(230,179,187,0.22)"; ctx.lineWidth = 1.5;
+  roundRect(ctx, 60, 60, S - 120, S - 120, 28); ctx.stroke();
 
   // --- Başlık ---
   ctx.textAlign = "center";
@@ -150,7 +200,6 @@ export async function buildEtsyCard({ modelImg, analysis, weight, fileName, holl
   const dim = analysis.dimensions.map((d) => d.toFixed(1)).join(" × ");
   drawPanel(leftX, "TEKNİK", [
     ["Hacim", `${weight.volumeMm3.toFixed(1)} mm³`],
-    ["Hacim", `${weight.volumeCm3.toFixed(3)} cm³`],
     ["Üçgen", analysis.triangleCount.toLocaleString("tr-TR")],
     ["Parça / Shell", String(analysis.shellCount)],
     ["Boyut (mm)", dim],
