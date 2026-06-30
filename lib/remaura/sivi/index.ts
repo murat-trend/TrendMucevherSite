@@ -5,6 +5,9 @@
 export * from "./types";
 export * from "./io";
 export * from "./registry";
+export * from "./mesh";
+export * from "./relief";
+export * from "./cast";
 
 import { REMA_VERSION, type RemaDocument } from "./types";
 
