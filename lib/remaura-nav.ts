@@ -20,6 +20,7 @@ export type RemauraNavKey =
   | 'hologram'
   | 'meshTemizle'
   | 'hollow'
+  | 'ajur'
 
 export type RemauraCategory = {
   id: string
@@ -204,6 +205,15 @@ export const REMAURA_CATEGORIES: RemauraCategory[] = [
     labelKey: 'hollow',
     icon: '🕳️',
     path: '/remaura/hollow',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'ajur',
+    labelKey: 'ajur',
+    icon: '🪟',
+    path: '/remaura/ajur',
     accessType: 'restricted',
     isSuperAdminOnly: true,
     isActive: true,

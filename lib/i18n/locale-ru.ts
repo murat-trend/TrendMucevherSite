@@ -336,6 +336,7 @@ export const ruMessages = {
     hologram: "Remaura Hologram",
     meshTemizle: "Очистка меша и вес",
     hollow: "Выдалбливание",
+    ajur: "Ажур и задний срез",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",

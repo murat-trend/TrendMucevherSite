@@ -336,6 +336,7 @@ export const deMessages = {
     hologram: "Remaura Hologram",
     meshTemizle: "Mesh-Bereinigung & Gewicht",
     hollow: "Aushöhlung",
+    ajur: "Durchbruch & Rückschnitt",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",
