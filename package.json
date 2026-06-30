@@ -45,6 +45,7 @@
     "isosurface": "^1.0.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.577.0",
+    "manifold-3d": "^3.5.1",
     "next": "16.1.6",
     "nodemailer": "^8.0.3",
     "onnxruntime-web": "^1.21.0",
