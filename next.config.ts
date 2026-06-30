@@ -31,7 +31,13 @@ const nextConfig: NextConfig = {
       "./scripts/**",
     ],
   },
-  turbopack: {},
+  turbopack: {
+    // manifold-3d/manifold subpath export'u yalnız `import` koşulu içeriyor;
+    // Turbopack (Vercel build) çözemiyor → koşulsuz .js dosyasına map et.
+    resolveAlias: {
+      "manifold-3d/manifold": "manifold-3d/manifold.js",
+    },
+  },
   serverExternalPackages: ["draco3dgltf"],
   // manifold-3d (wasm/emscripten glue) tarayıcıda ölü bir `node:module` dalı içerir;
   // webpack bunu build sırasında çözmeye çalışıp patlar. Client build'de `node:`
