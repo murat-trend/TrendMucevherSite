@@ -341,6 +341,7 @@ export const translations = {
       hologram: "Remaura Hologram",
       meshTemizle: "Mesh Temizleme & Gramaj",
       hollow: "İç Boşaltma",
+      sivi: "Sıvı — Kalıp Döküm",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",
@@ -1155,6 +1156,7 @@ export const translations = {
       hologram: "Remaura Hologram",
       meshTemizle: "Mesh Cleanup & Weight",
       hollow: "Hollowing",
+      sivi: "Liquid — Mold Casting",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",
