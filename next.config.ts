@@ -33,6 +33,27 @@ const nextConfig: NextConfig = {
   },
   turbopack: {},
   serverExternalPackages: ["draco3dgltf"],
+  // manifold-3d (wasm/emscripten glue) tarayıcıda ölü bir `node:module` dalı içerir;
+  // webpack bunu build sırasında çözmeye çalışıp patlar. Client build'de `node:`
+  // şemasını çıplak isme çevirip boş modüle düşürüyoruz (dal zaten çalışmıyor).
+  webpack: (config, { isServer, webpack }) => {
+    if (!isServer) {
+      config.resolve = config.resolve || {};
+      config.resolve.fallback = {
+        ...(config.resolve.fallback || {}),
+        module: false,
+        fs: false,
+        path: false,
+        crypto: false,
+      };
+      config.plugins.push(
+        new webpack.NormalModuleReplacementPlugin(/^node:/, (resource: { request: string }) => {
+          resource.request = resource.request.replace(/^node:/, "");
+        }),
+      );
+    }
+    return config;
+  },
   images: {
     remotePatterns: [
       {
