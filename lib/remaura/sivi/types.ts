@@ -64,6 +64,16 @@ export type AjourParams = {
   region?: string;
 };
 
+/** Kalıp-döküm: görseli kalıba koy, sıvıyı dök, kalıbı at, içeriği ver. */
+export type GorselDokumParams = {
+  footprintMm: number;
+  baseMm: number;
+  reliefMm: number;
+  maskThreshold: number;
+  pitchMm: number;
+  imageRef?: string; // zip içindeki kaynak görsel (yeniden dökme için)
+};
+
 type OpBase = {
   id: string;
   enabled: boolean;
@@ -76,7 +86,8 @@ export type RemaOperation =
   | (OpBase & { type: "extractEdges"; params: ExtractEdgesParams })
   | (OpBase & { type: "sweep"; params: SweepParams })
   | (OpBase & { type: "pattern"; params: PatternParams })
-  | (OpBase & { type: "ajour"; params: AjourParams });
+  | (OpBase & { type: "ajour"; params: AjourParams })
+  | (OpBase & { type: "gorselDokum"; params: GorselDokumParams });
 
 export type RemaOperationType = RemaOperation["type"];
 
