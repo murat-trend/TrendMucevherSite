@@ -337,6 +337,7 @@ export const ruMessages = {
     meshTemizle: "Очистка меша и вес",
     hollow: "Выдалбливание",
     ajur: "Ажур и задний срез",
+    sivi: "Жидкость — литьё в форму",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",

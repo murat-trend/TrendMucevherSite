@@ -342,6 +342,7 @@ export const translations = {
       meshTemizle: "Mesh Temizleme & Gramaj",
       hollow: "İç Boşaltma",
       ajur: "Ajur & Arka Kesim",
+      sivi: "Sıvı — Kalıp Döküm",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",
@@ -1157,6 +1158,7 @@ export const translations = {
       meshTemizle: "Mesh Cleanup & Weight",
       hollow: "Hollowing",
       ajur: "Openwork & Back Cut",
+      sivi: "Liquid — Mold Casting",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",

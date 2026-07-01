@@ -337,6 +337,7 @@ export const deMessages = {
     meshTemizle: "Mesh-Bereinigung & Gewicht",
     hollow: "Aushöhlung",
     ajur: "Durchbruch & Rückschnitt",
+    sivi: "Flüssig — Formguss",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",
