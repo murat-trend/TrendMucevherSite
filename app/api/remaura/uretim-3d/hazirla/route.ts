@@ -15,7 +15,7 @@ loadEnvConfig(process.cwd());
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-const MODEL = "gemini-3.1-flash-image-preview";
+const MODEL = "gemini-3.1-flash-image";
 
 const GECERLI_KATEGORILER: Uretim3DKategori[] = ["Yüzük", "Kolye Ucu"];
 

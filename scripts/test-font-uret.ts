@@ -9,7 +9,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY! });
 
 async function testFont() {
   const response = await ai.models.generateContent({
-    model: "gemini-3.1-flash-image-preview",
+    model: "gemini-3.1-flash-image",
     contents: [{
       role: "user",
       parts: [{ text: `Design a luxury jewelry script font alphabet.

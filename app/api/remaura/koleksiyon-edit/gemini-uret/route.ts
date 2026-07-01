@@ -87,7 +87,7 @@ const FORM_EN: Record<string, string> = {
   "Asimetrik":    "asymmetric",
 };
 
-const MODEL = "gemini-3.1-flash-image-preview";
+const MODEL = "gemini-3.1-flash-image";
 
 // ─── Gemini multimodal result extractor ──────────────────────────────────────
 

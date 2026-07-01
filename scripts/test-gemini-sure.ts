@@ -17,7 +17,7 @@ async function test() {
 
   // TURN 1
   const turn1 = await ai.models.generateContent({
-    model: "gemini-3.1-flash-image-preview",
+    model: "gemini-3.1-flash-image",
     contents: [{
       role: "user",
       parts: [
@@ -37,7 +37,7 @@ async function test() {
 
   // TURN 3
   const turn3 = await ai.models.generateContent({
-    model: "gemini-3.1-flash-image-preview",
+    model: "gemini-3.1-flash-image",
     contents: [
       { role: "user", parts: [
         { inlineData: { mimeType: "image/jpeg", data: raw } },

@@ -15,7 +15,7 @@ async function test() {
   const results = await Promise.all([1, 2].map(async (n) => {
     const t1 = Date.now();
     const turn1 = await ai.models.generateContent({
-      model: "gemini-3.1-flash-image-preview",
+      model: "gemini-3.1-flash-image",
       contents: [{ role: "user", parts: [
         { inlineData: { mimeType: "image/jpeg", data: raw } },
         { text: "Analyze ONLY the decorative style. Describe metal, technique, motifs, stones, mood. No jewelry type." }
@@ -27,7 +27,7 @@ async function test() {
     console.log(`[var${n}] turn1: ${Date.now()-t1}ms | toplam: ${Date.now()-t0}ms`);
 
     const turn3 = await ai.models.generateContent({
-      model: "gemini-3.1-flash-image-preview",
+      model: "gemini-3.1-flash-image",
       contents: [
         { role: "user", parts: [{ inlineData: { mimeType: "image/jpeg", data: raw } }, { text: "Analyze ONLY decorative style. No jewelry type." }]},
         { role: "model", parts: [{ text: style }]},

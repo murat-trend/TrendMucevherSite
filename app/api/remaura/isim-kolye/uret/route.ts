@@ -176,7 +176,7 @@ async function generateOne(prompt: string): Promise<string> {
 
   const result = await Promise.race([
     ai.models.generateContent({
-      model: "gemini-3.1-flash-image-preview",
+      model: "gemini-3.1-flash-image",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: { responseModalities: ["IMAGE", "TEXT"], thinkingConfig: { thinkingBudget: 0 } } as never,
     }),
@@ -232,7 +232,7 @@ Professional luxury e-commerce photograph. Pure white background. No hands, no m
 
   const result = await Promise.race([
     ai.models.generateContent({
-      model: "gemini-3.1-flash-image-preview",
+      model: "gemini-3.1-flash-image",
       contents: [
         {
           role: "user",

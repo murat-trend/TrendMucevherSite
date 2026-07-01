@@ -22,7 +22,7 @@ export const maxDuration = 300;
  * Olgunlaşınca farklar tek tek production'a taşınacak.
  */
 
-const MODEL = "gemini-3.1-flash-image-preview";
+const MODEL = "gemini-3.1-flash-image";
 
 const DEFAULT_REF_MAX_PX = 1024; // production 512 → lab 1024 (DNA detayı)
 const DEFAULT_REF_QUALITY = 90; // production q80 → lab q90
