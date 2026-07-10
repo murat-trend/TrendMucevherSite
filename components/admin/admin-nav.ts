@@ -28,6 +28,8 @@ import {
   Gem,
   Clapperboard,
   PenTool,
+  Boxes,
+  Images,
 } from "lucide-react";
 
 export type AdminNavItem = {
@@ -335,6 +337,20 @@ export const ADMIN_NAV_ENTRIES: AdminNavEntry[] = [
         labelTr: "Nakkaş — Desen",
         labelEn: "Nakkaş — Ornament",
         icon: PenTool,
+      },
+      {
+        id: "3d-uret",
+        href: "/remaura/3d-uret",
+        labelTr: "3D Üret",
+        labelEn: "3D Generate",
+        icon: Boxes,
+      },
+      {
+        id: "galeri",
+        href: "/remaura/galeri",
+        labelTr: "Galeri",
+        labelEn: "Gallery",
+        icon: Images,
       },
     ],
   },

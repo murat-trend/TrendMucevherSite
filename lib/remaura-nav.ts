@@ -24,6 +24,8 @@ export type RemauraNavKey =
   | 'sivi'
   | 'creativeStudio'
   | 'nakkas'
+  | 'uretim3d'
+  | 'galeri'
 
 export type RemauraCategory = {
   id: string
@@ -244,6 +246,24 @@ export const REMAURA_CATEGORIES: RemauraCategory[] = [
     labelKey: 'nakkas',
     icon: '🖋️',
     path: '/remaura/nakkas',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: '3d-uret',
+    labelKey: 'uretim3d',
+    icon: '🏭',
+    path: '/remaura/3d-uret',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'galeri',
+    labelKey: 'galeri',
+    icon: '🗃️',
+    path: '/remaura/galeri',
     accessType: 'restricted',
     isSuperAdminOnly: true,
     isActive: true,

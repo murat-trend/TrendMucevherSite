@@ -345,6 +345,8 @@ export const translations = {
       sivi: "Sıvı — Kalıp Döküm",
       creativeStudio: "AI Creative Studio",
       nakkas: "Nakkaş — Desen",
+      uretim3d: "3D Üret",
+      galeri: "Galeri",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",
@@ -1163,6 +1165,8 @@ export const translations = {
       sivi: "Liquid — Mold Casting",
       creativeStudio: "AI Creative Studio",
       nakkas: "Nakkaş — Ornament",
+      uretim3d: "3D Generate",
+      galeri: "Gallery",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",

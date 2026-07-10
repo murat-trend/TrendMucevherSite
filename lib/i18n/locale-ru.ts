@@ -340,6 +340,8 @@ export const ruMessages = {
     sivi: "Жидкость — литьё в форму",
     creativeStudio: "AI Creative Studio",
     nakkas: "Наккаш — узоры",
+    uretim3d: "3D генерация",
+    galeri: "Галерея",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",
