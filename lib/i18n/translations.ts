@@ -343,6 +343,7 @@ export const translations = {
       hollow: "İç Boşaltma",
       ajur: "Ajur & Arka Kesim",
       sivi: "Sıvı — Kalıp Döküm",
+      creativeStudio: "AI Creative Studio",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",
@@ -1159,6 +1160,7 @@ export const translations = {
       hollow: "Hollowing",
       ajur: "Openwork & Back Cut",
       sivi: "Liquid — Mold Casting",
+      creativeStudio: "AI Creative Studio",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",

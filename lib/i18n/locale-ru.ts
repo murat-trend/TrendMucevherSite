@@ -338,6 +338,7 @@ export const ruMessages = {
     hollow: "Выдалбливание",
     ajur: "Ажур и задний срез",
     sivi: "Жидкость — литьё в форму",
+    creativeStudio: "AI Creative Studio",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",
