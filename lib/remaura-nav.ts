@@ -26,6 +26,9 @@ export type RemauraNavKey =
   | 'nakkas'
   | 'uretim3d'
   | 'galeri'
+  | 'aciLab'
+  | 'uvMap'
+  | 'yuzukDene'
 
 export type RemauraCategory = {
   id: string
@@ -264,6 +267,33 @@ export const REMAURA_CATEGORIES: RemauraCategory[] = [
     labelKey: 'galeri',
     icon: '🗃️',
     path: '/remaura/galeri',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'aci-lab',
+    labelKey: 'aciLab',
+    icon: '📷',
+    path: '/remaura/aci-lab',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'uv',
+    labelKey: 'uvMap',
+    icon: '🗺️',
+    path: '/remaura/uv',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'yuzuk-dene',
+    labelKey: 'yuzukDene',
+    icon: '💍',
+    path: '/remaura/yuzuk-dene',
     accessType: 'restricted',
     isSuperAdminOnly: true,
     isActive: true,

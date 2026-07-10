@@ -347,6 +347,9 @@ export const translations = {
       nakkas: "Nakkaş — Desen",
       uretim3d: "3D Üret",
       galeri: "Galeri",
+      aciLab: "Açı Lab",
+      uvMap: "UV Haritalama",
+      yuzukDene: "Yüzük Dene",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",
@@ -1167,6 +1170,9 @@ export const translations = {
       nakkas: "Nakkaş — Ornament",
       uretim3d: "3D Generate",
       galeri: "Gallery",
+      aciLab: "Angle Lab",
+      uvMap: "UV Mapping",
+      yuzukDene: "Ring Try-On",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",

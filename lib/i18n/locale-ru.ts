@@ -342,6 +342,9 @@ export const ruMessages = {
     nakkas: "Наккаш — узоры",
     uretim3d: "3D генерация",
     galeri: "Галерея",
+    aciLab: "Лаб ракурсов",
+    uvMap: "UV-развёртка",
+    yuzukDene: "Примерка кольца",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",

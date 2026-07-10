@@ -342,6 +342,9 @@ export const deMessages = {
     nakkas: "Nakkaş — Ornament",
     uretim3d: "3D-Erzeugung",
     galeri: "Galerie",
+    aciLab: "Winkel-Labor",
+    uvMap: "UV-Mapping",
+    yuzukDene: "Ring-Anprobe",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",
