@@ -337,6 +337,7 @@ export const deMessages = {
     meshTemizle: "Mesh-Bereinigung & Gewicht",
     hollow: "Aushöhlung",
     ajur: "Durchbruch & Rückschnitt",
+    creativeStudio: "AI Creative Studio",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",
