@@ -26,6 +26,8 @@ import {
   Coins,
   BookOpen,
   Gem,
+  Clapperboard,
+  PenTool,
 } from "lucide-react";
 
 export type AdminNavItem = {
@@ -308,6 +310,31 @@ export const ADMIN_NAV_ENTRIES: AdminNavEntry[] = [
         labelTr: "Firmalar",
         labelEn: "Firms",
         icon: Store,
+      },
+    ],
+  },
+
+  // ── Remaura Araçları (süper-admin site araçlarına kısayol) ──
+  {
+    type: "group",
+    id: "remaura-tools",
+    titleTr: "Remaura Araçları",
+    titleEn: "Remaura Tools",
+    icon: Gem,
+    children: [
+      {
+        id: "creative-studio",
+        href: "/remaura/creative-studio",
+        labelTr: "AI Creative Studio",
+        labelEn: "AI Creative Studio",
+        icon: Clapperboard,
+      },
+      {
+        id: "nakkas",
+        href: "/remaura/nakkas",
+        labelTr: "Nakkaş — Desen",
+        labelEn: "Nakkaş — Ornament",
+        icon: PenTool,
       },
     ],
   },

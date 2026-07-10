@@ -23,6 +23,7 @@ export type RemauraNavKey =
   | 'ajur'
   | 'sivi'
   | 'creativeStudio'
+  | 'nakkas'
 
 export type RemauraCategory = {
   id: string
@@ -234,6 +235,15 @@ export const REMAURA_CATEGORIES: RemauraCategory[] = [
     labelKey: 'creativeStudio',
     icon: '🎞️',
     path: '/remaura/creative-studio',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'nakkas',
+    labelKey: 'nakkas',
+    icon: '🖋️',
+    path: '/remaura/nakkas',
     accessType: 'restricted',
     isSuperAdminOnly: true,
     isActive: true,

@@ -344,6 +344,7 @@ export const translations = {
       ajur: "Ajur & Arka Kesim",
       sivi: "Sıvı — Kalıp Döküm",
       creativeStudio: "AI Creative Studio",
+      nakkas: "Nakkaş — Desen",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",
@@ -1161,6 +1162,7 @@ export const translations = {
       ajur: "Openwork & Back Cut",
       sivi: "Liquid — Mold Casting",
       creativeStudio: "AI Creative Studio",
+      nakkas: "Nakkaş — Ornament",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",

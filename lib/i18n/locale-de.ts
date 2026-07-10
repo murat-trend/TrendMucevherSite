@@ -339,6 +339,7 @@ export const deMessages = {
     ajur: "Durchbruch & Rückschnitt",
     sivi: "Flüssig — Formguss",
     creativeStudio: "AI Creative Studio",
+    nakkas: "Nakkaş — Ornament",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",
