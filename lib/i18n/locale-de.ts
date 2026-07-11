@@ -338,6 +338,7 @@ export const deMessages = {
     hollow: "Aushöhlung",
     ajur: "Durchbruch & Rückschnitt",
     creativeStudio: "AI Creative Studio",
+    sivi: "Flüssig — Formguss",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",
