@@ -45,6 +45,8 @@ export type HolePlacement = {
   /** delik sütunundaki tekilleştirilmiş yüzey mesafeleri (ilk 4) —
    *  ≥3 vuruş = duvar arkasında KAVİTE var; 2 vuruş = dolu kesit */
   dists: number[];
+  /** ayak izi örnekleri: [merkez, 8 çevre] — her biri dedup'lı mesafe listesi */
+  samples?: number[][];
 };
 
 export type HolePlan = {
@@ -188,20 +190,40 @@ export function planHoles(ctx: PlanCtx, params: AjurParams): HolePlan {
     if (!ok) { skipped += 1; continue; }
 
     // sütun profili: yakın çift vuruşları tekle (kenar paylaşan üçgenler)
-    const dists: number[] = [];
-    for (const h of hits) {
-      if (dists.length === 0 || h.distance - dists[dists.length - 1] > 1e-4) dists.push(h.distance);
-      if (dists.length >= 4) break;
-    }
+    const dedup = (hs: RayHit[]): number[] => {
+      const out: number[] = [];
+      for (const h of hs) {
+        if (out.length === 0 || h.distance - out[out.length - 1] > 1e-4) out.push(h.distance);
+        if (out.length >= 4) break;
+      }
+      return out;
+    };
+    const dists = dedup(hits);
     if (dists.length < 2) { skipped += 1; continue; }
     const wall = dists[1] - dists[0];
     if (wall <= 0.05) { skipped += 1; continue; }
+
+    // AYAK İZİ PROFİLİ: yüksek rölyefte yüzey delik içinde >1mm dalgalanır —
+    // derinlik yalnız merkezden ölçülürse delik kenarı ön/dış eti deler.
+    // Poligonun kendi noktalarından 8 örnek (0.8 ölçekli) + merkez birlikte
+    // değerlendirilir; derinlik EN KÖTÜ örneğe göre sınırlanır.
+    const samples: number[][] = [dists];
+    let footprintOk = true;
+    const nPts = cand.poly.length;
+    for (let k = 0; k < 8; k += 1) {
+      const [pu, pv] = cand.poly[Math.floor((k * nPts) / 8)];
+      const s = castUV(ctx, cand.cu + pu * 0.8, cand.cv + pv * 0.8);
+      const sd = dedup(s.hits);
+      if (sd.length < 2) { footprintOk = false; break; }
+      samples.push(sd);
+    }
+    if (!footprintOk) { skipped += 1; continue; }
 
     const entry = origin.clone().addScaledVector(dir, dists[0]);
     pre.push({
       poly: cand.poly, cu: cand.cu, cv: cand.cv,
       entry, dir, startDist: dists[0] - 0.5, depth: 0, wallMm: wall,
-      areaMm2: polyArea(cand.poly), dists,
+      areaMm2: polyArea(cand.poly), dists, samples,
     });
   }
 
@@ -212,6 +234,7 @@ export function planHoles(ctx: PlanCtx, params: AjurParams): HolePlan {
   //   sütunda 2 yüzey (dolu kesit): kör — dış/ön yüze frontSkin payı kala dur
   const walls = pre.map((p) => p.wallMm).sort((a, b) => a - b);
   const medianWall = walls.length ? walls[Math.floor(walls.length / 2)] : 0;
+  const frontSkin = Math.max(0.3, params.frontSkinMm);
   const placements: HolePlacement[] = [];
   for (const p of pre) {
     const hasCavity = ctx.isShell && p.dists.length >= 3;
@@ -219,13 +242,26 @@ export function planHoles(ctx: PlanCtx, params: AjurParams): HolePlan {
       // heykel/kafa bölgesi (aşırı kalın dolu kesit) tamamen atlanır
       if (p.wallMm > Math.max(medianWall * 2.5, medianWall + 2)) { skipped += 1; continue; }
     }
+    // ayak izinin HER örneğinde güvenli kalan azami derinlik (o örneğin kendi
+    // girişine göre; paralel ışınlar → giriş yüzeyi farkları kendiliğinden düşer)
+    let allowed = Infinity;   // hiçbir örnekte dış/ön ihlali veya karşı duvar teması olmasın
+    let needed = 0;           // kavite örneklerinde tam açılmak için gereken
+    for (const s of p.samples ?? [p.dists]) {
+      const w = s[1] - s[0];
+      if (ctx.isShell && s.length >= 3) {
+        allowed = Math.min(allowed, (s[2] - s[0]) - 0.3);
+        needed = Math.max(needed, w + 0.3);
+      } else {
+        allowed = Math.min(allowed, w - frontSkin);
+      }
+    }
     if (hasCavity) {
-      const gap = p.dists[2] - p.dists[1]; // kavite genişliği
-      p.depth = 0.5 + p.wallMm + Math.min(0.4, gap / 2);
+      const d = Math.min(allowed, Math.max(needed, 0.4));
+      if (d < 0.4) { skipped += 1; continue; }
+      p.depth = 0.5 + d;
     } else {
-      const usable = p.wallMm - Math.max(0.3, params.frontSkinMm);
-      if (usable < 0.4) { skipped += 1; continue; }
-      p.depth = 0.5 + usable;
+      if (allowed < 0.4) { skipped += 1; continue; }
+      p.depth = 0.5 + allowed;
     }
     placements.push(p);
   }

@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { MeshBVH } from "three-mesh-bvh";
 import { AjurViewer, type ViewerMode } from "./AjurViewer";
 import { loadStl, exportStlBlob } from "./lib/stl";
-import { validateOnLoad, detectShell, scanMinWall, blameThinHoles, triCount, MAX_TRIS, type MinWallScan } from "./lib/validate";
+import { validateOnLoad, detectShell, scanMinWall, blameThinHoles, thinPositions, triCount, MAX_TRIS, type MinWallScan } from "./lib/validate";
 import { decimateGeometry } from "./lib/decimate";
 import { autoLevelGeometry } from "./lib/ajurOps";
 import {
@@ -15,6 +15,7 @@ import {
 } from "./lib/mask";
 import { PATTERNS, patternById } from "./lib/patterns";
 import { planHoles, applyAjur, type AjurParams, type HolePlan } from "./lib/applyAjur";
+import { solveAutoParams, type AutoLevel } from "./lib/autoParams";
 import { hollowModel } from "./lib/hollow";
 import { estimateHollowCavity, gramForMetal } from "./lib/estimate";
 import { CASTING_RULES, type MetalKey } from "./lib/castingRules";
@@ -90,6 +91,15 @@ export function AjurClient() {
   const [plan, setPlan] = useState<HolePlan | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
 
+  // OTO AJUR — yoğunluk modele/kurala göre çözülür; slider'lar "Gelişmiş"te
+  const [autoLevel, setAutoLevel] = useState<AutoLevel>("dengeli");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [solving, setSolving] = useState(false);
+  /** oto modda tarama sonrası otomatik oto-düzelt hakkı (küçült + kaldır = 2 tur) */
+  const autoChainRef = useRef(0);
+  /** oto düzelt kademesi: 0 = suçlu delikleri KÜÇÜLT, 1 = KALDIR */
+  const fixStageRef = useRef(0);
+
   // senaryo
   const [hollowEstMm3, setHollowEstMm3] = useState<number | null>(null);
 
@@ -112,6 +122,8 @@ export function AjurClient() {
   const [ajurThinVerts, setAjurThinVerts] = useState<Uint32Array | null>(null);
   /** delik açılmadan ÖNCE modelde zaten var olan ince nokta sayısı */
   const [baselineThin, setBaselineThin] = useState<number | null>(null);
+  /** taban çizgisi cache — aynı çalışma geometrisi için bir kez taranır */
+  const baselineRef = useRef<{ geometry: THREE.BufferGeometry; count: number; positions: Float32Array } | null>(null);
 
   // kesit
   const [clipOn, setClipOn] = useState(false);
@@ -341,6 +353,17 @@ export function AjurClient() {
       setTimeout(() => {
         try {
           const th = CASTING_RULES[metal].minWallHardMm;
+          // taban çizgisi: DELİKSİZ modelin ince noktaları (cache'li) —
+          // deliğe komşu düşen ama zaten var olan sculpt incesi deliği suçlamaz
+          if (model && baselineRef.current?.geometry !== model.geometry) {
+            const bs = scanMinWall(model.geometry, model.bvh, th);
+            baselineRef.current = {
+              geometry: model.geometry,
+              count: bs.thinCount,
+              positions: thinPositions(model.geometry, bs.thinVerts),
+            };
+          }
+          setBaselineThin(baselineRef.current?.count ?? null);
           const rbvh = new MeshBVH(r.geometry);
           const scan = scanMinWall(r.geometry, rbvh, th);
           setWallScan(scan);
@@ -349,13 +372,9 @@ export function AjurClient() {
               entry: p.entry, dir: p.dir, depth: p.depth,
               radiusMm: Math.max(...p.poly.map(([x, y]) => Math.hypot(x, y))),
             }));
-            const blame = blameThinHoles(r.geometry, scan.thinVerts, holes);
+            const blame = blameThinHoles(r.geometry, scan.thinVerts, holes, 1.0, baselineRef.current?.positions);
             setBlamedHoles(blame.holeIdx);
             setAjurThinVerts(blame.vertIdx);
-          }
-          // taban çizgisi: aynı eşikle DELİKSİZ modelin ince sayısı
-          if (model) {
-            setBaselineThin(scanMinWall(model.geometry, model.bvh, th).thinCount);
           }
         } catch { setWallScan(null); }
       }, 60);
@@ -368,26 +387,80 @@ export function AjurClient() {
   }, [model, frame, metal]);
 
   const runApply = useCallback(() => {
+    autoChainRef.current = 0; // manuel mod: otomatik zincir yok
+    fixStageRef.current = 0;
     if (plan) void runBoolean(plan);
   }, [plan, runBoolean]);
 
-  // ---- oto düzelt: ince bölgeye neden olan delikleri kaldır, yeniden koş ----
+  // ---- OTO AJUR: kısıt çözücü + uygula + (gerekirse) otomatik oto-düzelt ----
+  const runAutoAjur = useCallback(async () => {
+    if (!model || !frame || !maskRef.current) return;
+    setSolving(true);
+    setError(null);
+    await new Promise((r) => setTimeout(r, 30)); // buton durumu boyansın
+    try {
+      const solved = solveAutoParams(
+        { geometry: model.geometry, bvh: model.bvh, mask: maskRef.current, frame, isShell: model.isShell },
+        patternId, autoLevel, rule, frontSkinMm,
+      );
+      // çözülen değerleri Gelişmiş panelde göster (şeffaflık)
+      setCellMm(solved.params.cellMm);
+      setHoleScale(solved.params.holeScale);
+      setMarginMm(solved.params.marginMm);
+      setRotationDeg(solved.params.rotationDeg);
+      autoChainRef.current = 3; // tarama ince bulursa: küçült → kaldır → kaldır
+      fixStageRef.current = 0;
+      setSolving(false);
+      await runBoolean(solved.plan);
+    } catch (e) {
+      setSolving(false);
+      setError((e as Error).message);
+    }
+  }, [model, frame, patternId, autoLevel, rule, frontSkinMm, runBoolean]);
+
+  // oto zincir: tarama ajur-kaynaklı ince bulduysa oto-düzelt otomatik koşar
+  useEffect(() => {
+    if (autoChainRef.current > 0 && wallScan && blamedHoles.length > 0 && (ajurThinVerts?.length ?? 0) > 0) {
+      autoChainRef.current -= 1;
+      runAutoFix();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallScan, blamedHoles, ajurThinVerts]);
+
+  // ---- oto düzelt (kademeli): önce suçlu delikleri KÜÇÜLT (desen korunur),
+  // hâlâ ince üretiyorlarsa KALDIR. Boolean hep orijinalden yeniden koşulur. ----
   const runAutoFix = useCallback(() => {
     const applied = appliedPlanRef.current;
     if (!applied || blamedHoles.length === 0) return;
     const bad = new Set(blamedHoles);
-    const filtered: HolePlan = {
-      ...applied,
-      placements: applied.placements.filter((_, i) => !bad.has(i)),
-      removedMm3: applied.placements
-        .filter((_, i) => !bad.has(i))
-        .reduce((s, p) => s + p.areaMm2 * Math.max(0, p.depth - 0.5), 0),
-    };
-    if (filtered.placements.length === 0) {
-      setError("Tüm delikler riskli çıktı — yoğunluğu azaltıp yeniden deneyin.");
-      return;
+    let next: HolePlan;
+    if (fixStageRef.current === 0) {
+      const SHRINK = 0.72;
+      next = {
+        ...applied,
+        placements: applied.placements.map((p, i) =>
+          bad.has(i)
+            ? {
+                ...p,
+                poly: p.poly.map(([x, y]) => [x * SHRINK, y * SHRINK] as [number, number]),
+                areaMm2: p.areaMm2 * SHRINK * SHRINK,
+              }
+            : p,
+        ),
+      };
+      fixStageRef.current = 1;
+    } else {
+      next = {
+        ...applied,
+        placements: applied.placements.filter((_, i) => !bad.has(i)),
+      };
+      if (next.placements.length === 0) {
+        setError("Tüm delikler riskli çıktı — farklı desen deneyin ya da bölgeyi değiştirin.");
+        return;
+      }
     }
-    void runBoolean(filtered);
+    next.removedMm3 = next.placements.reduce((s, p) => s + p.areaMm2 * Math.max(0, p.depth - 0.5), 0);
+    void runBoolean(next);
   }, [blamedHoles, runBoolean]);
 
   // ---- indir + köprüye yaz ----
@@ -859,6 +932,41 @@ export function AjurClient() {
                   ))}
                 </div>
 
+                {/* OTO AJUR — yoğunluk modele ve döküm kuralına göre çözülür */}
+                <div className="rounded-2xl border border-[#b76e79]/25 bg-[#b76e79]/[0.07] p-4">
+                  <p className="text-sm font-medium text-[#e8b4bc]">Oto Ajur</p>
+                  <p className="mt-1 text-xs leading-relaxed text-white/50">
+                    Ölçek ve yoğunluğu modelinize ve seçili metalin döküm kurallarına göre
+                    sistem belirler; riskli delikler otomatik ayıklanır.
+                  </p>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {(["hafif", "dengeli", "agresif"] as const).map((lv) => (
+                      <ModeBtn
+                        key={lv}
+                        active={autoLevel === lv}
+                        onClick={() => setAutoLevel(lv)}
+                        label={lv === "hafif" ? "Hafif" : lv === "dengeli" ? "Dengeli" : "Agresif"}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => void runAutoAjur()}
+                    disabled={solving || applying}
+                    className="mt-3 w-full rounded-xl bg-[linear-gradient(135deg,#c4838b,#b76e79,#a65f69)] px-6 py-3.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                  >
+                    {solving ? "En iyi ayar aranıyor…" : "Oto Ajur — modele göre uygula"}
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setAdvancedOpen((v) => !v)}
+                  className="text-left text-xs text-white/40 underline hover:text-white/70"
+                >
+                  {advancedOpen ? "▾ Gelişmiş ayarları gizle" : "▸ Gelişmiş ayarlar (elle ölçek/yoğunluk)"}
+                </button>
+
+                {advancedOpen && (
+                <>
                 <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
                   {pattern?.layout !== "central" && (
                     <Slider label="Ölçek (hücre)" value={cellMm} min={1.5} max={10} step={0.1} unit="mm" onChange={setCellMm} />
@@ -904,10 +1012,12 @@ export function AjurClient() {
                 <button
                   onClick={() => void runApply()}
                   disabled={!plan || plan.placements.length === 0 || applying}
-                  className="w-full rounded-xl bg-[linear-gradient(135deg,#c4838b,#b76e79,#a65f69)] px-6 py-3.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+                  className="w-full rounded-xl border border-white/15 bg-white/[0.05] px-6 py-3 text-sm font-medium text-white/80 hover:bg-white/[0.09] disabled:opacity-40"
                 >
-                  Uygula — gerçek delikleri aç
+                  Elle uygula — bu ayarlarla del
                 </button>
+                </>
+                )}
               </>
             )}
 
@@ -944,7 +1054,7 @@ export function AjurClient() {
                               disabled={applying}
                               className="mt-2 w-full rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-xs font-medium text-red-200 transition-colors hover:bg-red-500/20 disabled:opacity-50"
                             >
-                              ⚡ Oto düzelt — {blamedHoles.length} riskli deliği kaldır ve yeniden del
+                              ⚡ Oto düzelt — {blamedHoles.length} riskli deliği {fixStageRef.current === 0 ? "küçült" : "kaldır"} ve yeniden del
                             </button>
                           )}
                         </>

@@ -76,6 +76,8 @@ export function detectShell(bvh: MeshBVH, geometry: THREE.BufferGeometry): boole
 export type MinWallScan = {
   /** taranan vertex indeksleri içinden İNCE bulunanlar */
   thinVerts: Uint32Array;
+  /** thinVerts ile paralel — o noktadaki ölçülen et (mm) */
+  thinDepths: Float32Array;
   /** ince bölge sayısı / taranan örnek */
   thinCount: number;
   sampled: number;
@@ -97,7 +99,7 @@ export function scanMinWall(
   const idx = geometry.index!.array;
   const triN = idx.length / 3;
   const step = Math.max(1, Math.floor(triN / maxSamples));
-  const thinSet = new Set<number>();
+  const thinMap = new Map<number, number>(); // vertex → en ince ölçüm
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
   const ab = new THREE.Vector3(), ac = new THREE.Vector3();
   const origin = new THREE.Vector3();
@@ -149,14 +151,20 @@ export function scanMinWall(
       const parity = bvh.raycast(new THREE.Ray(mid, PARITY_DIR), THREE.DoubleSide).length;
       if (parity % 2 === 0) continue; // orta nokta dışarıda → kıvrım, et değil
       if (t < minFound) minFound = t;
-      thinSet.add(i0); thinSet.add(i1); thinSet.add(i2);
+      for (const iv of [i0, i1, i2]) {
+        const prev = thinMap.get(iv);
+        if (prev === undefined || t < prev) thinMap.set(iv, t);
+      }
     } else if (t < minFound) {
       minFound = t;
     }
   }
-  const thin = [...thinSet];
+  const thin = [...thinMap.keys()];
+  const thinDepths = new Float32Array(thin.length);
+  for (let k = 0; k < thin.length; k += 1) thinDepths[k] = thinMap.get(thin[k])!;
   return {
     thinVerts: new Uint32Array(thin),
+    thinDepths,
     thinCount: thin.length,
     sampled,
     minFoundMm: Number.isFinite(minFound) ? minFound : 0,
@@ -175,14 +183,30 @@ export type ThinBlameInput = {
   radiusMm: number;
 };
 
+/** Taban çizgisi ince noktaları (delik ÖNCESİ geometri) — xyz üçlüleri. */
+export function thinPositions(geometry: THREE.BufferGeometry, thinVerts: Uint32Array): Float32Array {
+  const pos = geometry.attributes.position;
+  const out = new Float32Array(thinVerts.length * 3);
+  for (let k = 0; k < thinVerts.length; k += 1) {
+    const i = thinVerts[k];
+    out[k * 3] = pos.getX(i);
+    out[k * 3 + 1] = pos.getY(i);
+    out[k * 3 + 2] = pos.getZ(i);
+  }
+  return out;
+}
+
 /** İnce vertexleri delik sütunlarıyla eşler: hangi delikler suçlu + hangi
  *  ince vertexler AJURDAN kaynaklı (deliğe yakın). Deliğe uzak inceler modelin
- *  kendi detayıdır (sculpt ucu vb.) — oto düzeltin hedefi değildir. */
+ *  kendi detayıdır (sculpt ucu vb.) — oto düzeltin hedefi değildir.
+ *  baselinePositions verilirse: delik ÖNCESİNDE de o konum civarı inceyse
+ *  (sculpt süslemesi deliğe komşu düşmüş) delik SUÇLANMAZ. */
 export function blameThinHoles(
   resultGeometry: THREE.BufferGeometry,
   thinVerts: Uint32Array,
   holes: ThinBlameInput[],
   extraMm = 1.0,
+  baselinePositions?: Float32Array,
 ): { holeIdx: number[]; vertIdx: Uint32Array } {
   const pos = resultGeometry.attributes.position;
   const p = new THREE.Vector3();
@@ -190,20 +214,31 @@ export function blameThinHoles(
   const closest = new THREE.Vector3();
   const blamed = new Set<number>();
   const nearVerts: number[] = [];
+  const baseR2 = 0.35 * 0.35; // taban ince noktasına bu kadar yakınsa "zaten vardı"
+  const preexisting = (x: number, y: number, z: number): boolean => {
+    if (!baselinePositions) return false;
+    for (let b = 0; b < baselinePositions.length; b += 3) {
+      const dx = x - baselinePositions[b];
+      const dy = y - baselinePositions[b + 1];
+      const dz = z - baselinePositions[b + 2];
+      if (dx * dx + dy * dy + dz * dz < baseR2) return true;
+    }
+    return false;
+  };
   for (let k = 0; k < thinVerts.length; k += 1) {
     p.fromBufferAttribute(pos, thinVerts[k]);
-    let near = false;
+    let nearHole = -1;
     for (let i = 0; i < holes.length; i += 1) {
       const h = holes[i];
       ap.subVectors(p, h.entry);
       const t = Math.max(0, Math.min(h.depth, ap.dot(h.dir)));
       closest.copy(h.entry).addScaledVector(h.dir, t);
-      if (p.distanceTo(closest) < h.radiusMm + extraMm) {
-        blamed.add(i);
-        near = true;
-      }
+      if (p.distanceTo(closest) < h.radiusMm + extraMm) { nearHole = i; break; }
     }
-    if (near) nearVerts.push(thinVerts[k]);
+    if (nearHole < 0) continue;
+    if (preexisting(p.x, p.y, p.z)) continue; // delikten önce de inceydi
+    blamed.add(nearHole);
+    nearVerts.push(thinVerts[k]);
   }
   return { holeIdx: [...blamed].sort((a, b) => a - b), vertIdx: new Uint32Array(nearVerts) };
 }
