@@ -82,8 +82,11 @@ export type MinWallScan = {
   minFoundMm: number;
 };
 
-/** Min et kalınlığı taraması — örneklenen vertexlerden içeri ışın atıp karşı
- *  yüzeye mesafeyi ölçer. threshold altı vertexler kırmızı highlight için döner. */
+/** Min et kalınlığı taraması — üçgen MERKEZLERİNDEN düz yüzey normaliyle içeri
+ *  ışın atıp karşı yüzeye mesafeyi ölçer. (Vertex normali pürüzlü yüzeylerde
+ *  — ör. levelSet kavitesi — komşu tümseğe 0.0x mm sahte çarpma üretiyordu;
+ *  üçgenin kendi düzlem normali bu artefaktı yapısal olarak engeller.)
+ *  threshold altı üçgenlerin vertexleri kırmızı highlight için döner. */
 export function scanMinWall(
   geometry: THREE.BufferGeometry,
   bvh: MeshBVH,
@@ -91,47 +94,116 @@ export function scanMinWall(
   maxSamples = 24_000,
 ): MinWallScan {
   const pos = geometry.attributes.position;
-  if (!geometry.attributes.normal) geometry.computeVertexNormals();
-  const nrm = geometry.attributes.normal;
-  const n = pos.count;
-  const step = Math.max(1, Math.floor(n / maxSamples));
-  const thin: number[] = [];
+  const idx = geometry.index!.array;
+  const triN = idx.length / 3;
+  const step = Math.max(1, Math.floor(triN / maxSamples));
+  const thinSet = new Set<number>();
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  const ab = new THREE.Vector3(), ac = new THREE.Vector3();
   const origin = new THREE.Vector3();
   const dir = new THREE.Vector3();
   const hitNrm = new THREE.Vector3();
+  const mid = new THREE.Vector3();
+  const PARITY_DIR = new THREE.Vector3(1, 0.1234, 0.0717).normalize();
   const eps = 0.02;
   let minFound = Infinity;
   let sampled = 0;
-  for (let i = 0; i < n; i += step) {
-    origin.fromBufferAttribute(pos, i);
-    dir.fromBufferAttribute(nrm, i).normalize().multiplyScalar(-1);
-    origin.addScaledVector(dir, eps); // yüzeyin hemen içinden başla
+  for (let t3 = 0; t3 < triN; t3 += step) {
+    const i0 = idx[t3 * 3], i1 = idx[t3 * 3 + 1], i2 = idx[t3 * 3 + 2];
+    a.fromBufferAttribute(pos, i0);
+    b.fromBufferAttribute(pos, i1);
+    c.fromBufferAttribute(pos, i2);
+    // düz yüzey normali (winding'den) — içeri yön = −normal
+    dir.crossVectors(ab.subVectors(b, a), ac.subVectors(c, a));
+    const len = dir.length();
+    if (len < 1e-12) continue;
+    dir.multiplyScalar(-1 / len);
+    origin.copy(a).add(b).add(c).multiplyScalar(1 / 3).addScaledVector(dir, eps);
     const ray = new THREE.Ray(origin, dir);
     sampled += 1;
-    // sıyıran çarpmalar (delik yan duvarı, keskin köşe) sahte 0.0x mm okur —
+    // sıyıran çarpmalar (delik yan duvarı, keskin köşe) sahte okur —
     // sadece ışına KARŞI duran yüzeyler gerçek "karşı et"tir
     const hits = bvh.raycast(ray, THREE.DoubleSide) as {
       distance: number;
       face?: { normal?: THREE.Vector3 } | null;
     }[];
-    hits.sort((a, b) => a.distance - b.distance);
+    hits.sort((x, y) => x.distance - y.distance);
     let t = -1;
     for (const h of hits) {
       const fn = h.face?.normal;
       if (!fn) continue;
       hitNrm.copy(fn);
-      if (Math.abs(hitNrm.dot(dir)) < 0.35) continue; // sıyırma → atla
+      // Gerçek KARŞI DUVAR: çıkış yüzeyi giriş yüzeyine zıt bakar
+      // (dot(nHit, dir) → +1). Keskin tümsek SIRTI (voxel dokusu) dik/dar
+      // açılıdır (~0) ve sahte 0.0x mm okutur; sıyırmalar da elenmiş olur.
+      if (hitNrm.dot(dir) < 0.55) continue;
       t = h.distance + eps;
       break;
     }
     if (t < 0) continue;
-    if (t < minFound) minFound = t;
-    if (t < thresholdMm) thin.push(i);
+    if (t < thresholdMm) {
+      // KIVRIM/FİN ELEMESİ: pürüzlü yüzey (levelSet kavitesi) kendi üstüne
+      // katlanınca iki yüz arası HAVA olur — sahte "0.0x mm et" okur. Gerçek
+      // ince DUVARDA aralığın orta noktası metalin İÇİNDEDİR (ışın paritesi).
+      mid.copy(origin).addScaledVector(dir, Math.max(0, t - eps) / 2);
+      const parity = bvh.raycast(new THREE.Ray(mid, PARITY_DIR), THREE.DoubleSide).length;
+      if (parity % 2 === 0) continue; // orta nokta dışarıda → kıvrım, et değil
+      if (t < minFound) minFound = t;
+      thinSet.add(i0); thinSet.add(i1); thinSet.add(i2);
+    } else if (t < minFound) {
+      minFound = t;
+    }
   }
+  const thin = [...thinSet];
   return {
     thinVerts: new Uint32Array(thin),
     thinCount: thin.length,
     sampled,
     minFoundMm: Number.isFinite(minFound) ? minFound : 0,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Oto düzelt: ince noktaları delik sütunlarıyla eşle — hangi delikler suçlu?
+// Suçlu delikler plandan çıkarılıp boolean orijinalden yeniden koşulur.
+// ---------------------------------------------------------------------------
+export type ThinBlameInput = {
+  entry: THREE.Vector3;
+  dir: THREE.Vector3;
+  depth: number;
+  /** deliğin UV yarıçapı (poligon maks yarıçapı) */
+  radiusMm: number;
+};
+
+/** İnce vertexleri delik sütunlarıyla eşler: hangi delikler suçlu + hangi
+ *  ince vertexler AJURDAN kaynaklı (deliğe yakın). Deliğe uzak inceler modelin
+ *  kendi detayıdır (sculpt ucu vb.) — oto düzeltin hedefi değildir. */
+export function blameThinHoles(
+  resultGeometry: THREE.BufferGeometry,
+  thinVerts: Uint32Array,
+  holes: ThinBlameInput[],
+  extraMm = 1.0,
+): { holeIdx: number[]; vertIdx: Uint32Array } {
+  const pos = resultGeometry.attributes.position;
+  const p = new THREE.Vector3();
+  const ap = new THREE.Vector3();
+  const closest = new THREE.Vector3();
+  const blamed = new Set<number>();
+  const nearVerts: number[] = [];
+  for (let k = 0; k < thinVerts.length; k += 1) {
+    p.fromBufferAttribute(pos, thinVerts[k]);
+    let near = false;
+    for (let i = 0; i < holes.length; i += 1) {
+      const h = holes[i];
+      ap.subVectors(p, h.entry);
+      const t = Math.max(0, Math.min(h.depth, ap.dot(h.dir)));
+      closest.copy(h.entry).addScaledVector(h.dir, t);
+      if (p.distanceTo(closest) < h.radiusMm + extraMm) {
+        blamed.add(i);
+        near = true;
+      }
+    }
+    if (near) nearVerts.push(thinVerts[k]);
+  }
+  return { holeIdx: [...blamed].sort((a, b) => a - b), vertIdx: new Uint32Array(nearVerts) };
 }

@@ -25,7 +25,9 @@ export async function hollowModel(
   const w = await loadManifold();
   const { Manifold } = w;
 
-  const grid = buildSignedGrid(geometry, opts.gridMax ?? 80, (p) => opts.onProgress?.(p * 0.7));
+  // smoothIters=2: kavite yüzeyi pürüzsüz çıksın — voxel tümsek/finleri
+  // min-et taramasında binlerce sahte "0.0x mm" okutuyordu
+  const grid = buildSignedGrid(geometry, opts.gridMax ?? 80, (p) => opts.onProgress?.(p * 0.7), 2);
   const wall = Math.max(0.5, wallMm);
   const cavity = Manifold.levelSet(
     (p: number[]) => -(grid.sample(p[0], p[1], p[2]) + wall),

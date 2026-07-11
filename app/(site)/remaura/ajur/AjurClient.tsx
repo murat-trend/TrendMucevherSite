@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { MeshBVH } from "three-mesh-bvh";
 import { AjurViewer, type ViewerMode } from "./AjurViewer";
 import { loadStl, exportStlBlob } from "./lib/stl";
-import { validateOnLoad, detectShell, scanMinWall, triCount, MAX_TRIS, type MinWallScan } from "./lib/validate";
+import { validateOnLoad, detectShell, scanMinWall, blameThinHoles, triCount, MAX_TRIS, type MinWallScan } from "./lib/validate";
 import { decimateGeometry } from "./lib/decimate";
 import { autoLevelGeometry } from "./lib/ajurOps";
 import {
@@ -103,9 +103,15 @@ export function AjurClient() {
   const [hollowWallMm, setHollowWallMm] = useState(1.0);
   const [shrinkPct, setShrinkPct] = useState(2.0);
 
-  // sonuç doğrulama
+  // sonuç doğrulama + oto düzelt
   const [wallScan, setWallScan] = useState<MinWallScan | null>(null);
   const [showThin, setShowThin] = useState(true);
+  const appliedPlanRef = useRef<HolePlan | null>(null);
+  const [blamedHoles, setBlamedHoles] = useState<number[]>([]);
+  /** ajurdan kaynaklı ince vertexler (highlight bunları gösterir) */
+  const [ajurThinVerts, setAjurThinVerts] = useState<Uint32Array | null>(null);
+  /** delik açılmadan ÖNCE modelde zaten var olan ince nokta sayısı */
+  const [baselineThin, setBaselineThin] = useState<number | null>(null);
 
   // kesit
   const [clipOn, setClipOn] = useState(false);
@@ -309,9 +315,9 @@ export function AjurClient() {
     return () => clearTimeout(t);
   }, [model, frame, step, patternId, cellMm, holeScale, rotationDeg, marginMm, frontSkinMm, maskVersion, result]);
 
-  // ---- uygula ----
-  const runApply = useCallback(async () => {
-    if (!model || !frame || !maskRef.current || !plan || plan.placements.length === 0) return;
+  // ---- uygula (plan verilirse onu, yoksa canlı planı koşar) ----
+  const runBoolean = useCallback(async (planToUse: HolePlan) => {
+    if (!model || !frame || !maskRef.current || planToUse.placements.length === 0) return;
     setApplying(true);
     setApplyPct(0);
     setError(null);
@@ -320,16 +326,37 @@ export function AjurClient() {
     try {
       const r = await applyAjur(
         { geometry: model.geometry, bvh: model.bvh, mask: maskRef.current, frame, isShell: model.isShell },
-        plan,
+        planToUse,
         { onProgress: (p) => setApplyPct(Math.round(p * 100)), signal: ac.signal },
       );
       setResult(r);
+      appliedPlanRef.current = planToUse;
+      setWallScan(null);
+      setBlamedHoles([]);
+      setAjurThinVerts(null);
       setStep(5);
-      // sonuç min-et taraması (kırmızı highlight)
+      // sonuç min-et taraması + suçlu delik eşlemesi. Modelin KENDİ ince
+      // detayı (sculpt uçları) ayrı raporlanır — highlight ve oto düzelt
+      // yalnız AJURDAN kaynaklı (deliğe komşu) inceleri hedefler.
       setTimeout(() => {
         try {
+          const th = CASTING_RULES[metal].minWallHardMm;
           const rbvh = new MeshBVH(r.geometry);
-          setWallScan(scanMinWall(r.geometry, rbvh, CASTING_RULES[metal].minWallHardMm));
+          const scan = scanMinWall(r.geometry, rbvh, th);
+          setWallScan(scan);
+          if (scan.thinCount > 0) {
+            const holes = planToUse.placements.map((p) => ({
+              entry: p.entry, dir: p.dir, depth: p.depth,
+              radiusMm: Math.max(...p.poly.map(([x, y]) => Math.hypot(x, y))),
+            }));
+            const blame = blameThinHoles(r.geometry, scan.thinVerts, holes);
+            setBlamedHoles(blame.holeIdx);
+            setAjurThinVerts(blame.vertIdx);
+          }
+          // taban çizgisi: aynı eşikle DELİKSİZ modelin ince sayısı
+          if (model) {
+            setBaselineThin(scanMinWall(model.geometry, model.bvh, th).thinCount);
+          }
         } catch { setWallScan(null); }
       }, 60);
     } catch (e) {
@@ -338,7 +365,30 @@ export function AjurClient() {
       setApplying(false);
       abortRef.current = null;
     }
-  }, [model, frame, plan, metal]);
+  }, [model, frame, metal]);
+
+  const runApply = useCallback(() => {
+    if (plan) void runBoolean(plan);
+  }, [plan, runBoolean]);
+
+  // ---- oto düzelt: ince bölgeye neden olan delikleri kaldır, yeniden koş ----
+  const runAutoFix = useCallback(() => {
+    const applied = appliedPlanRef.current;
+    if (!applied || blamedHoles.length === 0) return;
+    const bad = new Set(blamedHoles);
+    const filtered: HolePlan = {
+      ...applied,
+      placements: applied.placements.filter((_, i) => !bad.has(i)),
+      removedMm3: applied.placements
+        .filter((_, i) => !bad.has(i))
+        .reduce((s, p) => s + p.areaMm2 * Math.max(0, p.depth - 0.5), 0),
+    };
+    if (filtered.placements.length === 0) {
+      setError("Tüm delikler riskli çıktı — yoğunluğu azaltıp yeniden deneyin.");
+      return;
+    }
+    void runBoolean(filtered);
+  }, [blamedHoles, runBoolean]);
 
   // ---- indir + köprüye yaz ----
   // Çekme payı: döküm küçülmesi telafisi — YALNIZ indirilen dosyaya uygulanır
@@ -472,7 +522,7 @@ export function AjurClient() {
                 brushRadius={brushRadius}
                 mask={result ? null : maskRef.current}
                 maskVersion={maskVersion}
-                thinVerts={result && showThin ? wallScan?.thinVerts ?? null : null}
+                thinVerts={result && showThin ? ajurThinVerts : null}
                 clip={{ enabled: clipOn, axis: clipAxis, position: clipPos }}
                 holePreview={step === 4 && !result ? plan?.placements ?? null : null}
                 onPaint={onPaint}
@@ -881,14 +931,34 @@ export function AjurClient() {
                   <p className="mb-2 text-sm font-medium text-white/70">Doğrulama</p>
                   <p className="text-emerald-400">✓ Watertight (kapalı katı)</p>
                   {wallScan ? (
-                    wallScan.thinCount > 0 ? (
-                      <p className="mt-1 text-red-400">
-                        ⚠ {wallScan.thinCount} noktada et {fmt2(rule.minWallHardMm)} mm altında (en ince {fmt2(wallScan.minFoundMm)} mm)
-                        — kırmızı bölgeler döküm riski taşır. Yoğunluğu azaltıp yeniden deneyebilirsiniz.
-                      </p>
-                    ) : (
-                      <p className="mt-1 text-emerald-400">✓ Et kalınlığı {fmt2(rule.minWallHardMm)} mm üzerinde</p>
-                    )
+                    <>
+                      {(ajurThinVerts?.length ?? 0) > 0 ? (
+                        <>
+                          <p className="mt-1 text-red-400">
+                            ⚠ Ajurdan kaynaklı {ajurThinVerts!.length} ince bölge (deliğe komşu, et{" "}
+                            {fmt2(rule.minWallHardMm)} mm altında) — kırmızı bölgeler döküm riski taşır.
+                          </p>
+                          {blamedHoles.length > 0 && (
+                            <button
+                              onClick={runAutoFix}
+                              disabled={applying}
+                              className="mt-2 w-full rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-xs font-medium text-red-200 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+                            >
+                              ⚡ Oto düzelt — {blamedHoles.length} riskli deliği kaldır ve yeniden del
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <p className="mt-1 text-emerald-400">✓ Ajur delikleri ince bölge üretmedi</p>
+                      )}
+                      {wallScan.thinCount - (ajurThinVerts?.length ?? 0) > 0 && (
+                        <p className="mt-1 text-white/35">
+                          Modelin kendisinde {(wallScan.thinCount - (ajurThinVerts?.length ?? 0)).toLocaleString("tr-TR")} ince
+                          nokta var (sculpt detayı olabilir; ajurdan bağımsız
+                          {baselineThin !== null ? ` — delik öncesi de ${baselineThin.toLocaleString("tr-TR")} idi` : ""}).
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <p className="mt-1 text-white/30">Et kalınlığı taranıyor…</p>
                   )}

@@ -227,7 +227,14 @@ export type HollowAjurOpts = {
 
 // İşaretli mesafe gridini kur (negatif=iç) + trilineer örnekleyici döndür.
 // (hollow.ts de kullanır — sayfa içi iç boşaltma)
-export function buildSignedGrid(geometry: THREE.BufferGeometry, gridMax: number, onProgress?: (p: number) => void) {
+// smoothIters: SDF'e 6-komşu kutu yumuşatması — levelSet kavite yüzeyindeki
+// voxel tümseklerini/finleri alır (0 = eski davranış; hollow için 2 önerilir).
+export function buildSignedGrid(
+  geometry: THREE.BufferGeometry,
+  gridMax: number,
+  onProgress?: (p: number) => void,
+  smoothIters = 0,
+) {
   const src = geometry.clone(); src.deleteAttribute("normal"); src.deleteAttribute("uv");
   const indexed = mergeVertices(src);
   const bvh = new MeshBVH(indexed);
@@ -263,6 +270,21 @@ export function buildSignedGrid(geometry: THREE.BufferGeometry, gridMax: number,
       }
     }
     onProgress?.((kz + 1) / M[2]);
+  }
+  // isteğe bağlı yumuşatma — merkez ağırlıklı 6-komşu ortalaması
+  for (let it = 0; it < smoothIters; it += 1) {
+    const src2 = sdf.slice();
+    const at3 = (x: number, y: number, z: number) => src2[x + y * M[0] + z * M[0] * M[1]];
+    let w = 0;
+    for (let kz = 1; kz < M[2] - 1; kz += 1)
+      for (let ky = 1; ky < M[1] - 1; ky += 1)
+        for (let kx = 1; kx < M[0] - 1; kx += 1) {
+          w = at3(kx, ky, kz) * 2
+            + at3(kx - 1, ky, kz) + at3(kx + 1, ky, kz)
+            + at3(kx, ky - 1, kz) + at3(kx, ky + 1, kz)
+            + at3(kx, ky, kz - 1) + at3(kx, ky, kz + 1);
+          sdf[kx + ky * M[0] + kz * M[0] * M[1]] = w / 8;
+        }
   }
   // trilineer örnekle
   const sample = (x: number, y: number, z: number): number => {
