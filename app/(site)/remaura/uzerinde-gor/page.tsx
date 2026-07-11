@@ -10,6 +10,7 @@ import {
 } from "@/components/remaura/RemauraBillingModalProvider";
 import { RemauraAccessGate } from "@/components/remaura/RemauraAccessGate";
 import { useRemauraCreditsCheck } from "@/hooks/useRemauraCreditsCheck";
+import { KolyeDeneClient } from "../kolye-dene/KolyeDeneClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface FingerLandmark {
@@ -28,6 +29,8 @@ const T = {
   tr: {
     title: "Üzerimde Gör",
     subtitle: "Yüzüğü parmağında nasıl görüneceğini keşfet ve sosyal medyada paylaş.",
+    tabRing: "Yüzük (Foto)",
+    tabNecklace: "Kolye (Canlı Kamera)",
     step1: "1. El Fotoğrafı",
     step1Hint: "Parmakların düz ve ayrık, avuç içi yukarı bakacak şekilde fotoğrafla.",
     step2: "2. Yüzük Görseli",
@@ -62,6 +65,8 @@ const T = {
   en: {
     title: "See On Me",
     subtitle: "See how the ring looks on your finger and share it on social media.",
+    tabRing: "Ring (Photo)",
+    tabNecklace: "Necklace (Live Camera)",
     step1: "1. Hand Photo",
     step1Hint: "Fingers flat and spread, palm facing up.",
     step2: "2. Ring Image",
@@ -333,6 +338,9 @@ function UzerimdeGorContent() {
   const [lang, setLang] = useState<Lang>("tr");
   const t = T[lang];
 
+  // Mod: yüzük (foto) | kolye (canlı AR)
+  const [mode, setMode] = useState<"ring" | "necklace">("ring");
+
   const [handFile, setHandFile] = useState<File | null>(null);
   const [handPreview, setHandPreview] = useState<string | null>(null);
   const [fingerData, setFingerData] = useState<FingerData | null>(null);
@@ -419,6 +427,10 @@ function UzerimdeGorContent() {
     } finally { setLoading(false); }
   };
 
+  if (mode === "necklace") {
+    return <KolyeDeneClient onBack={() => setMode("ring")} />;
+  }
+
   return (
     <main className="min-h-screen bg-[#0a0a0a] px-4 py-12 text-white">
       <div className="mx-auto max-w-2xl">
@@ -437,6 +449,18 @@ function UzerimdeGorContent() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Mod seçici: Yüzük (foto) / Kolye (canlı) */}
+        <div className="mb-8 flex gap-2">
+          <button type="button"
+            className="flex-1 rounded-xl bg-amber-500/20 py-3 text-sm font-semibold text-amber-300 ring-1 ring-amber-500/40">
+            💍 {t.tabRing}
+          </button>
+          <button type="button" onClick={() => setMode("necklace")}
+            className="flex-1 rounded-xl border border-gray-700 py-3 text-sm font-semibold text-gray-300 transition hover:border-amber-500/40 hover:text-amber-300">
+            📿 {t.tabNecklace}
+          </button>
         </div>
 
         {/* El Rehberi */}

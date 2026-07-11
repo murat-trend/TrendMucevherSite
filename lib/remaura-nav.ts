@@ -21,8 +21,8 @@ export type RemauraNavKey =
   | 'meshTemizle'
   | 'hollow'
   | 'ajur'
-  | 'sivi'
   | 'creativeStudio'
+  | 'sivi'
   | 'nakkas'
   | 'uretim3d'
   | 'galeri'
@@ -227,19 +227,19 @@ export const REMAURA_CATEGORIES: RemauraCategory[] = [
     isActive: true,
   },
   {
-    id: 'sivi',
-    labelKey: 'sivi',
-    icon: '💧',
-    path: '/remaura/sivi',
+    id: 'creative-studio',
+    labelKey: 'creativeStudio',
+    icon: '🎞️',
+    path: '/remaura/creative-studio',
     accessType: 'restricted',
     isSuperAdminOnly: true,
     isActive: true,
   },
   {
-    id: 'creative-studio',
-    labelKey: 'creativeStudio',
-    icon: '🎞️',
-    path: '/remaura/creative-studio',
+    id: 'sivi',
+    labelKey: 'sivi',
+    icon: '💧',
+    path: '/remaura/sivi',
     accessType: 'restricted',
     isSuperAdminOnly: true,
     isActive: true,
