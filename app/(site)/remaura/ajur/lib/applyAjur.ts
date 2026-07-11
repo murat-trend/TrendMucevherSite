@@ -40,8 +40,11 @@ export type HolePlacement = {
   startDist: number;
   depth: number;
   areaMm2: number;
-  /** yerel duvar kalınlığı (giriş→çıkış) */
+  /** yerel duvar kalınlığı (giriş→ilk çıkış) */
   wallMm: number;
+  /** delik sütunundaki tekilleştirilmiş yüzey mesafeleri (ilk 4) —
+   *  ≥3 vuruş = duvar arkasında KAVİTE var; 2 vuruş = dolu kesit */
+  dists: number[];
 };
 
 export type HolePlan = {
@@ -180,33 +183,41 @@ export function planHoles(ctx: PlanCtx, params: AjurParams): HolePlan {
     }
     if (!ok) { skipped += 1; continue; }
 
-    const d0 = hits[0].distance;
-    const d1 = hits[1].distance;
-    const wall = d1 - d0;
+    // sütun profili: yakın çift vuruşları tekle (kenar paylaşan üçgenler)
+    const dists: number[] = [];
+    for (const h of hits) {
+      if (dists.length === 0 || h.distance - dists[dists.length - 1] > 1e-4) dists.push(h.distance);
+      if (dists.length >= 4) break;
+    }
+    if (dists.length < 2) { skipped += 1; continue; }
+    const wall = dists[1] - dists[0];
     if (wall <= 0.05) { skipped += 1; continue; }
 
-    const entry = origin.clone().addScaledVector(dir, d0);
+    const entry = origin.clone().addScaledVector(dir, dists[0]);
     pre.push({
       poly: cand.poly, cu: cand.cu, cv: cand.cv,
-      entry, dir, startDist: d0 - 0.5, depth: 0, wallMm: wall,
-      areaMm2: polyArea(cand.poly),
+      entry, dir, startDist: dists[0] - 0.5, depth: 0, wallMm: wall,
+      areaMm2: polyArea(cand.poly), dists,
     });
   }
 
   // derinlik stratejisi — KURAL: dış/ön sculpt yüzeyi ASLA delinmez.
-  //   kabuk (içi boş): delik yerel duvarı geçip İÇ BOŞLUĞA açılır (dışarı çıkmaz;
-  //     ışının 2. vuruşu kavite duvarıdır, ölçülen duvar = iç duvar kalınlığı)
-  //   dolu: kör delik — dış/ön yüze frontSkin payı kala durur
+  // Her delik KENDİ sütun profiline bakar (isShell tek başına yetmez — kabuk
+  // modelde de tabla altı gibi kavitesiz DOLU kesitler vardır):
+  //   sütunda ≥3 yüzey (duvar + kavite): boşluğa açıl, karşı duvara DEĞME
+  //   sütunda 2 yüzey (dolu kesit): kör — dış/ön yüze frontSkin payı kala dur
   const walls = pre.map((p) => p.wallMm).sort((a, b) => a - b);
   const medianWall = walls.length ? walls[Math.floor(walls.length / 2)] : 0;
   const placements: HolePlacement[] = [];
   for (const p of pre) {
-    if (ctx.frame.kind === "cylindrical") {
-      // heykel/kafa bölgesi (aşırı kalın duvar) tamamen atlanır
+    const hasCavity = ctx.isShell && p.dists.length >= 3;
+    if (ctx.frame.kind === "cylindrical" && !hasCavity) {
+      // heykel/kafa bölgesi (aşırı kalın dolu kesit) tamamen atlanır
       if (p.wallMm > Math.max(medianWall * 2.5, medianWall + 2)) { skipped += 1; continue; }
     }
-    if (ctx.isShell) {
-      p.depth = 0.5 + p.wallMm + 0.4;
+    if (hasCavity) {
+      const gap = p.dists[2] - p.dists[1]; // kavite genişliği
+      p.depth = 0.5 + p.wallMm + Math.min(0.4, gap / 2);
     } else {
       const usable = p.wallMm - Math.max(0.3, params.frontSkinMm);
       if (usable < 0.4) { skipped += 1; continue; }
