@@ -6,7 +6,8 @@ import * as THREE from "three";
 import { MeshBVH } from "three-mesh-bvh";
 import { AjurViewer, type ViewerMode } from "./AjurViewer";
 import { loadStl, exportStlBlob } from "./lib/stl";
-import { validateOnLoad, detectShell, scanMinWall, MAX_TRIS, type MinWallScan } from "./lib/validate";
+import { validateOnLoad, detectShell, scanMinWall, triCount, MAX_TRIS, type MinWallScan } from "./lib/validate";
+import { decimateGeometry } from "./lib/decimate";
 import { autoLevelGeometry } from "./lib/ajurOps";
 import {
   detectModelKind, autoMaskRing, autoMaskMedallion, applyBrush, maskedCount,
@@ -113,19 +114,18 @@ export function AjurClient() {
     readBridge().then(setBridgeRec).catch(() => setBridgeRec(null));
   }, []);
 
-  // ---- yükleme ----
-  const loadModel = useCallback(async (blob: Blob, fileName: string, fromBridge?: BridgeRecord) => {
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    setPlan(null);
-    setWallScan(null);
-    setHollowEstMm3(null);
-    try {
-      let geo = await loadStl(blob);
-      const leveled = autoLevelGeometry(geo);
-      if (leveled.changed) geo = leveled.geometry;
+  // sınır aşımı → onay bekleyen otomatik sadeleştirme önerisi
+  const [pendingDec, setPendingDec] = useState<{
+    geometry: THREE.BufferGeometry;
+    tris: number;
+    fileName: string;
+    fromBridge?: BridgeRecord;
+  } | null>(null);
+  const DECIMATE_TARGET = 200_000;
 
+  // ---- yükleme (2 faz: hazırla → sonuçlandır) ----
+  const finalizeModel = useCallback(async (geo: THREE.BufferGeometry, fileName: string, fromBridge?: BridgeRecord) => {
+    try {
       const val = await validateOnLoad(geo);
       if (!val.ok) {
         setError(val.error ?? "Model doğrulanamadı.");
@@ -163,11 +163,53 @@ export function AjurClient() {
         setBridgeRec(null);
       }
     } catch {
-      setError("Dosya okunamadı — geçerli bir STL olduğundan emin olun.");
+      setError("Model işlenemedi — geçerli bir STL olduğundan emin olun.");
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const loadModel = useCallback(async (blob: Blob, fileName: string, fromBridge?: BridgeRecord) => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setPlan(null);
+    setWallScan(null);
+    setHollowEstMm3(null);
+    setPendingDec(null);
+    try {
+      let geo = await loadStl(blob);
+      const leveled = autoLevelGeometry(geo);
+      if (leveled.changed) geo = leveled.geometry;
+
+      const tris = triCount(geo);
+      if (tris > MAX_TRIS) {
+        // reddetme — onaylı otomatik sadeleştirme öner (PRD ruhu: her redde çözüm)
+        setPendingDec({ geometry: geo, tris, fileName, fromBridge });
+        setLoading(false);
+        return;
+      }
+      await finalizeModel(geo, fileName, fromBridge);
+    } catch {
+      setError("Dosya okunamadı — geçerli bir STL olduğundan emin olun.");
+      setLoading(false);
+    }
+  }, [finalizeModel]);
+
+  const acceptDecimate = useCallback(async () => {
+    if (!pendingDec) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const dec = await decimateGeometry(pendingDec.geometry, DECIMATE_TARGET);
+      const p = pendingDec;
+      setPendingDec(null);
+      await finalizeModel(dec, p.fileName, p.fromBridge);
+    } catch {
+      setError("Sadeleştirme başarısız — modeli Mesh Temizleme aracından geçirip tekrar deneyin.");
+      setLoading(false);
+    }
+  }, [pendingDec, finalizeModel]);
 
   const onFile = useCallback((f: File) => {
     if (!f.name.toLowerCase().endsWith(".stl")) {
@@ -280,6 +322,7 @@ export function AjurClient() {
     setModel(null); setResult(null); setPlan(null); setWallScan(null);
     setError(null); setStep(1); maskRef.current = null; setFrame(null);
     setViewerMode("orbit"); setClipOn(false); setHollowEstMm3(null);
+    setPendingDec(null);
   }, []);
 
   // ---- gram sayacı (sabit) ----
@@ -449,7 +492,34 @@ export function AjurClient() {
             {/* ADIM 1 — Yükle */}
             {step === 1 && (
               <>
-                {bridgeRec && (
+                {pendingDec && (
+                  <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-4">
+                    <p className="text-sm font-medium text-amber-200">Model sınırın üzerinde</p>
+                    <p className="mt-1 text-xs leading-relaxed text-white/50">
+                      {pendingDec.fileName} — {(pendingDec.tris / 1000).toFixed(0)}K poligon; sınır{" "}
+                      {(MAX_TRIS / 1000).toFixed(0)}K. Otomatik sadeleştirme ile{" "}
+                      {(DECIMATE_TARGET / 1000).toFixed(0)}K&apos;ya indirebiliriz — detay kaybı bu
+                      yoğunlukta gözle görülmez düzeydedir.
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={() => void acceptDecimate()}
+                        disabled={loading}
+                        className="rounded-lg bg-[linear-gradient(135deg,#c4838b,#b76e79)] px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
+                      >
+                        {loading ? "Sadeleştiriliyor…" : "Sadeleştir ve devam et"}
+                      </button>
+                      <button
+                        onClick={() => setPendingDec(null)}
+                        disabled={loading}
+                        className="rounded-lg border border-white/10 px-3 py-2 text-xs text-white/50 hover:text-white disabled:opacity-50"
+                      >
+                        Vazgeç
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {bridgeRec && !pendingDec && (
                   <div className="rounded-2xl border border-[#b76e79]/25 bg-[#b76e79]/[0.07] p-4">
                     <p className="text-sm font-medium text-[#e8b4bc]">
                       {bridgeRec.source === "hollow"
