@@ -339,6 +339,13 @@ export const ruMessages = {
     ajur: "Ажур и задний срез",
     creativeStudio: "AI Creative Studio",
     sivi: "Жидкость — литьё в форму",
+    nakkas: "Наккаш — узоры",
+    uretim3d: "3D генерация",
+    galeri: "Галерея",
+    aciLab: "Лаб ракурсов",
+    uvMap: "UV-развёртка",
+    yuzukDene: "Примерка кольца",
+    kolyeDene: "Примерка колье",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",

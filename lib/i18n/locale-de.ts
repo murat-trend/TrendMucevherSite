@@ -339,6 +339,13 @@ export const deMessages = {
     ajur: "Durchbruch & Rückschnitt",
     creativeStudio: "AI Creative Studio",
     sivi: "Flüssig — Formguss",
+    nakkas: "Nakkaş — Ornament",
+    uretim3d: "3D-Erzeugung",
+    galeri: "Galerie",
+    aciLab: "Winkel-Labor",
+    uvMap: "UV-Mapping",
+    yuzukDene: "Ring-Anprobe",
+    kolyeDene: "Ketten-Anprobe",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",

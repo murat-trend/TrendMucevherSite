@@ -23,6 +23,13 @@ export type RemauraNavKey =
   | 'ajur'
   | 'creativeStudio'
   | 'sivi'
+  | 'nakkas'
+  | 'uretim3d'
+  | 'galeri'
+  | 'aciLab'
+  | 'uvMap'
+  | 'yuzukDene'
+  | 'kolyeDene'
 
 export type RemauraCategory = {
   id: string
@@ -234,6 +241,69 @@ export const REMAURA_CATEGORIES: RemauraCategory[] = [
     labelKey: 'sivi',
     icon: '💧',
     path: '/remaura/sivi',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'nakkas',
+    labelKey: 'nakkas',
+    icon: '🖋️',
+    path: '/remaura/nakkas',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: '3d-uret',
+    labelKey: 'uretim3d',
+    icon: '🏭',
+    path: '/remaura/3d-uret',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'galeri',
+    labelKey: 'galeri',
+    icon: '🗃️',
+    path: '/remaura/galeri',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'aci-lab',
+    labelKey: 'aciLab',
+    icon: '📷',
+    path: '/remaura/aci-lab',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'uv',
+    labelKey: 'uvMap',
+    icon: '🗺️',
+    path: '/remaura/uv',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'yuzuk-dene',
+    labelKey: 'yuzukDene',
+    icon: '💍',
+    path: '/remaura/yuzuk-dene',
+    accessType: 'restricted',
+    isSuperAdminOnly: true,
+    isActive: true,
+  },
+  {
+    id: 'kolye-dene',
+    labelKey: 'kolyeDene',
+    icon: '📿',
+    path: '/remaura/kolye-dene',
     accessType: 'restricted',
     isSuperAdminOnly: true,
     isActive: true,
