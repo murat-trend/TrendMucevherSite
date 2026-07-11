@@ -56,6 +56,22 @@ export function manifoldToGeo(result: ManifoldT): THREE.BufferGeometry {
   return geo;
 }
 
+/** İndeksli geometrinin işaretli hacmi (diverjans; manifold çıktılar için kesin). */
+export function geometryVolumeMm3(geo: THREE.BufferGeometry): number {
+  const idx = geo.index!.array;
+  const pos = geo.attributes.position;
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  const cr = new THREE.Vector3();
+  let v6 = 0;
+  for (let t = 0; t < idx.length; t += 3) {
+    a.fromBufferAttribute(pos, idx[t]);
+    b.fromBufferAttribute(pos, idx[t + 1]);
+    c.fromBufferAttribute(pos, idx[t + 2]);
+    v6 += a.dot(cr.crossVectors(b, c));
+  }
+  return Math.abs(v6 / 6);
+}
+
 /** Manifold hacmi (mm³). API sürümüne göre volume() ya da getProperties(). */
 export function manifoldVolume(m: ManifoldT): number {
   const anyM = m as unknown as {

@@ -49,6 +49,7 @@ export function solveAutoParams(
   level: AutoLevel,
   rule: CastingRule,
   frontSkinMm: number,
+  floorMm = 0,
 ): AutoSolveResult {
   const pattern = patternById(patternId);
   if (!pattern) throw new Error("Desen bulunamadı.");
@@ -77,7 +78,7 @@ export function solveAutoParams(
   const evaluate = (cellMm: number, hs: number, minBridge: number) => {
     const params: AjurParams = {
       patternId, cellMm, holeScale: hs, rotationDeg: 0,
-      marginMm: margin, frontSkinMm,
+      marginMm: margin, frontSkinMm, floorMm,
     };
     let plan: HolePlan;
     try {

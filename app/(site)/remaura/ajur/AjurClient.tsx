@@ -17,6 +17,8 @@ import { PATTERNS, patternById } from "./lib/patterns";
 import { planHoles, applyAjur, type AjurParams, type HolePlan } from "./lib/applyAjur";
 import { solveAutoParams, type AutoLevel } from "./lib/autoParams";
 import { hollowModel } from "./lib/hollow";
+import { buildRingLiner } from "./lib/liner";
+import { manifoldUnion } from "./lib/ajurBoolean";
 import { estimateHollowCavity, gramForMetal } from "./lib/estimate";
 import { CASTING_RULES, type MetalKey } from "./lib/castingRules";
 import { METALS } from "../mesh-temizle/lib/meshOps";
@@ -112,6 +114,18 @@ export function AjurClient() {
   const [hollowing, setHollowing] = useState(false);
   const [hollowWallMm, setHollowWallMm] = useState(1.0);
   const [shrinkPct, setShrinkPct] = useState(2.0);
+
+  // KAPAK: delik zemini (kabukta) + yüzük iç astarı
+  const [floorMm, setFloorMm] = useState(0);
+  const [linerThicknessMm, setLinerThicknessMm] = useState(0.5);
+  const [linerMode, setLinerMode] = useState<"fused" | "separate">("fused");
+  const [linerGapMm, setLinerGapMm] = useState(0.15);
+  const [linerBusy, setLinerBusy] = useState(false);
+  /** ayrı-parça astar (kendi STL'i); tek parçada null kalır */
+  const [linerPart, setLinerPart] = useState<{ geometry: THREE.BufferGeometry; volumeMm3: number } | null>(null);
+  /** astar eklenmeden önceki sonuç — "astarı kaldır" için */
+  const preLinerRef = useRef<ResultState | null>(null);
+  const [linerFused, setLinerFused] = useState(false);
 
   // sonuç doğrulama + oto düzelt
   const [wallScan, setWallScan] = useState<MinWallScan | null>(null);
@@ -312,7 +326,7 @@ export function AjurClient() {
     if (step !== 2 && step !== 4) return;
     const t = setTimeout(() => {
       try {
-        const params: AjurParams = { patternId, cellMm, holeScale, rotationDeg, marginMm, frontSkinMm };
+        const params: AjurParams = { patternId, cellMm, holeScale, rotationDeg, marginMm, frontSkinMm, floorMm };
         const p = planHoles(
           { geometry: model.geometry, bvh: model.bvh, mask: maskRef.current!, frame, isShell: model.isShell },
           params,
@@ -325,7 +339,7 @@ export function AjurClient() {
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [model, frame, step, patternId, cellMm, holeScale, rotationDeg, marginMm, frontSkinMm, maskVersion, result]);
+  }, [model, frame, step, patternId, cellMm, holeScale, rotationDeg, marginMm, frontSkinMm, floorMm, maskVersion, result]);
 
   // ---- uygula (plan verilirse onu, yoksa canlı planı koşar) ----
   const runBoolean = useCallback(async (planToUse: HolePlan) => {
@@ -346,6 +360,10 @@ export function AjurClient() {
       setWallScan(null);
       setBlamedHoles([]);
       setAjurThinVerts(null);
+      // yeni sonuç = astar durumu sıfırlanır
+      setLinerPart(null);
+      setLinerFused(false);
+      preLinerRef.current = null;
       setStep(5);
       // sonuç min-et taraması + suçlu delik eşlemesi. Modelin KENDİ ince
       // detayı (sculpt uçları) ayrı raporlanır — highlight ve oto düzelt
@@ -401,7 +419,7 @@ export function AjurClient() {
     try {
       const solved = solveAutoParams(
         { geometry: model.geometry, bvh: model.bvh, mask: maskRef.current, frame, isShell: model.isShell },
-        patternId, autoLevel, rule, frontSkinMm,
+        patternId, autoLevel, rule, frontSkinMm, floorMm,
       );
       // çözülen değerleri Gelişmiş panelde göster (şeffaflık)
       setCellMm(solved.params.cellMm);
@@ -416,7 +434,7 @@ export function AjurClient() {
       setSolving(false);
       setError((e as Error).message);
     }
-  }, [model, frame, patternId, autoLevel, rule, frontSkinMm, runBoolean]);
+  }, [model, frame, patternId, autoLevel, rule, frontSkinMm, floorMm, runBoolean]);
 
   // oto zincir: tarama ajur-kaynaklı ince bulduysa oto-düzelt otomatik koşar
   useEffect(() => {
@@ -462,6 +480,57 @@ export function AjurClient() {
     next.removedMm3 = next.placements.reduce((s, p) => s + p.areaMm2 * Math.max(0, p.depth - 0.5), 0);
     void runBoolean(next);
   }, [blamedHoles, runBoolean]);
+
+  // ---- KAPAK: yüzük iç astarı ekle/kaldır ----
+  const addLiner = useCallback(async () => {
+    if (!model || !frame || !maskRef.current || !result || linerFused || linerPart) return;
+    setLinerBusy(true);
+    setError(null);
+    try {
+      // bant, deliklerin gerçek eksenel aralığına kilitlenir (taç altına uzamasın)
+      let axialRangeMm: [number, number] | undefined;
+      const applied = appliedPlanRef.current;
+      if (applied && frame.kind === "cylindrical") {
+        let lo = Infinity, hi = -Infinity;
+        for (const p of applied.placements) {
+          const v = p.entry.getComponent(frame.axisIndex) - frame.center.getComponent(frame.axisIndex);
+          const r = Math.max(...p.poly.map(([x, y]) => Math.hypot(x, y)));
+          if (v - r < lo) lo = v - r;
+          if (v + r > hi) hi = v + r;
+        }
+        if (Number.isFinite(lo)) axialRangeMm = [lo - 1.2, hi + 1.2];
+      }
+      const liner = await buildRingLiner(model.geometry, maskRef.current, frame, {
+        thicknessMm: linerThicknessMm,
+        gapMm: linerMode === "separate" ? linerGapMm : 0,
+        axialRangeMm,
+      });
+      preLinerRef.current = result;
+      if (linerMode === "fused") {
+        const u = await manifoldUnion(result.geometry, liner.geometry);
+        const { geometryVolumeMm3 } = await import("./lib/manifoldKit");
+        setResult({
+          ...result,
+          geometry: u.geometry,
+          volumeAfterMm3: geometryVolumeMm3(u.geometry), // örtüşme payı düşülmüş gerçek hacim
+        });
+        setLinerFused(true);
+      } else {
+        setLinerPart({ geometry: liner.geometry, volumeMm3: liner.volumeMm3 });
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLinerBusy(false);
+    }
+  }, [model, frame, result, linerThicknessMm, linerMode, linerGapMm, linerFused, linerPart]);
+
+  const removeLiner = useCallback(() => {
+    if (preLinerRef.current) setResult(preLinerRef.current);
+    preLinerRef.current = null;
+    setLinerPart(null);
+    setLinerFused(false);
+  }, []);
 
   // ---- indir + köprüye yaz ----
   // Çekme payı: döküm küçülmesi telafisi — YALNIZ indirilen dosyaya uygulanır
@@ -509,11 +578,11 @@ export function AjurClient() {
 
   // ---- gram sayacı (sabit) ----
   const gramNow = useMemo(() => {
-    if (result) return gramForMetal(result.volumeAfterMm3, metal);
+    if (result) return gramForMetal(result.volumeAfterMm3 + (linerPart?.volumeMm3 ?? 0), metal);
     if (!model) return null;
     const planned = step === 4 && plan ? plan.removedMm3 : 0;
     return gramForMetal(Math.max(0, model.volumeMm3 - planned), metal);
-  }, [model, result, plan, step, metal]);
+  }, [model, result, plan, step, metal, linerPart]);
   const gramBefore = model ? gramForMetal(model.volumeMm3, metal) : null;
 
   const pattern = patternById(patternId);
@@ -980,6 +1049,17 @@ export function AjurClient() {
                       value={frontSkinMm} min={0.5} max={2.5} step={0.1} unit="mm" onChange={setFrontSkinMm}
                     />
                   )}
+                  {model.isShell && (
+                    <>
+                      <Slider
+                        label="Delik zemini (kapaklı görünüm)"
+                        value={floorMm} min={0} max={0.6} step={0.05} unit="mm" onChange={setFloorMm}
+                      />
+                      <p className="-mt-1 text-[11px] text-white/30">
+                        0 = delikler iç boşluğa açık; &gt;0 = dibinde kapalı zemin kalır.
+                      </p>
+                    </>
+                  )}
                 </div>
 
                 <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4 text-xs">
@@ -1073,6 +1153,75 @@ export function AjurClient() {
                     <p className="mt-1 text-white/30">Et kalınlığı taranıyor…</p>
                   )}
                 </div>
+
+                {/* KAPAK — yüzük iç astarı (kapaklı ajur) */}
+                {kind === "ring" && (
+                  <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
+                    <p className="mb-1 text-sm font-medium text-white/70">İç Astar (Kapak)</p>
+                    {!linerFused && !linerPart ? (
+                      <>
+                        <p className="mb-3 text-xs leading-relaxed text-white/40">
+                          Delikli şankın altına pürüzsüz bir iç bant: ten teması rahatlar,
+                          kir girmez, desen kapalı zeminde okunur — klasik kapaklı ajur.
+                        </p>
+                        <Slider
+                          label="Astar kalınlığı" value={linerThicknessMm}
+                          min={0.3} max={0.8} step={0.05} unit="mm" onChange={setLinerThicknessMm}
+                        />
+                        <div className="mb-3 grid grid-cols-2 gap-2">
+                          <ModeBtn active={linerMode === "fused"} onClick={() => setLinerMode("fused")} label="Tek parça (kaynaşık)" />
+                          <ModeBtn active={linerMode === "separate"} onClick={() => setLinerMode("separate")} label="Ayrı parça (lehimlik)" />
+                        </div>
+                        {linerMode === "separate" && (
+                          <Slider
+                            label="Lehim boşluğu" value={linerGapMm}
+                            min={0.05} max={0.3} step={0.01} unit="mm" onChange={setLinerGapMm}
+                          />
+                        )}
+                        <button
+                          onClick={() => void addLiner()}
+                          disabled={linerBusy}
+                          className="w-full rounded-xl bg-[linear-gradient(135deg,#c4838b,#b76e79)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                        >
+                          {linerBusy ? "Astar kuruluyor…" : "İç astar ekle"}
+                        </button>
+                      </>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <p className="text-xs text-emerald-400">
+                          ✓ Astar eklendi — {fmt2(linerThicknessMm)} mm,{" "}
+                          {linerFused ? "tek parça (kaynaşık)" : `ayrı parça (${fmt2(linerGapMm)} mm lehim boşluğu)`}
+                        </p>
+                        {linerPart && (
+                          <button
+                            onClick={() => {
+                              const scale = 1 + Math.max(0, shrinkPct) / 100;
+                              const g = linerPart.geometry.clone();
+                              if (scale !== 1) g.scale(scale, scale, scale);
+                              const blob = exportStlBlob(g);
+                              g.dispose();
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement("a");
+                              a.href = url;
+                              a.download = (model?.fileName ?? "model.stl").replace(/\.stl$/i, "") + "_astar.stl";
+                              a.click();
+                              URL.revokeObjectURL(url);
+                            }}
+                            className="w-full rounded-xl border border-[#b76e79]/30 bg-[#b76e79]/10 px-4 py-2.5 text-xs font-medium text-[#e8b4bc] hover:opacity-80"
+                          >
+                            Astar STL indir (ayrı parça)
+                          </button>
+                        )}
+                        <button
+                          onClick={removeLiner}
+                          className="w-full rounded-xl border border-white/10 px-4 py-2 text-xs text-white/50 hover:text-white"
+                        >
+                          Astarı kaldır
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Çekme payı — döküm küçülmesi telafisi */}
                 <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">

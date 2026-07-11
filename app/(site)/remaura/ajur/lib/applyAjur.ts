@@ -27,6 +27,9 @@ export type AjurParams = {
   marginMm: number;
   /** dolu modelde ön yüzde korunacak et (mm) */
   frontSkinMm: number;
+  /** kabuk modelde deliğin dibinde bırakılacak KAPALI ZEMİN (mm; 0 = kaviteye
+   *  açık). Kapaklı-ajur görünümü: desen okunur, arkası kapalı. */
+  floorMm?: number;
 };
 
 export type HolePlacement = {
@@ -244,18 +247,23 @@ export function planHoles(ctx: PlanCtx, params: AjurParams): HolePlan {
     }
     // ayak izinin HER örneğinde güvenli kalan azami derinlik (o örneğin kendi
     // girişine göre; paralel ışınlar → giriş yüzeyi farkları kendiliğinden düşer)
+    const floor = Math.max(0, params.floorMm ?? 0);
     let allowed = Infinity;   // hiçbir örnekte dış/ön ihlali veya karşı duvar teması olmasın
     let needed = 0;           // kavite örneklerinde tam açılmak için gereken
     for (const s of p.samples ?? [p.dists]) {
       const w = s[1] - s[0];
       if (ctx.isShell && s.length >= 3) {
-        allowed = Math.min(allowed, (s[2] - s[0]) - 0.3);
-        needed = Math.max(needed, w + 0.3);
+        // zeminli mod: delik kaviteye AÇILMAZ, dibinde floor kadar et kalır
+        allowed = Math.min(allowed, floor > 0 ? w - floor : (s[2] - s[0]) - 0.3);
+        if (floor <= 0) needed = Math.max(needed, w + 0.3);
       } else {
         allowed = Math.min(allowed, w - frontSkin);
       }
     }
-    if (hasCavity) {
+    if (hasCavity && floor > 0) {
+      if (allowed < 0.3) { skipped += 1; continue; }
+      p.depth = 0.5 + allowed;
+    } else if (hasCavity) {
       const d = Math.min(allowed, Math.max(needed, 0.4));
       if (d < 0.4) { skipped += 1; continue; }
       p.depth = 0.5 + d;
