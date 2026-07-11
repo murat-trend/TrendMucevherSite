@@ -519,8 +519,16 @@ export function AjurClient() {
                   <div className="grid grid-cols-2 gap-2">
                     <Stat label="Hacim" value={`${fmt2(model.volumeMm3 / 1000)} cm³`} />
                     <Stat label="Poligon" value={`${(model.tris / 1000).toFixed(0)}K`} />
-                    <Stat label="Yapı" value={model.isShell ? "İçi boş (kabuk)" : "Dolu"} />
                     <Stat label="Dosya" value={model.fileName} />
+                    {/* Yapı — kullanıcı düzeltebilir (içi boşaltılmış yüzük dıştan anlaşılmaz) */}
+                    <button
+                      onClick={() => setModel({ ...model, isShell: !model.isShell })}
+                      className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-left transition-colors hover:border-[#b76e79]/30"
+                      title="Yanlışsa tıklayıp değiştirin"
+                    >
+                      <p className="text-[11px] text-white/40">Yapı (tıkla değiştir)</p>
+                      <p className="font-mono text-sm text-[#e8b4bc]">{model.isShell ? "İçi boş (kabuk)" : "Dolu"}</p>
+                    </button>
                   </div>
                   <div className="mt-3">
                     <p className="mb-1.5 text-xs text-white/40">Model tipi</p>
@@ -659,7 +667,10 @@ export function AjurClient() {
                   <Slider label="Döndürme" value={rotationDeg} min={0} max={180} step={5} unit="°" onChange={setRotationDeg} />
                   <Slider label="Kenar payı" value={marginMm} min={1} max={4} step={0.1} unit="mm" onChange={setMarginMm} />
                   {!model.isShell && (
-                    <Slider label="Ön et koruması" value={frontSkinMm} min={0.5} max={2.5} step={0.1} unit="mm" onChange={setFrontSkinMm} />
+                    <Slider
+                      label={kind === "ring" ? "Dış et koruması" : "Ön et koruması"}
+                      value={frontSkinMm} min={0.5} max={2.5} step={0.1} unit="mm" onChange={setFrontSkinMm}
+                    />
                   )}
                 </div>
 

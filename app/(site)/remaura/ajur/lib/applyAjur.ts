@@ -193,20 +193,21 @@ export function planHoles(ctx: PlanCtx, params: AjurParams): HolePlan {
     });
   }
 
-  // derinlik stratejisi
+  // derinlik stratejisi — KURAL: dış/ön sculpt yüzeyi ASLA delinmez.
+  //   kabuk (içi boş): delik yerel duvarı geçip İÇ BOŞLUĞA açılır (dışarı çıkmaz;
+  //     ışının 2. vuruşu kavite duvarıdır, ölçülen duvar = iç duvar kalınlığı)
+  //   dolu: kör delik — dış/ön yüze frontSkin payı kala durur
   const walls = pre.map((p) => p.wallMm).sort((a, b) => a - b);
   const medianWall = walls.length ? walls[Math.floor(walls.length / 2)] : 0;
   const placements: HolePlacement[] = [];
   for (const p of pre) {
     if (ctx.frame.kind === "cylindrical") {
-      // şankı boydan boya del; heykel bölgesi (aşırı kalın duvar) korunur
+      // heykel/kafa bölgesi (aşırı kalın duvar) tamamen atlanır
       if (p.wallMm > Math.max(medianWall * 2.5, medianWall + 2)) { skipped += 1; continue; }
-      p.depth = 0.5 + p.wallMm + 0.5;
-    } else if (ctx.isShell) {
-      // kabuk: delik iç boşluğa açılır
+    }
+    if (ctx.isShell) {
       p.depth = 0.5 + p.wallMm + 0.4;
     } else {
-      // dolu: kör delik — ön et korunur
       const usable = p.wallMm - Math.max(0.3, params.frontSkinMm);
       if (usable < 0.4) { skipped += 1; continue; }
       p.depth = 0.5 + usable;
