@@ -1,72 +1,69 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
+import { MeshBVH, acceleratedRaycast } from "three-mesh-bvh";
+import type { HolePlacement } from "./lib/applyAjur";
 
-type Clip = { enabled: boolean; axis: "x" | "y" | "z"; position: number; flip: boolean };
+// ---------------------------------------------------------------------------
+// Ajur Viewer (yeniden yapım — PRD §4/§9)
+//   - vertex-color maske overlay (gül = güvenli bölge, kırmızı = ince et)
+//   - fırça modu: BVH hızlandırmalı raycast ile maske boya/sil
+//   - kesit görünümü (clipping plane + slider değeri client'tan)
+//   - delik önizleme: ucuz instanced disk overlay (boolean'dan önce)
+// Geometri GERÇEK mm koordinatlarında gösterilir (kamera fit) — fırça ve
+// önizleme dünyası motorla birebir aynı.
+// ---------------------------------------------------------------------------
+
+export type ViewerMode = "orbit" | "brush-add" | "brush-remove";
+
+type Clip = { enabled: boolean; axis: 0 | 1 | 2; position: number };
 
 type Props = {
   geometry: THREE.BufferGeometry | null;
+  bvh: MeshBVH | null;
+  mode: ViewerMode;
+  brushRadius: number;
+  /** maske değişince artan sayaç — renkleri yeniden boyar */
+  mask: Uint8Array | null;
+  maskVersion: number;
+  /** ince et vertexleri (kırmızı) */
+  thinVerts: Uint32Array | null;
   clip: Clip;
-  wireframe?: boolean;
-  /** serbest döndürme gumball'ı açık/kapalı */
-  gizmo?: boolean;
-  /** yarı saydam hayalet (relief) — panel modunda yerini görmek için. Ortak ölçek referansı. */
-  ghost?: THREE.BufferGeometry | null;
-  /** seçili yüz göstergesi — o yüze renkli yarı saydam levha koyar (yön seçimi netliği). */
-  marker?: { axis: "x" | "y" | "z"; flip: boolean } | null;
+  /** ucuz delik önizlemesi */
+  holePreview: HolePlacement[] | null;
+  /** fırça değdi — client maskeyi günceller */
+  onPaint?: (center: THREE.Vector3) => void;
 };
 
-export type AjurViewerHandle = {
-  /** Kameraya göre en uygun kesim ekseni + yön (yakın yarıyı kes). */
-  getViewClip: () => { axis: "x" | "y" | "z"; flip: boolean };
-  /** Gumball ile uygulanan döndürme matrisi (kesim öncesi geometriye bake için). */
-  getOrientationMatrix: () => THREE.Matrix4 | null;
-};
+const COL_BASE = new THREE.Color(0xbfb9b6);   // nötr metal grisi
+const COL_MASK = new THREE.Color(0xb76e79);   // gül — güvenli bölge
+const COL_THIN = new THREE.Color(0xe23b3b);   // kırmızı — ince et
 
-export const AjurViewer = forwardRef<AjurViewerHandle, Props>(function AjurViewer(
-  { geometry, clip, wireframe, gizmo, ghost, marker }, ref,
-) {
+export function AjurViewer({
+  geometry, bvh, mode, brushRadius, mask, maskVersion, thinVerts, clip, holePreview, onPaint,
+}: Props) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
-  const controlsRef = useRef<OrbitControls | null>(null);
-  const groupRef = useRef<THREE.Group | null>(null);
-  const ghostRef = useRef<THREE.Mesh | null>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-  const outerMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
-  const innerMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const meshRef = useRef<THREE.Mesh | null>(null);
+  const matRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const previewRef = useRef<THREE.InstancedMesh | null>(null);
+  const cursorRef = useRef<THREE.Mesh | null>(null);
   const planeRef = useRef<THREE.Plane>(new THREE.Plane(new THREE.Vector3(1, 0, 0), 0));
-  const boxRef = useRef<THREE.Box3 | null>(null);
-  const quadRef = useRef<THREE.Mesh | null>(null);
-  const markerRef = useRef<THREE.Mesh | null>(null);
-  const tcRef = useRef<TransformControls | null>(null);
-  const tcHelperRef = useRef<THREE.Object3D | null>(null);
+  const raycasterRef = useRef(new THREE.Raycaster());
+  const paintingRef = useRef(false);
+  const modeRef = useRef<ViewerMode>(mode);
+  const radiusRef = useRef(brushRadius);
+  const onPaintRef = useRef(onPaint);
+  modeRef.current = mode;
+  radiusRef.current = brushRadius;
+  onPaintRef.current = onPaint;
 
-  // Ortak ölçek/merkez referansı: hayalet varsa O (relief), yoksa ana geometri.
-  // Böylece panel, relief içinde DOĞRU konum ve oranda görünür.
-  const refForXform = ghost ?? geometry;
-
-  useImperativeHandle(ref, () => ({
-    getViewClip: () => {
-      const cam = cameraRef.current;
-      const p = cam ? cam.position : new THREE.Vector3(0, 0, 1);
-      const ax = Math.abs(p.x), ay = Math.abs(p.y), az = Math.abs(p.z);
-      let axis: "x" | "y" | "z" = "z"; let comp = p.z;
-      if (ax >= ay && ax >= az) { axis = "x"; comp = p.x; }
-      else if (ay >= ax && ay >= az) { axis = "y"; comp = p.y; }
-      return { axis, flip: comp > 0 };
-    },
-    getOrientationMatrix: () => {
-      const g = groupRef.current;
-      if (!g) return null;
-      return new THREE.Matrix4().makeRotationFromQuaternion(g.quaternion);
-    },
-  }));
-
-  // Sahne kurulumu
+  // ---- sahne ----
   useEffect(() => {
     const host = mountRef.current;
     if (!host) return;
@@ -76,66 +73,84 @@ export const AjurViewer = forwardRef<AjurViewerHandle, Props>(function AjurViewe
     scene.background = new THREE.Color(0x07080a);
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 5000);
-    camera.position.set(0, 0, 4.2);
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10_000);
+    camera.position.set(0, 0, 60);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-    rendererRef.current = renderer;
     renderer.localClippingEnabled = true;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.domElement.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block";
+    renderer.domElement.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none";
     host.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controlsRef.current = controls;
 
-    // Serbest döndürme gumball'ı (TransformControls, rotate)
-    const tc = new TransformControls(camera, renderer.domElement);
-    tc.setMode("rotate");
-    tc.setSpace("local");
-    tc.addEventListener("dragging-changed", (e) => { controls.enabled = !(e as unknown as { value: boolean }).value; });
-    tcRef.current = tc;
-    const tcAny = tc as unknown as { getHelper?: () => THREE.Object3D };
-    const helper = tcAny.getHelper ? tcAny.getHelper() : (tc as unknown as THREE.Object3D);
-    tcHelperRef.current = helper;
-    scene.add(helper);
-    tc.enabled = false;
-    helper.visible = false;
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const d1 = new THREE.DirectionalLight(0xffffff, 1.6); d1.position.set(4, 6, 5); scene.add(d1);
+    const d2 = new THREE.DirectionalLight(0xb76e79, 0.7); d2.position.set(-4, -3, 3); scene.add(d2);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
-    const d1 = new THREE.DirectionalLight(0xffffff, 1.7); d1.position.set(4, 6, 5); scene.add(d1);
-    const d2 = new THREE.DirectionalLight(0xb76e79, 0.8); d2.position.set(-4, -3, 3); scene.add(d2);
-
-    // Kesit düzlemi göstergesi (yarı saydam quad)
-    const quad = new THREE.Mesh(
-      new THREE.PlaneGeometry(1, 1),
-      new THREE.MeshBasicMaterial({ color: 0xb76e79, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false }),
+    // fırça imleci
+    const cursor = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 20, 14),
+      new THREE.MeshBasicMaterial({ color: 0xb76e79, transparent: true, opacity: 0.28, depthWrite: false }),
     );
-    quad.visible = false;
-    quad.renderOrder = 5;
-    quadRef.current = quad;
-    scene.add(quad);
-
-    // Seçili yüz göstergesi (parlak gül levha) — yön seçiminde "burası" demek için
-    const marker3d = new THREE.Mesh(
-      new THREE.PlaneGeometry(1, 1),
-      new THREE.MeshBasicMaterial({ color: 0xff6b9d, transparent: true, opacity: 0.42, side: THREE.DoubleSide, depthWrite: false }),
-    );
-    marker3d.visible = false;
-    marker3d.renderOrder = 6;
-    markerRef.current = marker3d;
-    scene.add(marker3d);
+    cursor.visible = false;
+    scene.add(cursor);
+    cursorRef.current = cursor;
 
     const applySize = () => {
       const w = host.clientWidth || 1, h = host.clientHeight || 1;
-      camera.aspect = w / h; camera.updateProjectionMatrix();
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
       renderer.setSize(w, h, false);
     };
     applySize();
-    const ro = new ResizeObserver(applySize); ro.observe(host);
+    const ro = new ResizeObserver(applySize);
+    ro.observe(host);
+
+    // ---- fırça pointer akışı ----
+    const ndc = new THREE.Vector2();
+    const pick = (ev: PointerEvent): THREE.Vector3 | null => {
+      const mesh = meshRef.current;
+      if (!mesh) return null;
+      const r = renderer.domElement.getBoundingClientRect();
+      ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -(((ev.clientY - r.top) / r.height) * 2 - 1));
+      raycasterRef.current.setFromCamera(ndc, camera);
+      const hits = raycasterRef.current.intersectObject(mesh, false);
+      return hits.length ? hits[0].point : null;
+    };
+    const onDown = (ev: PointerEvent) => {
+      if (modeRef.current === "orbit") return;
+      const p = pick(ev);
+      if (!p) return;
+      paintingRef.current = true;
+      controls.enabled = false;
+      onPaintRef.current?.(p);
+    };
+    const onMove = (ev: PointerEvent) => {
+      if (modeRef.current === "orbit") { if (cursorRef.current) cursorRef.current.visible = false; return; }
+      const p = pick(ev);
+      const c = cursorRef.current;
+      if (c) {
+        c.visible = !!p;
+        if (p) {
+          c.position.copy(p);
+          c.scale.setScalar(radiusRef.current);
+        }
+      }
+      if (paintingRef.current && p) onPaintRef.current?.(p);
+    };
+    const onUp = () => {
+      paintingRef.current = false;
+      controls.enabled = true;
+    };
+    renderer.domElement.addEventListener("pointerdown", onDown);
+    renderer.domElement.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
 
     let frame = 0;
     const animate = () => {
@@ -150,178 +165,157 @@ export const AjurViewer = forwardRef<AjurViewerHandle, Props>(function AjurViewe
       alive = false;
       cancelAnimationFrame(frame);
       ro.disconnect();
+      renderer.domElement.removeEventListener("pointerdown", onDown);
+      renderer.domElement.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
       controls.dispose();
-      scene.traverse((o) => {
-        const m = o as THREE.Mesh;
-        if (m.isMesh && m.geometry) m.geometry.dispose();
-        const mat = m.material as THREE.Material | THREE.Material[] | undefined;
-        if (Array.isArray(mat)) mat.forEach((x) => x.dispose()); else mat?.dispose();
-      });
-      try { tc.detach(); tc.dispose(); } catch { /* yok say */ }
+      // client'ın geometrisine DOKUNMA — sadece viewer'ın kendi kaynakları
+      cursor.geometry.dispose();
+      (cursor.material as THREE.Material).dispose();
+      previewRef.current?.geometry.dispose();
+      (previewRef.current?.material as THREE.Material | undefined)?.dispose();
+      matRef.current?.dispose();
       renderer.dispose();
       host.innerHTML = "";
-      sceneRef.current = null; controlsRef.current = null; groupRef.current = null;
-      rendererRef.current = null; cameraRef.current = null;
-      outerMatRef.current = null; innerMatRef.current = null; quadRef.current = null;
-      markerRef.current = null; tcRef.current = null; tcHelperRef.current = null;
+      sceneRef.current = null; cameraRef.current = null; controlsRef.current = null;
+      rendererRef.current = null; meshRef.current = null; matRef.current = null;
+      previewRef.current = null; cursorRef.current = null;
     };
   }, []);
 
-  // Gumball aç/kapa (geometri değişince yeni group'a yeniden attach)
-  useEffect(() => {
-    const tc = tcRef.current, helper = tcHelperRef.current, g = groupRef.current;
-    if (!tc) return;
-    if (gizmo && g) {
-      tc.setMode("rotate");
-      tc.attach(g); tc.enabled = true;
-      if (helper) helper.visible = true;
-    } else {
-      tc.detach(); tc.enabled = false;
-      if (helper) helper.visible = false;
-    }
-  }, [gizmo, geometry]);
-
-  // Geometri değişince yeniden kur (merkez + ölçek normalize)
+  // ---- geometri değişimi: mesh kur + kamera fit ----
   useEffect(() => {
     const scene = sceneRef.current;
+    const camera = cameraRef.current;
     const controls = controlsRef.current;
-    if (!scene) return;
+    if (!scene || !camera || !controls) return;
 
-    if (groupRef.current) {
-      scene.remove(groupRef.current);
-      groupRef.current.traverse((o) => {
-        const m = o as THREE.Mesh;
-        if (m.isMesh && m.geometry) m.geometry.dispose();
-      });
-      groupRef.current = null;
+    if (meshRef.current) {
+      scene.remove(meshRef.current);
+      matRef.current?.dispose();
+      meshRef.current = null;
+      matRef.current = null;
     }
     if (!geometry) return;
 
-    // Ortak transform referansı (hayalet varsa relief) — panel doğru oranda otursun
-    const ref = refForXform ?? geometry;
-    ref.computeBoundingBox();
-    const box = ref.boundingBox!;
-    const center = box.getCenter(new THREE.Vector3());
-    const sphereR = box.getSize(new THREE.Vector3()).length() / 2 || 1;
-    const scale = 2.35 / sphereR;
+    // BVH hızlandırmalı raycast (fırça 250K'da akıcı kalsın)
+    if (bvh) {
+      (geometry as unknown as { boundsTree?: MeshBVH }).boundsTree = bvh;
+    }
 
-    const disp = geometry.clone();
-    disp.translate(-center.x, -center.y, -center.z);
-    disp.scale(scale, scale, scale);
-    disp.computeVertexNormals();
-    disp.computeBoundingBox();
-    boxRef.current = disp.boundingBox!.clone();
-
-    const group = new THREE.Group();
-
-    const outer = new THREE.MeshStandardMaterial({
-      color: 0xc4838b, roughness: 0.55, metalness: 0.1, side: THREE.FrontSide,
-      wireframe: !!wireframe, clippingPlanes: [], clipShadows: true,
+    const mat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      color: 0xffffff,
+      roughness: 0.5,
+      metalness: 0.35,
+      side: THREE.DoubleSide,
+      clippingPlanes: [],
     });
-    outerMatRef.current = outer;
-    group.add(new THREE.Mesh(disp, outer));
+    matRef.current = mat;
 
-    const inner = new THREE.MeshStandardMaterial({
-      color: 0xe4b56f, roughness: 0.4, metalness: 0.5, side: THREE.BackSide,
-      clippingPlanes: [], clipShadows: true,
-    });
-    innerMatRef.current = inner;
-    group.add(new THREE.Mesh(disp, inner));
+    const mesh = new THREE.Mesh(geometry, mat);
+    mesh.raycast = acceleratedRaycast as typeof mesh.raycast;
+    scene.add(mesh);
+    meshRef.current = mesh;
 
-    scene.add(group);
-    groupRef.current = group;
-    if (controls) { controls.target.set(0, 0, 0); controls.update(); }
+    // kamera fit — gerçek mm koordinatları
+    geometry.computeBoundingBox();
+    const bb = geometry.boundingBox!;
+    const center = bb.getCenter(new THREE.Vector3());
+    const radius = bb.getSize(new THREE.Vector3()).length() / 2 || 1;
+    camera.near = radius / 100;
+    camera.far = radius * 40;
+    camera.position.copy(center).add(new THREE.Vector3(radius * 0.9, radius * 0.7, radius * 1.9));
+    camera.updateProjectionMatrix();
+    controls.target.copy(center);
+    controls.update();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [geometry, ghost]);
+  }, [geometry, bvh]);
 
-  // Hayalet (relief) — yarı saydam; ana geometriyle AYNI transform (relief bbox).
+  // ---- vertex renkleri: taban + maske + ince et ----
+  useEffect(() => {
+    if (!geometry) return;
+    const n = geometry.attributes.position.count;
+    let colorAttr = geometry.attributes.color as THREE.BufferAttribute | undefined;
+    if (!colorAttr || colorAttr.count !== n) {
+      colorAttr = new THREE.BufferAttribute(new Float32Array(n * 3), 3);
+      geometry.setAttribute("color", colorAttr);
+    }
+    const arr = colorAttr.array as Float32Array;
+    for (let i = 0; i < n; i += 1) {
+      const c = mask && mask[i] ? COL_MASK : COL_BASE;
+      arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b;
+    }
+    if (thinVerts) {
+      for (let k = 0; k < thinVerts.length; k += 1) {
+        const i = thinVerts[k];
+        arr[i * 3] = COL_THIN.r; arr[i * 3 + 1] = COL_THIN.g; arr[i * 3 + 2] = COL_THIN.b;
+      }
+    }
+    colorAttr.needsUpdate = true;
+  }, [geometry, mask, maskVersion, thinVerts]);
+
+  // ---- kesit (clipping plane) ----
+  useEffect(() => {
+    const mat = matRef.current;
+    if (!mat || !geometry) return;
+    if (!clip.enabled) {
+      mat.clippingPlanes = [];
+      mat.needsUpdate = true;
+      return;
+    }
+    geometry.computeBoundingBox();
+    const bb = geometry.boundingBox!;
+    const lo = bb.min.getComponent(clip.axis);
+    const hi = bb.max.getComponent(clip.axis);
+    const px = lo + (hi - lo) * clip.position;
+    const plane = planeRef.current;
+    plane.normal.set(0, 0, 0).setComponent(clip.axis, -1);
+    plane.constant = px;
+    mat.clippingPlanes = [plane];
+    mat.needsUpdate = true;
+  }, [clip, geometry]);
+
+  // ---- delik önizleme (instanced diskler) ----
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
-    if (ghostRef.current) {
-      scene.remove(ghostRef.current);
-      ghostRef.current.geometry.dispose();
-      (ghostRef.current.material as THREE.Material).dispose();
-      ghostRef.current = null;
+    if (previewRef.current) {
+      scene.remove(previewRef.current);
+      previewRef.current.geometry.dispose();
+      (previewRef.current.material as THREE.Material).dispose();
+      previewRef.current = null;
     }
-    if (!ghost) return;
+    if (!holePreview || holePreview.length === 0) return;
 
-    ghost.computeBoundingBox();
-    const box = ghost.boundingBox!;
-    const center = box.getCenter(new THREE.Vector3());
-    const sphereR = box.getSize(new THREE.Vector3()).length() / 2 || 1;
-    const scale = 2.35 / sphereR;
-
-    const gd = ghost.clone();
-    gd.translate(-center.x, -center.y, -center.z);
-    gd.scale(scale, scale, scale);
-    gd.computeVertexNormals();
-
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0xc4838b, roughness: 0.6, metalness: 0.1,
-      transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide,
+    const disk = new THREE.CircleGeometry(1, 20);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x14060a,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
     });
-    const mesh = new THREE.Mesh(gd, mat);
-    mesh.renderOrder = -1; // panelden önce çiz
-    scene.add(mesh);
-    ghostRef.current = mesh;
-  }, [ghost]);
-
-  useEffect(() => {
-    if (outerMatRef.current) outerMatRef.current.wireframe = !!wireframe;
-  }, [wireframe]);
-
-  // Kesit (clip plane) + düzlem göstergesi — display uzayında (merkez+ölçek normalize)
-  useEffect(() => {
-    const outer = outerMatRef.current, inner = innerMatRef.current;
-    const plane = planeRef.current, box = boxRef.current, quad = quadRef.current;
-    if (!outer || !inner) return;
-    const on = !!(clip.enabled && box);
-    if (!on) {
-      outer.clippingPlanes = []; inner.clippingPlanes = [];
-      outer.needsUpdate = true; inner.needsUpdate = true;
-      if (quad) quad.visible = false;
-      return;
+    const inst = new THREE.InstancedMesh(disk, mat, holePreview.length);
+    const m4 = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const zAxis = new THREE.Vector3(0, 0, 1);
+    const s = new THREE.Vector3();
+    for (let i = 0; i < holePreview.length; i += 1) {
+      const h = holePreview[i];
+      const r = Math.max(0.15, Math.sqrt(h.areaMm2 / Math.PI));
+      q.setFromUnitVectors(zAxis, h.dir.clone().multiplyScalar(-1));
+      s.setScalar(r);
+      m4.compose(h.entry.clone().addScaledVector(h.dir, -0.03), q, s);
+      inst.setMatrixAt(i, m4);
     }
-    const ai = clip.axis === "x" ? 0 : clip.axis === "y" ? 1 : 2;
-    plane.normal.set(0, 0, 0).setComponent(ai, clip.flip ? -1 : 1);
-    const lo = box!.min.getComponent(ai), hi = box!.max.getComponent(ai);
-    const pxLocal = lo + (hi - lo) * clip.position;
-    plane.constant = clip.flip ? pxLocal : -pxLocal;
-    outer.clippingPlanes = [plane]; inner.clippingPlanes = [plane];
-    outer.needsUpdate = true; inner.needsUpdate = true;
-
-    if (quad) {
-      quad.visible = true;
-      const size = box!.getSize(new THREE.Vector3());
-      const u = size.x, v = size.y, w = size.z;
-      quad.position.set(0, 0, 0).setComponent(ai, pxLocal);
-      // quad'ı kesit eksenine dik konumla
-      quad.rotation.set(0, 0, 0);
-      if (ai === 0) { quad.rotation.y = Math.PI / 2; quad.scale.set(w * 1.15, v * 1.15, 1); }
-      else if (ai === 1) { quad.rotation.x = Math.PI / 2; quad.scale.set(u * 1.15, w * 1.15, 1); }
-      else { quad.scale.set(u * 1.15, v * 1.15, 1); }
-    }
-  }, [clip, geometry]);
-
-  // Seçili yüz göstergesi — o eksenin uç yüzüne parlak gül levha koy
-  useEffect(() => {
-    const m = markerRef.current, box = boxRef.current;
-    if (!m) return;
-    if (!marker || !box) { m.visible = false; return; }
-    const ai = marker.axis === "x" ? 0 : marker.axis === "y" ? 1 : 2;
-    const size = box.getSize(new THREE.Vector3());
-    const u = size.x, v = size.y, w = size.z;
-    // flip=false → MIN uç (alçak), flip=true → MAX uç (yüksek)
-    const facePos = marker.flip ? box.max.getComponent(ai) : box.min.getComponent(ai);
-    const out = marker.flip ? 0.02 : -0.02; // yüzeyin biraz dışına taşır → görünür
-    m.visible = true;
-    m.position.set(0, 0, 0).setComponent(ai, facePos + out);
-    m.rotation.set(0, 0, 0);
-    if (ai === 0) { m.rotation.y = Math.PI / 2; m.scale.set(w * 1.05, v * 1.05, 1); }
-    else if (ai === 1) { m.rotation.x = Math.PI / 2; m.scale.set(u * 1.05, w * 1.05, 1); }
-    else { m.scale.set(u * 1.05, v * 1.05, 1); }
-  }, [marker, geometry]);
+    inst.instanceMatrix.needsUpdate = true;
+    inst.renderOrder = 4;
+    scene.add(inst);
+    previewRef.current = inst;
+  }, [holePreview]);
 
   return (
     <div className="relative h-full w-full">
@@ -333,4 +327,4 @@ export const AjurViewer = forwardRef<AjurViewerHandle, Props>(function AjurViewe
       )}
     </div>
   );
-});
+}

@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { HollowViewer } from "./HollowViewer";
+import { writeBridge } from "@/lib/remaura/mesh-bridge";
 
 type Stats = {
   wallThicknessMm: number;
@@ -31,6 +33,11 @@ export function HollowClient() {
   const [logs, setLogs] = useState<string[]>([]);
   const logBoxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Ajur köprüsü — sonuç blob'u bellekte tutulur, "ajur aç" ile IndexedDB'ye yazılır
+  const outputBlobRef = useRef<Blob | null>(null);
+  const [bridging, setBridging] = useState(false);
+  const router = useRouter();
 
   const addLog = useCallback((msg: string) => {
     const t = new Date().toLocaleTimeString("tr-TR", { hour12: false });
@@ -80,6 +87,7 @@ export function HollowClient() {
       const parsed: Stats | null = statsRaw ? JSON.parse(statsRaw) : null;
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
+      outputBlobRef.current = blob;
 
       setStats(parsed);
       setOutputUrl(url);
@@ -205,6 +213,9 @@ export function HollowClient() {
                 <span>0.3 mm</span>
                 <span>2.0 mm</span>
               </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-white/35">
+                Ajur açmayı planlıyorsanız 1.0 mm ve üzeri duvar önerilir.
+              </p>
             </div>
 
             {/* Yöntem seçimi */}
@@ -254,6 +265,30 @@ export function HollowClient() {
                     </svg>
                     Hollow STL İndir
                   </a>
+                )}
+                {outputBlobRef.current && stats && (
+                  <button
+                    onClick={async () => {
+                      if (!outputBlobRef.current || !stats) return;
+                      setBridging(true);
+                      try {
+                        await writeBridge({
+                          meshBlob: outputBlobRef.current,
+                          source: "hollow",
+                          wallThickness: stats.wallThicknessMm,
+                          volumeCm3: stats.volumeAfterCm3,
+                        });
+                        router.push("/remaura/ajur");
+                      } catch {
+                        addLog("✗ HATA: Model ajur sayfasına aktarılamadı.");
+                        setBridging(false);
+                      }
+                    }}
+                    disabled={bridging}
+                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#c4838b,#b76e79,#a65f69)] px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  >
+                    {bridging ? "Aktarılıyor…" : "Bu modele ajur aç →"}
+                  </button>
                 )}
               </div>
             )}

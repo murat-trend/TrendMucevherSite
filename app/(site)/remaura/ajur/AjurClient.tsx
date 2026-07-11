@@ -1,453 +1,762 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import * as THREE from "three";
-import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
-import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
+import { MeshBVH } from "three-mesh-bvh";
+import { AjurViewer, type ViewerMode } from "./AjurViewer";
+import { loadStl, exportStlBlob } from "./lib/stl";
+import { validateOnLoad, detectShell, scanMinWall, MAX_TRIS, type MinWallScan } from "./lib/validate";
+import { autoLevelGeometry } from "./lib/ajurOps";
 import {
-  Upload, Download, RotateCcw, Sparkles, Check, ChevronLeft, ChevronRight, Ruler,
-} from "lucide-react";
-import { AjurViewer, type AjurViewerHandle } from "./AjurViewer";
-import { analyzeModelForAjur, autoLevelGeometry, detectFlatFace, type Axis, type PatternType } from "./lib/ajurOps";
-import { runAjurPipeline, type AjurPipelineProgress } from "./lib/ajurPipeline";
-import { analyzeGeometry, computeWeight, METALS, type MeshAnalysis, type MetalWeight } from "../mesh-temizle/lib/meshOps";
+  detectModelKind, autoMaskRing, autoMaskMedallion, applyBrush, maskedCount,
+  type MaskFrame, type ModelKind,
+} from "./lib/mask";
+import { PATTERNS, patternById } from "./lib/patterns";
+import { planHoles, applyAjur, type AjurParams, type HolePlan } from "./lib/applyAjur";
+import { estimateHollowCavity, gramForMetal } from "./lib/estimate";
+import { CASTING_RULES, type MetalKey } from "./lib/castingRules";
+import { METALS } from "../mesh-temizle/lib/meshOps";
+import { readBridge, writeBridge, clearBridge, type BridgeRecord } from "@/lib/remaura/mesh-bridge";
 
-type LogType = "info" | "ok" | "warn" | "err";
-type Log = { id: number; type: LogType; msg: string };
+// ---------------------------------------------------------------------------
+// Ajur & Arka Kesim — yeniden yapım (PRD v1.0, Temmuz 2026)
+// 5 adım: Yükle → Analiz → Bölge → Ajur → İndir
+// Tamamen tarayıcıda çalışır; dosya sunucuya asla gitmez.
+// ---------------------------------------------------------------------------
 
-// Arka yön = ajurun uygulanacağı yüz. Flip/eksen kullanıcıdan gizli.
-type Dir = "back" | "front" | "top" | "bottom" | "left" | "right";
+type Step = 1 | 2 | 3 | 4 | 5;
 
-const DIRS: { key: Dir; label: string; arrow: string }[] = [
-  { key: "back", label: "Arka", arrow: "⌫" },
-  { key: "front", label: "Ön", arrow: "⌦" },
-  { key: "top", label: "Üst", arrow: "↑" },
-  { key: "bottom", label: "Alt", arrow: "↓" },
-  { key: "left", label: "Sol", arrow: "←" },
-  { key: "right", label: "Sağ", arrow: "→" },
+type ModelState = {
+  geometry: THREE.BufferGeometry;
+  bvh: MeshBVH;
+  tris: number;
+  volumeMm3: number;
+  isShell: boolean;
+  fileName: string;
+};
+
+type ResultState = {
+  geometry: THREE.BufferGeometry;
+  holes: number;
+  volumeBeforeMm3: number;
+  volumeAfterMm3: number;
+  ms: number;
+};
+
+const STEPS: { id: Step; label: string }[] = [
+  { id: 1, label: "Yükle" },
+  { id: 2, label: "Analiz" },
+  { id: 3, label: "Bölge" },
+  { id: 4, label: "Ajur" },
+  { id: 5, label: "İndir" },
 ];
 
-function dirToPlane(dir: Dir, depth: number): { axis: Axis; position: number; flip: boolean } {
-  const d = Math.min(0.95, Math.max(0, depth));
-  switch (dir) {
-    case "back": return { axis: "z", position: d, flip: false };
-    case "front": return { axis: "z", position: 1 - d, flip: true };
-    case "bottom": return { axis: "y", position: d, flip: false };
-    case "top": return { axis: "y", position: 1 - d, flip: true };
-    case "left": return { axis: "x", position: d, flip: false };
-    case "right": return { axis: "x", position: 1 - d, flip: true };
-  }
-}
-function clipToDir(axis: Axis, flip: boolean): Dir {
-  if (axis === "z") return flip ? "front" : "back";
-  if (axis === "y") return flip ? "top" : "bottom";
-  return flip ? "right" : "left";
-}
-
-const PATTERNS: { key: PatternType; label: string; hint: string }[] = [
-  { key: "petek", label: "Petek", hint: "Altıgen — en sağlam köprüler" },
-  { key: "yuvarlak", label: "Yuvarlak", hint: "Daire — yumuşak görünüm" },
-  { key: "baklava", label: "Baklava", hint: "Eşkenar dörtgen — klasik" },
-];
-
-const STEPS = ["Model Yükle", "Arka Yön", "Desen", "Üret"];
+const fmt1 = (x: number) => x.toLocaleString("tr-TR", { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+const fmt2 = (x: number) => x.toLocaleString("tr-TR", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
 
 export function AjurClient() {
-  const [step, setStep] = useState(0);
-  const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null);
-  const [resultGeo, setResultGeo] = useState<THREE.BufferGeometry | null>(null);
-  const [fileName, setFileName] = useState("");
-  const [analysis, setAnalysis] = useState<MeshAnalysis | null>(null);
-  const [weight, setWeight] = useState<MetalWeight | null>(null);
-  const [metalKey, setMetalKey] = useState("au18");
+  const [step, setStep] = useState<Step>(1);
+  const [model, setModel] = useState<ModelState | null>(null);
+  const [result, setResult] = useState<ResultState | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  // Ayarlar
-  const [dir, setDir] = useState<Dir>("back");
-  const [pattern, setPattern] = useState<PatternType>("petek");
-  const [cellsAcross, setCellsAcross] = useState(10);
+  // köprü (iç boşaltmadan geliş)
+  const [bridgeRec, setBridgeRec] = useState<BridgeRecord | null>(null);
+
+  // metal + gram
+  const [metal, setMetal] = useState<MetalKey>("ag925");
+
+  // maske
+  const [kind, setKind] = useState<ModelKind>("medallion");
+  const [frame, setFrame] = useState<MaskFrame | null>(null);
+  const maskRef = useRef<Uint8Array | null>(null);
+  const [maskVersion, setMaskVersion] = useState(0);
+  const [viewerMode, setViewerMode] = useState<ViewerMode>("orbit");
+  const [brushRadius, setBrushRadius] = useState(2);
+
+  // patern parametreleri
+  const [patternId, setPatternId] = useState("oval");
+  const [cellMm, setCellMm] = useState(3.2);
   const [holeScale, setHoleScale] = useState(0.6);
-  const [wallMm, setWallMm] = useState(1.0);
-  const [frontSkin, setFrontSkin] = useState(1.0);     // ön yüzde korunacak min et (mm)
-  const [thinExtent, setThinExtent] = useState(6);     // modelin en ince ekseni (mm) — bilgi
+  const [rotationDeg, setRotationDeg] = useState(0);
+  const [marginMm, setMarginMm] = useState(1.5);
+  const [frontSkinMm, setFrontSkinMm] = useState(1.0);
 
-  // Üretim
-  const [pipeProgress, setPipeProgress] = useState<AjurPipelineProgress | null>(null);
-  const [resultStats, setResultStats] = useState<{ holes: number; strutMm: number; ms: number } | null>(null);
+  // plan (canlı önizleme + sayaç)
+  const [plan, setPlan] = useState<HolePlan | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
+
+  // senaryo
+  const [hollowEstMm3, setHollowEstMm3] = useState<number | null>(null);
+
+  // uygulama süreci
+  const [applying, setApplying] = useState(false);
+  const [applyPct, setApplyPct] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
 
-  const [logs, setLogs] = useState<Log[]>([]);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const viewerRef = useRef<AjurViewerHandle | null>(null);
-  const logId = useRef(0);
+  // sonuç doğrulama
+  const [wallScan, setWallScan] = useState<MinWallScan | null>(null);
+  const [showThin, setShowThin] = useState(true);
 
-  const shown = resultGeo ?? geometry;
-  const noClip = useMemo(() => ({ enabled: false, axis: "z" as const, position: 0.5, flip: false }), []);
-  // Seçili yüz göstergesi — sonuç yokken yön seçimini görselleştir
-  const marker = useMemo(() => {
-    if (resultGeo) return null;
-    const p = dirToPlane(dir, 0);
-    return { axis: p.axis, flip: p.flip };
-  }, [dir, resultGeo]);
+  // kesit
+  const [clipOn, setClipOn] = useState(false);
+  const [clipPos, setClipPos] = useState(0.5);
+  const [clipAxis, setClipAxis] = useState<0 | 1 | 2>(0);
 
-  const addLog = useCallback((type: LogType, msg: string) => {
-    setLogs((p) => [...p, { id: (logId.current += 1), type, msg }].slice(-40));
+  const inputRef = useRef<HTMLInputElement>(null);
+  const rule = CASTING_RULES[metal];
+
+  // ---- açılışta köprü kontrolü (PRD §4.1) ----
+  useEffect(() => {
+    readBridge().then(setBridgeRec).catch(() => setBridgeRec(null));
   }, []);
 
-  // Görüntülenen geometri değişince analiz + gramaj
-  useEffect(() => {
-    if (!shown) { setAnalysis(null); setWeight(null); return; }
-    try { setAnalysis(analyzeGeometry(shown)); setWeight(computeWeight(shown)); }
-    catch { setAnalysis(null); setWeight(null); }
-  }, [shown]);
-
-  function loadFile(file: File) {
-    setFileName(file.name);
-    addLog("info", `Yükleniyor: ${file.name}`);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const raw = new STLLoader().parse(e.target?.result as ArrayBuffer);
-        const geo = autoLevelGeometry(raw).geometry;
-        setGeometry(geo);
-        setResultGeo(null);
-        setResultStats(null);
-        // Arka yön önerisi: ince eksen + DÜZ (detaysız) yüzü arka kabul et
-        try {
-          const a = analyzeModelForAjur(geo);
-          const flat = detectFlatFace(geo, a.thinAxis); // fromMax=true → arka yüksek uçta
-          setDir(clipToDir(a.thinAxis, flat.fromMax));
-          // En ince eksen = model kalınlığı (bilgi); ön et varsayılanı ~%20 (min 0.8)
-          const tExt = Math.min(...a.dims);
-          setThinExtent(+tExt.toFixed(1));
-          setFrontSkin(+Math.max(0.8, Math.min(2.0, tExt * 0.2)).toFixed(1));
-        } catch { /* yok say */ }
-        addLog("ok", "Model yüklendi ve hizalandı.");
-        setStep(1);
-      } catch {
-        addLog("err", "Model okunamadı. Dosya bozuk veya desteklenmeyen olabilir.");
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  }
-
-  function onInput(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]; if (f) loadFile(f);
-  }
-  function onDrop(e: React.DragEvent) {
-    e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) loadFile(f);
-  }
-
-  // Önizleme amaçlı yaklaşık köprü kalınlığı (üretmeden uyarı için)
-  const approxStrut = useMemo(() => {
-    if (!analysis) return null;
-    const dims = [...analysis.dimensions].sort((a, b) => b - a);
-    const faceMax = dims[0]; // en geniş yüz ekseni
-    const cell = faceMax / Math.max(1, cellsAcross);
-    return cell * (1 - holeScale);
-  }, [analysis, cellsAcross, holeScale]);
-
-  async function produce() {
-    if (!geometry) return;
-    setResultGeo(null);
-    setResultStats(null);
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    setPipeProgress({ stage: "prepare", percent: 0, message: "Başlatılıyor…" });
-    addLog("info", "Ajur üretimi başladı.");
+  // ---- yükleme ----
+  const loadModel = useCallback(async (blob: Blob, fileName: string, fromBridge?: BridgeRecord) => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setPlan(null);
+    setWallScan(null);
+    setHollowEstMm3(null);
     try {
-      const res = await runAjurPipeline(
-        {
-          geometry,
-          backPlane: dirToPlane(dir, 0.2),
-          wallMm,
-          pattern,
-          cellsAcross,
-          holeScale,
-          thickness: Math.max(0.8, wallMm),
-          border: Math.max(wallMm, 0.6),
-          decimateTarget: 150000,
-          compose: "drill-back",
-          frontSkinMm: frontSkin,
-        },
-        { mode: "single", execution: "main-thread", signal: ctrl.signal, onProgress: setPipeProgress },
-      );
-      if (res.geometry) {
-        res.geometry.computeVertexNormals();
-        setResultGeo(res.geometry);
+      let geo = await loadStl(blob);
+      const leveled = autoLevelGeometry(geo);
+      if (leveled.changed) geo = leveled.geometry;
+
+      const val = await validateOnLoad(geo);
+      if (!val.ok) {
+        setError(val.error ?? "Model doğrulanamadı.");
+        setLoading(false);
+        return;
       }
-      const s = res.stats;
-      setResultStats({ holes: s.holes, strutMm: s.strutMm, ms: s.ms });
-      addLog("ok", `Tamam — ${s.holes} delik · köprü ${s.strutMm.toFixed(2)}mm · ${(s.ms / 1000).toFixed(1)}s.`);
-      if (s.strutMm < 0.8) addLog("warn", `Köprü ${s.strutMm.toFixed(2)}mm — döküm için ince olabilir.`);
-    } catch (err) {
-      const e = err as Error;
-      if (e.name === "AbortError") addLog("warn", "İptal edildi.");
-      else addLog("err", `Başarısız: ${e.message}`);
+      const bvh = new MeshBVH(geo);
+      const det = detectModelKind(geo, bvh);
+      const k = det.kind;
+      // Yüzükte merkez ışını tüpü 4 kez keser → detectShell yanlış pozitif verir;
+      // yüzük şankı pratikte dolu kabul edilir (köprüden gelen hollow hariç).
+      const isShell = fromBridge?.source === "hollow" ? true : k === "ring" ? false : detectShell(bvh, geo);
+      const auto = k === "ring" && det.ringAxis !== null
+        ? autoMaskRing(geo, det.ringAxis)
+        : autoMaskMedallion(geo);
+
+      maskRef.current = auto.mask;
+      setFrame(auto.frame);
+      setKind(k);
+      setMaskVersion((v) => v + 1);
+      setModel({ geometry: geo, bvh, tris: val.tris, volumeMm3: val.volumeMm3, isShell, fileName });
+      setClipAxis(auto.frame.kind === "cylindrical" ? auto.frame.axisIndex : 2);
+      setStep(2);
+
+      // dolu modelde hollow senaryosu — kaba tahmin (arka planda)
+      if (!isShell) {
+        setTimeout(() => {
+          try {
+            setHollowEstMm3(estimateHollowCavity(geo, bvh, 1.0));
+          } catch { setHollowEstMm3(null); }
+        }, 50);
+      }
+      if (fromBridge) {
+        clearBridge().catch(() => undefined);
+        setBridgeRec(null);
+      }
+    } catch {
+      setError("Dosya okunamadı — geçerli bir STL olduğundan emin olun.");
     } finally {
-      setPipeProgress(null);
+      setLoading(false);
+    }
+  }, []);
+
+  const onFile = useCallback((f: File) => {
+    if (!f.name.toLowerCase().endsWith(".stl")) {
+      setError("Yalnızca STL kabul edilir.");
+      return;
+    }
+    void loadModel(f, f.name);
+  }, [loadModel]);
+
+  // ---- model tipi değişince otomatik maskeyi yenile ----
+  const reAutoMask = useCallback((newKind: ModelKind) => {
+    if (!model) return;
+    const det = detectModelKind(model.geometry, model.bvh);
+    const auto = newKind === "ring"
+      ? autoMaskRing(model.geometry, det.ringAxis ?? 1)
+      : autoMaskMedallion(model.geometry);
+    maskRef.current = auto.mask;
+    setFrame(auto.frame);
+    setKind(newKind);
+    setMaskVersion((v) => v + 1);
+  }, [model]);
+
+  // ---- fırça ----
+  const onPaint = useCallback((p: THREE.Vector3) => {
+    if (!model || !maskRef.current) return;
+    const mode = viewerMode === "brush-remove" ? "remove" : "add";
+    const changed = applyBrush(model.geometry, maskRef.current, p, brushRadius, mode);
+    if (changed > 0) setMaskVersion((v) => v + 1);
+  }, [model, viewerMode, brushRadius]);
+
+  // ---- canlı plan (adım 2 senaryo + adım 4 önizleme) ----
+  useEffect(() => {
+    if (!model || !frame || !maskRef.current || result) { setPlan(null); return; }
+    if (step !== 2 && step !== 4) return;
+    const t = setTimeout(() => {
+      try {
+        const params: AjurParams = { patternId, cellMm, holeScale, rotationDeg, marginMm, frontSkinMm };
+        const p = planHoles(
+          { geometry: model.geometry, bvh: model.bvh, mask: maskRef.current!, frame, isShell: model.isShell },
+          params,
+        );
+        setPlan(p);
+        setPlanError(p.placements.length === 0 ? "Desen bu bölgeye sığmadı — ölçeği küçültün ya da kenar payını azaltın." : null);
+      } catch (e) {
+        setPlan(null);
+        setPlanError((e as Error).message);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [model, frame, step, patternId, cellMm, holeScale, rotationDeg, marginMm, frontSkinMm, maskVersion, result]);
+
+  // ---- uygula ----
+  const runApply = useCallback(async () => {
+    if (!model || !frame || !maskRef.current || !plan || plan.placements.length === 0) return;
+    setApplying(true);
+    setApplyPct(0);
+    setError(null);
+    const ac = new AbortController();
+    abortRef.current = ac;
+    try {
+      const r = await applyAjur(
+        { geometry: model.geometry, bvh: model.bvh, mask: maskRef.current, frame, isShell: model.isShell },
+        plan,
+        { onProgress: (p) => setApplyPct(Math.round(p * 100)), signal: ac.signal },
+      );
+      setResult(r);
+      setStep(5);
+      // sonuç min-et taraması (kırmızı highlight)
+      setTimeout(() => {
+        try {
+          const rbvh = new MeshBVH(r.geometry);
+          setWallScan(scanMinWall(r.geometry, rbvh, CASTING_RULES[metal].minWallHardMm));
+        } catch { setWallScan(null); }
+      }, 60);
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") setError((e as Error).message);
+    } finally {
+      setApplying(false);
       abortRef.current = null;
     }
-  }
+  }, [model, frame, plan, metal]);
 
-  function exportStl() {
-    const g = resultGeo ?? geometry;
-    if (!g) return;
+  // ---- indir + köprüye yaz ----
+  const download = useCallback(() => {
+    if (!result) return;
+    const blob = exportStlBlob(result.geometry);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = (model?.fileName ?? "model.stl").replace(/\.stl$/i, "") + "_ajur.stl";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [result, model]);
+
+  const sendToBridge = useCallback(async () => {
+    if (!result) return;
     try {
-      const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial());
-      const stl = new STLExporter().parse(mesh, { binary: true }) as unknown as BlobPart;
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([stl], { type: "model/stl" }));
-      a.download = (fileName.replace(/\.[^.]+$/, "") || "ajur") + "_ajur.stl";
-      a.click(); URL.revokeObjectURL(a.href);
-      addLog("ok", "STL indirildi.");
-    } catch { addLog("err", "Dışa aktarma başarısız."); }
-  }
+      await writeBridge({
+        meshBlob: exportStlBlob(result.geometry),
+        source: "ajur",
+        volumeCm3: result.volumeAfterMm3 / 1000,
+      });
+      setError(null);
+    } catch {
+      setError("Model köprüye yazılamadı.");
+    }
+  }, [result]);
 
-  function reset() {
-    setStep(0); setGeometry(null); setResultGeo(null); setResultStats(null);
-    setFileName(""); setAnalysis(null); setWeight(null); setDir("back");
-    setPattern("petek"); setCellsAcross(10); setHoleScale(0.6); setWallMm(1.0);
-    setFrontSkin(1.0); setThinExtent(6); setLogs([]);
-  }
+  const reset = useCallback(() => {
+    setModel(null); setResult(null); setPlan(null); setWallScan(null);
+    setError(null); setStep(1); maskRef.current = null; setFrame(null);
+    setViewerMode("orbit"); setClipOn(false); setHollowEstMm3(null);
+  }, []);
 
-  const grams = weight?.weights.find((w) => w.key === metalKey)?.grams;
-  const canNext = step === 0 ? !!geometry : true;
+  // ---- gram sayacı (sabit) ----
+  const gramNow = useMemo(() => {
+    if (result) return gramForMetal(result.volumeAfterMm3, metal);
+    if (!model) return null;
+    const planned = step === 4 && plan ? plan.removedMm3 : 0;
+    return gramForMetal(Math.max(0, model.volumeMm3 - planned), metal);
+  }, [model, result, plan, step, metal]);
+  const gramBefore = model ? gramForMetal(model.volumeMm3, metal) : null;
+
+  const pattern = patternById(patternId);
+  const displayGeo = result ? result.geometry : model?.geometry ?? null;
+  const maskedN = maskRef.current ? maskedCount(maskRef.current) : 0;
+  const bridgeWarn = !!(plan && pattern && plan.bridgeMm < Math.max(rule.minBridgeMm, pattern.minBridgeMm));
 
   return (
     <div className="min-h-screen bg-[#07080a] px-4 py-8 text-white">
-      {/* İlerleme overlay */}
-      {pipeProgress && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="w-[min(92vw,420px)] rounded-2xl border border-[#b76e79]/30 bg-[#0a0b0e] p-6 shadow-2xl">
-            <div className="mb-1 flex items-center gap-2 text-sm font-medium text-[#e6b3bb]">
-              <Sparkles className="h-4 w-4 animate-pulse" /> Ajur üretiliyor
-            </div>
-            <p className="mb-4 text-xs text-white/40">Model boyutuna göre 20–60 sn sürebilir. Pencereyi kapatmayın.</p>
-            <div className="mb-2 flex items-baseline justify-between">
-              <span className="text-sm text-white/80">{pipeProgress.message}</span>
-              <span className="font-mono text-xs text-[#e6b3bb]">%{pipeProgress.percent}</span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full rounded-full bg-[linear-gradient(90deg,#c4838b,#b76e79,#a65f69)] transition-all duration-300"
-                style={{ width: `${pipeProgress.percent}%` }} />
-            </div>
-            <div className="mt-4 flex justify-end">
-              <button onClick={() => abortRef.current?.abort()}
-                className="rounded-full border border-white/15 px-4 py-1.5 text-xs font-medium text-white/70 hover:bg-white/10">İptal</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="mx-auto max-w-5xl">
-        {/* Başlık */}
-        <div className="mb-5 flex items-center justify-between gap-4">
+      <div className="mx-auto max-w-6xl">
+        {/* Başlık + sabit gram sayacı */}
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-[#b76e79]/30 bg-[#b76e79]/10 px-3 py-1 text-xs font-medium text-[#b76e79]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#b76e79]" /> Ajur Aracı
+              <span className="h-1.5 w-1.5 rounded-full bg-[#b76e79]" />
+              Deney / Lab
             </div>
-            <h1 className="font-display text-3xl font-medium tracking-tight">Arkaya ışık geçen ajur</h1>
+            <h1 className="font-display text-3xl font-medium tracking-tight">Ajur & Arka Kesim</h1>
+            <p className="mt-1 text-sm text-white/40">Modeliniz tarayıcınızdan çıkmaz — tüm işlem cihazınızda.</p>
           </div>
-          {geometry && (
-            <button onClick={reset} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-white/60 hover:text-white">
-              <RotateCcw className="h-4 w-4" /> Baştan
-            </button>
-          )}
+
+          {/* CANLI GRAM SAYACI — en görünür öğe (PRD §9) */}
+          <div className="flex items-center gap-3 rounded-2xl border border-[#b76e79]/25 bg-[#b76e79]/[0.07] px-5 py-3">
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-white/40">Tahmini ağırlık</p>
+              <p className="font-mono text-2xl text-[#e8b4bc]">
+                {gramNow === null ? "—" : `${fmt1(gramNow)} g`}
+                {gramBefore !== null && gramNow !== null && gramNow < gramBefore - 0.05 && (
+                  <span className="ml-2 text-sm text-emerald-400">−{fmt1(gramBefore - gramNow)} g</span>
+                )}
+              </p>
+            </div>
+            <select
+              value={metal}
+              onChange={(e) => setMetal(e.target.value as MetalKey)}
+              className="rounded-lg border border-white/10 bg-[#141014] px-2 py-1.5 text-xs text-white/80 outline-none"
+            >
+              {METALS.map((m) => (
+                <option key={m.key} value={m.key}>{m.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Adım göstergesi */}
-        <div className="mb-5 flex items-center gap-2">
-          {STEPS.map((label, i) => (
-            <div key={label} className="flex flex-1 items-center gap-2">
-              <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                i < step ? "bg-[#b76e79] text-white" : i === step ? "bg-[#b76e79] text-white ring-2 ring-[#b76e79]/30 ring-offset-2 ring-offset-[#07080a]" : "bg-white/10 text-white/40"}`}>
-                {i < step ? <Check className="h-4 w-4" /> : i + 1}
-              </div>
-              <span className={`hidden text-xs sm:inline ${i === step ? "font-medium text-white" : "text-white/40"}`}>{label}</span>
-              {i < STEPS.length - 1 && <div className={`h-px flex-1 ${i < step ? "bg-[#b76e79]/50" : "bg-white/10"}`} />}
+        <div className="mb-5 flex items-center gap-1.5">
+          {STEPS.map((s, i) => (
+            <div key={s.id} className="flex items-center gap-1.5">
+              {i > 0 && <div className="h-px w-5 bg-white/10" />}
+              <button
+                onClick={() => {
+                  if (s.id < step && !applying) {
+                    if (s.id < 5) { setResult(null); setWallScan(null); }
+                    setStep(s.id);
+                  }
+                }}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  step === s.id
+                    ? "border-[#b76e79]/50 bg-[#b76e79]/20 text-[#e8b4bc]"
+                    : s.id < step
+                      ? "border-white/15 bg-white/[0.05] text-white/60 hover:text-white"
+                      : "border-white/[0.06] text-white/25"
+                }`}
+              >
+                {s.id}. {s.label}
+              </button>
             </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_360px]">
-          {/* SOL: viewer (1. adım hariç) */}
-          {step > 0 && (
-            <div className="relative h-[460px] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#07080a]">
-              <AjurViewer ref={viewerRef} geometry={shown} ghost={null} clip={noClip} wireframe={false} gizmo={false} marker={marker} />
-              <div className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white/60 backdrop-blur">
-                {resultGeo ? "Sonuç" : fileName || "Model"}
-              </div>
-            </div>
-          )}
-
-          {/* SAĞ (veya 1. adımda tam genişlik): adım paneli */}
-          <div className={`flex flex-col gap-4 ${step === 0 ? "lg:col-span-2" : ""}`}>
-
-            {/* ADIM 1 — Yükle */}
-            {step === 0 && (
-              <div
-                onDragOver={(e) => e.preventDefault()} onDrop={onDrop}
-                onClick={() => inputRef.current?.click()}
-                className="flex min-h-[280px] cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-white/10 bg-white/[0.02] px-6 text-center hover:border-[#b76e79]/40 hover:bg-[#b76e79]/5"
-              >
-                <input ref={inputRef} type="file" accept=".stl" className="hidden" onChange={onInput} />
-                <Upload className="h-10 w-10 text-white/30" />
-                <p className="text-base font-medium text-white/70">STL dosyanı sürükle veya tıkla</p>
-                <p className="max-w-sm text-xs text-white/35">3D modelini yükle. Model otomatik hizalanır, sonraki adımda arka yüzü seçeceksin.</p>
-              </div>
-            )}
-
-            {/* ADIM 2 — Arka yön */}
-            {step === 1 && (
-              <div className="flex flex-col gap-4 rounded-2xl border border-[#b76e79]/20 bg-[#b76e79]/[0.06] p-5">
-                <div>
-                  <h2 className="text-sm font-semibold text-white/90">Ajur hangi yüze uygulansın?</h2>
-                  <p className="mt-1 text-xs text-white/40">
-                    Modelin <b>düz arka yüzünü</b> seç (figürün OLMADIĞI taraf). Soldaki modelde seçtiğin yüz <span className="text-[#ff8fa3]">gül renkle</span> parlar — figürün üstündeyse başka yön seç. Önerilen seçili geldi.
-                  </p>
-                </div>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {DIRS.map((d) => (
-                    <button key={d.key} onClick={() => setDir(d.key)}
-                      className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-sm font-medium transition-colors ${dir === d.key ? "bg-[#b76e79] text-white" : "bg-white/10 text-white/60 hover:bg-white/15"}`}>
-                      <span className="leading-none">{d.arrow}</span> {d.label}
-                    </button>
-                  ))}
-                </div>
-                <button onClick={() => { const v = viewerRef.current?.getViewClip(); if (v) setDir(clipToDir(v.axis, v.flip)); }}
-                  className="self-start rounded-md bg-white/10 px-3 py-1.5 text-[11px] text-white/70 hover:bg-white/15">
-                  Şu an baktığım yüzü seç
-                </button>
-              </div>
-            )}
-
-            {/* ADIM 3 — Desen */}
-            {step === 2 && (
-              <div className="flex flex-col gap-4 rounded-2xl border border-[#b76e79]/20 bg-[#b76e79]/[0.06] p-5">
-                <div>
-                  <h2 className="text-sm font-semibold text-white/90">Desen ve ayarlar</h2>
-                  <p className="mt-1 text-xs text-white/40">Delik şekli, sıklığı ve duvar kalınlığını seç.</p>
-                </div>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {PATTERNS.map((p) => (
-                    <button key={p.key} onClick={() => setPattern(p.key)}
-                      className={`rounded-lg px-2 py-2.5 text-sm font-medium transition-colors ${pattern === p.key ? "bg-[#b76e79] text-white" : "bg-white/10 text-white/60 hover:bg-white/15"}`}>
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="-mt-2 text-[11px] text-white/35">{PATTERNS.find((p) => p.key === pattern)?.hint}</p>
-
-                <Slider label="Sıklık" value={cellsAcross} min={4} max={24} step={1}
-                  onChange={setCellsAcross} fmt={(v) => `${v} göz`} />
-                <Slider label="Delik boyutu" value={holeScale} min={0.3} max={0.9} step={0.02}
-                  onChange={setHoleScale} fmt={(v) => `%${(v * 100).toFixed(0)}`} />
-                <Slider label="Duvar" value={wallMm} min={0.5} max={2.0} step={0.1}
-                  onChange={setWallMm} fmt={(v) => `${v.toFixed(1)} mm`} />
-                <Slider label="Ön et koru" value={frontSkin} min={0.5} max={2.5} step={0.1}
-                  onChange={setFrontSkin} fmt={(v) => `${v.toFixed(1)} mm`} />
-                <p className="-mt-1 text-[11px] text-white/35">
-                  Model kalınlığı ≈ {thinExtent.toFixed(1)} mm. Delik her noktada ön yüze <b>{frontSkin.toFixed(1)} mm</b> kala durur — ön figür asla delinmez. Artır = daha güvenli; azalt = daha derin/ışıklı.
-                </p>
-
-                {frontSkin > thinExtent - wallMm && (
-                  <div className="rounded-lg border border-amber-400/30 bg-amber-400/[0.06] px-3 py-2 text-[11px] text-amber-300/90">
-                    ⚠ Ön et + duvar, model kalınlığını aşıyor — bu modelde çoğu delik açılamayabilir. Ön eti ya da duvarı küçült.
-                  </div>
-                )}
-                {approxStrut !== null && (
-                  <div className={`rounded-lg border px-3 py-2 text-[11px] ${approxStrut < 0.8 ? "border-amber-400/30 bg-amber-400/[0.06] text-amber-300/90" : "border-white/10 bg-white/[0.03] text-white/50"}`}>
-                    Tahmini köprü kalınlığı ≈ <b>{approxStrut.toFixed(2)} mm</b>
-                    {approxStrut < 0.8 && " — döküm için ince. Delik boyutunu küçült ya da sıklığı azalt."}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ADIM 4 — Üret */}
-            {step === 3 && (
-              <div className="flex flex-col gap-4 rounded-2xl border border-[#b76e79]/20 bg-[#b76e79]/[0.06] p-5">
-                <div>
-                  <h2 className="text-sm font-semibold text-white/90">Üret</h2>
-                  <p className="mt-1 text-xs text-white/40">Ayarların özeti aşağıda. Hazırsan üret.</p>
-                </div>
-                <div className="space-y-1.5 rounded-lg bg-white/[0.03] px-3 py-2.5 text-xs">
-                  <SumRow k="Yüz" v={DIRS.find((d) => d.key === dir)?.label ?? dir} />
-                  <SumRow k="Desen" v={PATTERNS.find((p) => p.key === pattern)?.label ?? pattern} />
-                  <SumRow k="Sıklık" v={`${cellsAcross} göz`} />
-                  <SumRow k="Delik" v={`%${(holeScale * 100).toFixed(0)}`} />
-                  <SumRow k="Duvar" v={`${wallMm.toFixed(1)} mm`} />
-                  <SumRow k="Ön et koru" v={`${frontSkin.toFixed(1)} mm`} />
-                </div>
-
-                {!resultGeo ? (
-                  <button onClick={produce} disabled={!!pipeProgress}
-                    className="inline-flex items-center justify-center gap-2 rounded-full bg-[linear-gradient(135deg,#c4838b,#b76e79,#a65f69)] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50">
-                    <Sparkles className="h-4 w-4" /> Ajur üret
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_370px]">
+          {/* SOL: Sahne */}
+          <div className="flex flex-col gap-3">
+            <div className="relative h-[520px] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#05060a]">
+              <AjurViewer
+                geometry={displayGeo}
+                bvh={result ? null : model?.bvh ?? null}
+                mode={step === 3 ? viewerMode : "orbit"}
+                brushRadius={brushRadius}
+                mask={result ? null : maskRef.current}
+                maskVersion={maskVersion}
+                thinVerts={result && showThin ? wallScan?.thinVerts ?? null : null}
+                clip={{ enabled: clipOn, axis: clipAxis, position: clipPos }}
+                holePreview={step === 4 && !result ? plan?.placements ?? null : null}
+                onPaint={onPaint}
+              />
+              {applying && (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/70 backdrop-blur-sm">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#b76e79]/30 border-t-[#b76e79]" />
+                  <p className="text-sm text-white/70">Ajur uygulanıyor… %{applyPct}</p>
+                  <button
+                    onClick={() => abortRef.current?.abort()}
+                    className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-white/60 hover:text-white"
+                  >
+                    İptal
                   </button>
-                ) : (
+                </div>
+              )}
+            </div>
+
+            {/* Kesit kontrolü — tek tıkla (PRD §9) */}
+            {model && (
+              <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-2.5">
+                <button
+                  onClick={() => setClipOn((v) => !v)}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    clipOn
+                      ? "border-[#b76e79]/40 bg-[#b76e79]/15 text-[#e8b4bc]"
+                      : "border-white/10 bg-white/[0.03] text-white/50 hover:text-white/80"
+                  }`}
+                >
+                  Kesit görünümü
+                </button>
+                {clipOn && (
                   <>
-                    <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/[0.06] px-3 py-2.5 text-xs text-emerald-300/90">
-                      ✓ Hazır{resultStats ? ` — ${resultStats.holes} delik · köprü ${resultStats.strutMm.toFixed(2)}mm · ${(resultStats.ms / 1000).toFixed(1)}s` : ""}.
-                      Soldan kontrol et; iyiyse indir.
+                    <div className="flex gap-1">
+                      {(["X", "Y", "Z"] as const).map((ax, i) => (
+                        <button
+                          key={ax}
+                          onClick={() => setClipAxis(i as 0 | 1 | 2)}
+                          className={`rounded px-2 py-1 text-[11px] ${clipAxis === i ? "bg-[#b76e79]/25 text-[#e8b4bc]" : "text-white/40 hover:text-white/70"}`}
+                        >
+                          {ax}
+                        </button>
+                      ))}
                     </div>
-                    <button onClick={exportStl}
-                      className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-4 py-3 text-sm font-semibold text-black">
-                      <Download className="h-4 w-4" /> STL indir
-                    </button>
-                    <button onClick={() => { setResultGeo(null); setResultStats(null); setStep(2); }}
-                      className="inline-flex items-center justify-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs font-medium text-white/70 hover:bg-white/10">
-                      Ayarları değiştir
-                    </button>
+                    <input
+                      type="range" min={0.02} max={0.98} step={0.01}
+                      value={clipPos}
+                      onChange={(e) => setClipPos(Number(e.target.value))}
+                      className="range-slider w-44"
+                    />
                   </>
                 )}
+                {result && wallScan && (
+                  <label className="ml-auto flex items-center gap-2 text-xs text-white/50">
+                    <input type="checkbox" checked={showThin} onChange={(e) => setShowThin(e.target.checked)} />
+                    İnce bölgeleri göster
+                  </label>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* SAĞ: Adım paneli */}
+          <div className="flex flex-col gap-4">
+            {error && (
+              <div className="rounded-2xl border border-red-500/25 bg-red-500/[0.07] p-4 text-sm text-red-300">
+                <p>{error}</p>
+                {error.includes("Mesh Temizleme") && (
+                  <Link href="/remaura/mesh-temizle" className="mt-2 inline-block text-xs font-medium text-[#e8b4bc] underline">
+                    Mesh Temizleme aracını aç →
+                  </Link>
+                )}
               </div>
             )}
 
-            {/* Gramaj (model varken) */}
-            {step > 0 && weight && (
-              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
-                <span className="mb-2 flex items-center gap-1.5 text-xs font-medium text-white/60">
-                  <Ruler className="h-3.5 w-3.5" /> Tahmini Gramaj
-                </span>
-                <div className="mb-2 flex flex-wrap gap-1">
-                  {METALS.map((m) => (
-                    <button key={m.key} onClick={() => setMetalKey(m.key)}
-                      className={`rounded-md px-2 py-0.5 text-[10px] font-medium ${metalKey === m.key ? "bg-[#b76e79] text-white" : "bg-white/10 text-white/60 hover:bg-white/15"}`}>
-                      {m.label}
+            {/* ADIM 1 — Yükle */}
+            {step === 1 && (
+              <>
+                {bridgeRec && (
+                  <div className="rounded-2xl border border-[#b76e79]/25 bg-[#b76e79]/[0.07] p-4">
+                    <p className="text-sm font-medium text-[#e8b4bc]">
+                      {bridgeRec.source === "hollow"
+                        ? "İç boşaltmadan gelen model"
+                        : bridgeRec.source === "ajur"
+                          ? "Önceki ajur çıktısı"
+                          : "Dönüştürücüden gelen model"}
+                    </p>
+                    <p className="mt-1 text-xs text-white/50">
+                      {fmt2(bridgeRec.volumeCm3)} cm³
+                      {bridgeRec.wallThickness ? ` · ${fmt1(bridgeRec.wallThickness)} mm duvar` : ""}
+                      {" · "}
+                      {Math.round((Date.now() - bridgeRec.timestamp) / 60000)} dk önce
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={() => void loadModel(bridgeRec.meshBlob, "hollow_model.stl", bridgeRec)}
+                        className="rounded-lg bg-[linear-gradient(135deg,#c4838b,#b76e79)] px-3 py-2 text-xs font-medium text-white"
+                      >
+                        Bu modelle devam et
+                      </button>
+                      <button
+                        onClick={() => { clearBridge().catch(() => undefined); setBridgeRec(null); }}
+                        className="rounded-lg border border-white/10 px-3 py-2 text-xs text-white/50 hover:text-white"
+                      >
+                        Yok say
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) onFile(f); }}
+                  onClick={() => inputRef.current?.click()}
+                  className="flex min-h-[160px] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-4 text-center transition-colors hover:border-[#b76e79]/40 hover:bg-[#b76e79]/5"
+                >
+                  <input
+                    ref={inputRef} type="file" accept=".stl" className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }}
+                  />
+                  {loading ? (
+                    <>
+                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#b76e79]/30 border-t-[#b76e79]" />
+                      <p className="text-sm text-white/50">Doğrulanıyor…</p>
+                    </>
+                  ) : (
+                    <>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/40">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="17 8 12 3 7 8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
+                      </svg>
+                      <p className="text-sm text-white/50">STL sürükle veya tıkla</p>
+                      <p className="text-[11px] text-white/25">Maks. {(MAX_TRIS / 1000).toFixed(0)}K poligon · watertight zorunlu</p>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* ADIM 2 — Analiz + senaryolar */}
+            {step === 2 && model && (
+              <>
+                <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
+                  <p className="mb-3 text-sm font-medium text-white/70">Model raporu</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Stat label="Hacim" value={`${fmt2(model.volumeMm3 / 1000)} cm³`} />
+                    <Stat label="Poligon" value={`${(model.tris / 1000).toFixed(0)}K`} />
+                    <Stat label="Yapı" value={model.isShell ? "İçi boş (kabuk)" : "Dolu"} />
+                    <Stat label="Dosya" value={model.fileName} />
+                  </div>
+                  <div className="mt-3">
+                    <p className="mb-1.5 text-xs text-white/40">Model tipi</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => reAutoMask("ring")}
+                        className={`rounded-xl border px-3 py-2 text-xs font-medium ${kind === "ring" ? "border-[#b76e79]/40 bg-[#b76e79]/15 text-[#e8b4bc]" : "border-white/10 text-white/50"}`}
+                      >
+                        Yüzük — iç şank
+                      </button>
+                      <button
+                        onClick={() => reAutoMask("medallion")}
+                        className={`rounded-xl border px-3 py-2 text-xs font-medium ${kind === "medallion" ? "border-[#b76e79]/40 bg-[#b76e79]/15 text-[#e8b4bc]" : "border-white/10 text-white/50"}`}
+                      >
+                        Madalyon — arka plaka
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {!model.isShell && (
+                  <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-4 text-xs leading-relaxed text-amber-200/90">
+                    Bu model iç boşaltılmamış; ajur delikleri boşluğa açılmaz, kör biter.
+                    Önce iç boşaltma öneriyoruz.{" "}
+                    <Link href="/remaura/hollow" className="font-medium underline">İç Boşaltma aracı →</Link>
+                  </div>
+                )}
+
+                {/* Senaryo kartları */}
+                <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
+                  <p className="mb-3 text-sm font-medium text-white/70">
+                    Senaryolar ({METALS.find((m) => m.key === metal)?.label})
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <Scenario label="Mevcut durum" grams={gramForMetal(model.volumeMm3, metal)} />
+                    <Scenario
+                      label="Ajur (bu sayfada)"
+                      grams={plan ? gramForMetal(model.volumeMm3 - plan.removedMm3, metal) : null}
+                      accent
+                    />
+                    {!model.isShell && (
+                      <Scenario
+                        label="İç boşaltma (1.0 mm duvar)"
+                        grams={hollowEstMm3 !== null ? gramForMetal(model.volumeMm3 - hollowEstMm3, metal) : null}
+                        href="/remaura/hollow"
+                      />
+                    )}
+                  </div>
+                  <p className="mt-2 text-[11px] text-white/25">Tahminler ±%10 — kesin değer "Uygula" sonrası hesaplanır.</p>
+                </div>
+
+                <button
+                  onClick={() => setStep(3)}
+                  className="w-full rounded-xl bg-[linear-gradient(135deg,#c4838b,#b76e79,#a65f69)] px-6 py-3 text-sm font-medium text-white hover:opacity-90"
+                >
+                  Bölge seçimine geç →
+                </button>
+              </>
+            )}
+
+            {/* ADIM 3 — Güvenli bölge */}
+            {step === 3 && model && (
+              <>
+                <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
+                  <p className="mb-1 text-sm font-medium text-white/70">Güvenli bölge</p>
+                  <p className="mb-3 text-xs leading-relaxed text-white/40">
+                    Gül rengi alan işlenecek bölgedir. Fırça ile ekleyip çıkarabilirsiniz —
+                    işlem bu bölgenin dışına asla taşmaz.
+                  </p>
+                  <div className="mb-3 grid grid-cols-3 gap-2">
+                    <ModeBtn active={viewerMode === "orbit"} onClick={() => setViewerMode("orbit")} label="Döndür" />
+                    <ModeBtn active={viewerMode === "brush-add"} onClick={() => setViewerMode("brush-add")} label="Fırça +" />
+                    <ModeBtn active={viewerMode === "brush-remove"} onClick={() => setViewerMode("brush-remove")} label="Fırça −" />
+                  </div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-xs text-white/40">Fırça boyutu</span>
+                    <span className="font-mono text-xs text-[#e8b4bc]">{fmt1(brushRadius)} mm</span>
+                  </div>
+                  <input
+                    type="range" min={0.5} max={8} step={0.1}
+                    value={brushRadius}
+                    onChange={(e) => setBrushRadius(Number(e.target.value))}
+                    className="range-slider w-full"
+                  />
+                  <div className="mt-3 flex items-center justify-between text-xs">
+                    <span className="text-white/30">{maskedN.toLocaleString("tr-TR")} vertex seçili</span>
+                    <button onClick={() => reAutoMask(kind)} className="text-[#e8b4bc]/70 underline hover:text-[#e8b4bc]">
+                      Otomatik tespite dön
                     </button>
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setViewerMode("orbit"); setStep(4); }}
+                  disabled={maskedN === 0}
+                  className="w-full rounded-xl bg-[linear-gradient(135deg,#c4838b,#b76e79,#a65f69)] px-6 py-3 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+                >
+                  Patern seçimine geç →
+                </button>
+              </>
+            )}
+
+            {/* ADIM 4 — Patern + önizleme */}
+            {step === 4 && model && (
+              <>
+                <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
+                  <p className="mb-2 text-sm font-medium text-white/70">Patern</p>
+                  {(["fonksiyonel", "dekoratif"] as const).map((cat) => (
+                    <div key={cat} className="mb-2 last:mb-0">
+                      <p className="mb-1.5 text-[11px] uppercase tracking-wide text-white/25">
+                        {cat === "fonksiyonel" ? "Fonksiyonel" : "Dekoratif"}
+                      </p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {PATTERNS.filter((p) => p.category === cat).map((p) => (
+                          <button
+                            key={p.id}
+                            onClick={() => { setPatternId(p.id); setCellMm(p.defaultCellMm); }}
+                            className={`rounded-lg border px-2.5 py-1.5 text-left text-xs transition-colors ${
+                              patternId === p.id
+                                ? "border-[#b76e79]/40 bg-[#b76e79]/15 text-[#e8b4bc]"
+                                : "border-white/[0.07] text-white/50 hover:border-white/20"
+                            }`}
+                          >
+                            {p.labelTr}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
-                <div className="flex items-baseline justify-between rounded-lg border border-[#b76e79]/20 bg-[#b76e79]/[0.06] px-3 py-2">
-                  <span className="text-[11px] text-white/50">Hacim {weight.volumeCm3.toFixed(2)} cm³</span>
-                  <span className="font-mono text-base font-semibold text-[#e6b3bb]">{grams?.toFixed(2)} g</span>
+
+                <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
+                  {pattern?.layout !== "central" && (
+                    <Slider label="Ölçek (hücre)" value={cellMm} min={1.5} max={10} step={0.1} unit="mm" onChange={setCellMm} />
+                  )}
+                  <Slider label="Delik yoğunluğu" value={holeScale} min={0.25} max={0.9} step={0.01} unit="" onChange={setHoleScale} />
+                  <Slider label="Döndürme" value={rotationDeg} min={0} max={180} step={5} unit="°" onChange={setRotationDeg} />
+                  <Slider label="Kenar payı" value={marginMm} min={1} max={4} step={0.1} unit="mm" onChange={setMarginMm} />
+                  {!model.isShell && (
+                    <Slider label="Ön et koruması" value={frontSkinMm} min={0.5} max={2.5} step={0.1} unit="mm" onChange={setFrontSkinMm} />
+                  )}
                 </div>
-              </div>
+
+                <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4 text-xs">
+                  {plan ? (
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex justify-between">
+                        <span className="text-white/40">Delik</span>
+                        <span className="font-mono text-white/80">{plan.placements.length}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/40">Köprü (tahmini)</span>
+                        <span className={`font-mono ${bridgeWarn ? "text-amber-400" : "text-white/80"}`}>{fmt2(plan.bridgeMm)} mm</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/40">Tahmini kazanç</span>
+                        <span className="font-mono text-emerald-400">−{fmt1(gramForMetal(plan.removedMm3, metal))} g</span>
+                      </div>
+                      {bridgeWarn && (
+                        <p className="mt-1 leading-relaxed text-amber-300/90">
+                          Köprü {fmt2(plan.bridgeMm)} mm — bu metal için önerilen alt sınır{" "}
+                          {fmt1(Math.max(rule.minBridgeMm, pattern?.minBridgeMm ?? 0))} mm. Yoğunluğu azaltın ya da ölçeği büyütün.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-white/30">{planError ?? "Önizleme hesaplanıyor…"}</p>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => void runApply()}
+                  disabled={!plan || plan.placements.length === 0 || applying}
+                  className="w-full rounded-xl bg-[linear-gradient(135deg,#c4838b,#b76e79,#a65f69)] px-6 py-3.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+                >
+                  Uygula — gerçek delikleri aç
+                </button>
+              </>
             )}
 
-            {/* Navigasyon */}
-            <div className="flex items-center gap-2">
-              {step > 0 && (
-                <button onClick={() => setStep((s) => Math.max(0, s - 1))}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-4 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10">
-                  <ChevronLeft className="h-4 w-4" /> Geri
-                </button>
-              )}
-              {step < STEPS.length - 1 && (
-                <button onClick={() => canNext && setStep((s) => s + 1)} disabled={!canNext}
-                  className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-[linear-gradient(135deg,#c4838b,#b76e79,#a65f69)] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40">
-                  İleri <ChevronRight className="h-4 w-4" />
-                </button>
-              )}
-            </div>
+            {/* ADIM 5 — Doğrulama + indir */}
+            {step === 5 && result && model && (
+              <>
+                <div className="rounded-2xl border border-[#b76e79]/20 bg-[#b76e79]/5 p-4">
+                  <p className="mb-3 text-sm font-medium text-[#e8b4bc]">Sonuç</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Stat label="Önce" value={`${fmt1(gramForMetal(result.volumeBeforeMm3, metal))} g`} />
+                    <Stat label="Sonra" value={`${fmt1(gramForMetal(result.volumeAfterMm3, metal))} g`} />
+                    <Stat
+                      label="Kazanç"
+                      value={`−%${(((result.volumeBeforeMm3 - result.volumeAfterMm3) / result.volumeBeforeMm3) * 100).toFixed(1)}`}
+                    />
+                    <Stat label="Delik" value={String(result.holes)} />
+                  </div>
+                </div>
 
-            {/* Son birkaç mesaj */}
-            {logs.length > 0 && (
-              <div className="rounded-xl border border-white/[0.06] bg-[#030712] px-3 py-2 font-mono text-[11px] leading-relaxed">
-                {logs.slice(-4).map((l) => (
-                  <div key={l.id} className={l.type === "err" ? "text-red-400" : l.type === "ok" ? "text-emerald-400" : l.type === "warn" ? "text-amber-400" : "text-white/50"}>{l.msg}</div>
-                ))}
-              </div>
+                <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4 text-xs leading-relaxed">
+                  <p className="mb-2 text-sm font-medium text-white/70">Doğrulama</p>
+                  <p className="text-emerald-400">✓ Watertight (kapalı katı)</p>
+                  {wallScan ? (
+                    wallScan.thinCount > 0 ? (
+                      <p className="mt-1 text-red-400">
+                        ⚠ {wallScan.thinCount} noktada et {fmt2(rule.minWallHardMm)} mm altında (en ince {fmt2(wallScan.minFoundMm)} mm)
+                        — kırmızı bölgeler döküm riski taşır. Yoğunluğu azaltıp yeniden deneyebilirsiniz.
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-emerald-400">✓ Et kalınlığı {fmt2(rule.minWallHardMm)} mm üzerinde</p>
+                    )
+                  ) : (
+                    <p className="mt-1 text-white/30">Et kalınlığı taranıyor…</p>
+                  )}
+                </div>
+
+                <button
+                  onClick={download}
+                  className="w-full rounded-xl bg-[linear-gradient(135deg,#c4838b,#b76e79,#a65f69)] px-6 py-3.5 text-sm font-medium text-white hover:opacity-90"
+                >
+                  Ajurlu STL indir
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setResult(null); setWallScan(null); setStep(4); }}
+                    className="flex-1 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-white/60 hover:text-white"
+                  >
+                    ← Ayarları değiştir
+                  </button>
+                  <button
+                    onClick={() => void sendToBridge()}
+                    className="flex-1 rounded-xl border border-[#b76e79]/30 bg-[#b76e79]/10 px-4 py-2.5 text-xs font-medium text-[#e8b4bc] hover:opacity-80"
+                  >
+                    Diğer araçlara aktar
+                  </button>
+                </div>
+                <button onClick={reset} className="text-xs text-white/30 underline hover:text-white/60">
+                  Yeni model yükle
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -456,26 +765,61 @@ export function AjurClient() {
   );
 }
 
-function SumRow({ k, v }: { k: string; v: string }) {
+// ---- küçük UI parçaları ----
+
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-white/45">{k}</span>
-      <span className="font-medium text-white/85">{v}</span>
+    <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2">
+      <p className="text-[11px] text-white/40">{label}</p>
+      <p className="truncate font-mono text-sm text-white">{value}</p>
     </div>
   );
 }
 
-function Slider({ label, value, min, max, step, onChange, fmt }: {
-  label: string; value: number; min: number; max: number; step: number;
-  onChange: (v: number) => void; fmt: (v: number) => string;
+function Scenario({ label, grams, accent, href }: { label: string; grams: number | null; accent?: boolean; href?: string }) {
+  const inner = (
+    <div className={`flex items-center justify-between rounded-xl border px-3 py-2.5 ${
+      accent ? "border-[#b76e79]/30 bg-[#b76e79]/10" : "border-white/[0.06] bg-white/[0.03]"
+    }`}>
+      <span className={`text-xs ${accent ? "text-[#e8b4bc]" : "text-white/50"}`}>
+        {label}{href ? " →" : ""}
+      </span>
+      <span className="font-mono text-sm text-white">{grams === null ? "…" : `~${fmt1(grams)} g`}</span>
+    </div>
+  );
+  return href ? <Link href={href}>{inner}</Link> : inner;
+}
+
+function ModeBtn({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-lg border px-2 py-2 text-xs font-medium transition-colors ${
+        active ? "border-[#b76e79]/40 bg-[#b76e79]/15 text-[#e8b4bc]" : "border-white/10 text-white/40 hover:text-white/70"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function Slider({ label, value, min, max, step, unit, onChange }: {
+  label: string; value: number; min: number; max: number; step: number; unit: string;
+  onChange: (v: number) => void;
 }) {
   return (
-    <div className="flex items-center gap-3">
-      <span className="w-20 shrink-0 text-xs text-white/60">{label}</span>
-      <input type="range" min={min} max={max} step={step} value={value}
+    <div className="mb-3 last:mb-0">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-xs text-white/40">{label}</span>
+        <span className="font-mono text-xs text-[#e8b4bc]">
+          {value.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}{unit}
+        </span>
+      </div>
+      <input
+        type="range" min={min} max={max} step={step} value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="range-slider flex-1 min-w-[80px]" />
-      <span className="w-16 shrink-0 text-right font-mono text-xs text-white/60">{fmt(value)}</span>
+        className="range-slider w-full"
+      />
     </div>
   );
 }
