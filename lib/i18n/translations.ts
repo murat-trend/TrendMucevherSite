@@ -350,7 +350,6 @@ export const translations = {
       aciLab: "Açı Lab",
       uvMap: "UV Haritalama",
       yuzukDene: "Yüzük Dene",
-      kolyeDene: "Kolye Dene",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",
@@ -1174,7 +1173,6 @@ export const translations = {
       aciLab: "Angle Lab",
       uvMap: "UV Mapping",
       yuzukDene: "Ring Try-On",
-      kolyeDene: "Necklace Try-On",
     },
     remauraWorkspace: {
       title: "Trend Mücevher",

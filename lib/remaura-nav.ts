@@ -29,7 +29,6 @@ export type RemauraNavKey =
   | 'aciLab'
   | 'uvMap'
   | 'yuzukDene'
-  | 'kolyeDene'
 
 export type RemauraCategory = {
   id: string
@@ -295,15 +294,6 @@ export const REMAURA_CATEGORIES: RemauraCategory[] = [
     labelKey: 'yuzukDene',
     icon: '💍',
     path: '/remaura/yuzuk-dene',
-    accessType: 'restricted',
-    isSuperAdminOnly: true,
-    isActive: true,
-  },
-  {
-    id: 'kolye-dene',
-    labelKey: 'kolyeDene',
-    icon: '📿',
-    path: '/remaura/kolye-dene',
     accessType: 'restricted',
     isSuperAdminOnly: true,
     isActive: true,

@@ -157,7 +157,7 @@ function coverMap(
   return { x: nx * dispW - offX, y: ny * dispH - offY, scale };
 }
 
-function KolyeDeneInner() {
+function KolyeDeneInner({ onBack }: { onBack?: () => void }) {
   const searchParams = useSearchParams();
   const modelId = searchParams.get("model"); // /public/models/necklaces/{id}.glb
   const debug = searchParams.get("debug") === "1";
@@ -670,7 +670,7 @@ function KolyeDeneInner() {
             </button>
 
             <button
-              onClick={() => history.back()}
+              onClick={() => (onBack ? onBack() : history.back())}
               className="rounded-xl border border-white/[0.15] px-5 py-2.5 text-sm text-white/80 transition hover:bg-white/5"
             >
               {t.back}
@@ -682,10 +682,10 @@ function KolyeDeneInner() {
   );
 }
 
-export function KolyeDeneClient() {
+export function KolyeDeneClient({ onBack }: { onBack?: () => void }) {
   return (
     <Suspense fallback={null}>
-      <KolyeDeneInner />
+      <KolyeDeneInner onBack={onBack} />
     </Suspense>
   );
 }

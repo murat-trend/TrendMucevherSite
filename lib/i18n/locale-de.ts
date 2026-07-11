@@ -345,7 +345,6 @@ export const deMessages = {
     aciLab: "Winkel-Labor",
     uvMap: "UV-Mapping",
     yuzukDene: "Ring-Anprobe",
-    kolyeDene: "Ketten-Anprobe",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",

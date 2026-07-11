@@ -345,7 +345,6 @@ export const ruMessages = {
     aciLab: "Лаб ракурсов",
     uvMap: "UV-развёртка",
     yuzukDene: "Примерка кольца",
-    kolyeDene: "Примерка колье",
   },
   remauraWorkspace: {
     title: "Trend Mücevher",
