@@ -226,7 +226,8 @@ export type HollowAjurOpts = {
 };
 
 // İşaretli mesafe gridini kur (negatif=iç) + trilineer örnekleyici döndür.
-function buildSignedGrid(geometry: THREE.BufferGeometry, gridMax: number, onProgress?: (p: number) => void) {
+// (hollow.ts de kullanır — sayfa içi iç boşaltma)
+export function buildSignedGrid(geometry: THREE.BufferGeometry, gridMax: number, onProgress?: (p: number) => void) {
   const src = geometry.clone(); src.deleteAttribute("normal"); src.deleteAttribute("uv");
   const indexed = mergeVertices(src);
   const bvh = new MeshBVH(indexed);

@@ -140,14 +140,18 @@ export function planHoles(ctx: PlanCtx, params: AjurParams): HolePlan {
     }
     bridgeMm = Math.max(0.05, Math.min(spec.strideU - polyW, spec.strideV - polyH));
 
-    // döndürülmüş kafes tüm sınırları kapsasın → genişletilmiş yarıçap
+    // döndürülmüş kafes tüm sınırları kapsasın → genişletilmiş yarıçap.
+    // Kafes MERKEZE hizalı başlar (lv=0 satırı bant ortasında) — dar bantlarda
+    // yarım-adım kayma tüm satırı kenar payına düşürüp deliksiz bırakıyordu.
     const spanU = bounds.maxU - bounds.minU;
     const spanV = bounds.maxV - bounds.minV;
     const half = Math.hypot(spanU, spanV) / 2 + params.cellMm;
-    let row = 0;
-    for (let lv = -half; lv <= half; lv += spec.strideV, row += 1) {
+    const v0 = -Math.floor(half / spec.strideV) * spec.strideV;
+    const u0 = -Math.floor(half / spec.strideU) * spec.strideU;
+    let row = Math.round(-v0 / spec.strideV) % 2; // stagger parite merkeze göre sabit
+    for (let lv = v0; lv <= half; lv += spec.strideV, row += 1) {
       const off = row % 2 === 1 ? spec.staggerU : 0;
-      for (let lu = -half + off; lu <= half; lu += spec.strideU) {
+      for (let lu = u0 + off; lu <= half; lu += spec.strideU) {
         const [ru, rvv] = rot2([lu, lv], rc, rs);
         const cu = cu0 + ru, cv = cv0 + rvv;
         if (cu < bounds.minU - 0.01 || cu > bounds.maxU + 0.01) continue;

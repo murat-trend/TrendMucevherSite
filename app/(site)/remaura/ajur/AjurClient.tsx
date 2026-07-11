@@ -15,6 +15,7 @@ import {
 } from "./lib/mask";
 import { PATTERNS, patternById } from "./lib/patterns";
 import { planHoles, applyAjur, type AjurParams, type HolePlan } from "./lib/applyAjur";
+import { hollowModel } from "./lib/hollow";
 import { estimateHollowCavity, gramForMetal } from "./lib/estimate";
 import { CASTING_RULES, type MetalKey } from "./lib/castingRules";
 import { METALS } from "../mesh-temizle/lib/meshOps";
@@ -97,6 +98,11 @@ export function AjurClient() {
   const [applyPct, setApplyPct] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
 
+  // sayfa içi iç boşaltma + çekme payı
+  const [hollowing, setHollowing] = useState(false);
+  const [hollowWallMm, setHollowWallMm] = useState(1.0);
+  const [shrinkPct, setShrinkPct] = useState(2.0);
+
   // sonuç doğrulama
   const [wallScan, setWallScan] = useState<MinWallScan | null>(null);
   const [showThin, setShowThin] = useState(true);
@@ -139,8 +145,8 @@ export function AjurClient() {
       // yüzük şankı pratikte dolu kabul edilir (köprüden gelen hollow hariç).
       const isShell = fromBridge?.source === "hollow" ? true : k === "ring" ? false : detectShell(bvh, geo);
       const auto = k === "ring" && det.ringAxis !== null
-        ? autoMaskRing(geo, det.ringAxis)
-        : autoMaskMedallion(geo);
+        ? autoMaskRing(geo, det.ringAxis, bvh)
+        : autoMaskMedallion(geo, bvh);
 
       maskRef.current = auto.mask;
       setFrame(auto.frame);
@@ -149,15 +155,6 @@ export function AjurClient() {
       setModel({ geometry: geo, bvh, tris: val.tris, volumeMm3: val.volumeMm3, isShell, fileName });
       setClipAxis(auto.frame.kind === "cylindrical" ? auto.frame.axisIndex : 2);
       setStep(2);
-
-      // dolu modelde hollow senaryosu — kaba tahmin (arka planda)
-      if (!isShell) {
-        setTimeout(() => {
-          try {
-            setHollowEstMm3(estimateHollowCavity(geo, bvh, 1.0));
-          } catch { setHollowEstMm3(null); }
-        }, 50);
-      }
       if (fromBridge) {
         clearBridge().catch(() => undefined);
         setBridgeRec(null);
@@ -224,13 +221,64 @@ export function AjurClient() {
     if (!model) return;
     const det = detectModelKind(model.geometry, model.bvh);
     const auto = newKind === "ring"
-      ? autoMaskRing(model.geometry, det.ringAxis ?? 1)
-      : autoMaskMedallion(model.geometry);
+      ? autoMaskRing(model.geometry, det.ringAxis ?? 1, model.bvh)
+      : autoMaskMedallion(model.geometry, model.bvh);
     maskRef.current = auto.mask;
     setFrame(auto.frame);
     setKind(newKind);
     setMaskVersion((v) => v + 1);
   }, [model]);
+
+  // ---- hollow senaryo tahmini (duvar slider'ıyla canlı) ----
+  useEffect(() => {
+    if (!model || model.isShell || step !== 2) return;
+    const t = setTimeout(() => {
+      try {
+        setHollowEstMm3(estimateHollowCavity(model.geometry, model.bvh, hollowWallMm));
+      } catch { setHollowEstMm3(null); }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [model, step, hollowWallMm]);
+
+  // ---- sayfa içi iç boşaltma ----
+  const runHollow = useCallback(async () => {
+    if (!model || model.isShell) return;
+    setHollowing(true);
+    setError(null);
+    await new Promise((r) => setTimeout(r, 60)); // overlay boyansın
+    try {
+      const h = await hollowModel(model.geometry, hollowWallMm);
+      // boşaltma üçgen sayısını artırır (kavite yüzeyi) — sınırı aşarsa
+      // türetilmiş veri olduğu için sormadan sadeleştir
+      let hollowGeo = h.geometry;
+      if (triCount(hollowGeo) > MAX_TRIS) {
+        hollowGeo = await decimateGeometry(hollowGeo, DECIMATE_TARGET);
+      }
+      const bvh = new MeshBVH(hollowGeo);
+      // maske yeni geometriye yeniden kurulur (vertex indeksleri değişti)
+      const det = detectModelKind(hollowGeo, bvh);
+      const auto = kind === "ring"
+        ? autoMaskRing(hollowGeo, det.ringAxis ?? 2, bvh)
+        : autoMaskMedallion(hollowGeo, bvh);
+      maskRef.current = auto.mask;
+      setFrame(auto.frame);
+      setMaskVersion((v) => v + 1);
+      setModel({
+        ...model,
+        geometry: hollowGeo,
+        bvh,
+        tris: triCount(hollowGeo),
+        volumeMm3: h.volumeAfterMm3,
+        isShell: true,
+      });
+      setPlan(null);
+      setHollowEstMm3(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setHollowing(false);
+    }
+  }, [model, hollowWallMm, kind]);
 
   // ---- fırça ----
   const onPaint = useCallback((p: THREE.Vector3) => {
@@ -293,16 +341,27 @@ export function AjurClient() {
   }, [model, frame, plan, metal]);
 
   // ---- indir + köprüye yaz ----
+  // Çekme payı: döküm küçülmesi telafisi — YALNIZ indirilen dosyaya uygulanır
   const download = useCallback(() => {
     if (!result) return;
-    const blob = exportStlBlob(result.geometry);
+    const scale = 1 + Math.max(0, shrinkPct) / 100;
+    const g = result.geometry.clone();
+    if (scale !== 1) g.scale(scale, scale, scale);
+    const blob = exportStlBlob(g);
+    g.dispose();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = (model?.fileName ?? "model.stl").replace(/\.stl$/i, "") + "_ajur.stl";
     a.click();
     URL.revokeObjectURL(url);
-  }, [result, model]);
+  }, [result, model, shrinkPct]);
+
+  // adım 5'e girişte çekme payını seçili metalin önerisine kur
+  useEffect(() => {
+    if (step === 5) setShrinkPct(CASTING_RULES[metal].shrinkagePct);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   const sendToBridge = useCallback(async () => {
     if (!result) return;
@@ -383,7 +442,7 @@ export function AjurClient() {
               {i > 0 && <div className="h-px w-5 bg-white/10" />}
               <button
                 onClick={() => {
-                  if (s.id < step && !applying) {
+                  if (s.id < step && !applying && !hollowing) {
                     if (s.id < 5) { setResult(null); setWallScan(null); }
                     setStep(s.id);
                   }
@@ -418,16 +477,22 @@ export function AjurClient() {
                 holePreview={step === 4 && !result ? plan?.placements ?? null : null}
                 onPaint={onPaint}
               />
-              {applying && (
+              {(applying || hollowing) && (
                 <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/70 backdrop-blur-sm">
                   <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#b76e79]/30 border-t-[#b76e79]" />
-                  <p className="text-sm text-white/70">Ajur uygulanıyor… %{applyPct}</p>
-                  <button
-                    onClick={() => abortRef.current?.abort()}
-                    className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-white/60 hover:text-white"
-                  >
-                    İptal
-                  </button>
+                  <p className="px-6 text-center text-sm text-white/70">
+                    {applying
+                      ? `Ajur uygulanıyor… %${applyPct}`
+                      : "İç boşluk oluşturuluyor… Bu adım modele göre 10–30 sn sürebilir; ekran duraklamış görünebilir."}
+                  </p>
+                  {applying && (
+                    <button
+                      onClick={() => abortRef.current?.abort()}
+                      className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-white/60 hover:text-white"
+                    >
+                      İptal
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -620,10 +685,26 @@ export function AjurClient() {
                 </div>
 
                 {!model.isShell && (
-                  <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-4 text-xs leading-relaxed text-amber-200/90">
-                    Bu model iç boşaltılmamış; ajur delikleri boşluğa açılmaz, kör biter.
-                    Önce iç boşaltma öneriyoruz.{" "}
-                    <Link href="/remaura/hollow" className="font-medium underline">İç Boşaltma aracı →</Link>
+                  <div className="rounded-2xl border border-[#b76e79]/25 bg-[#b76e79]/[0.07] p-4">
+                    <p className="text-sm font-medium text-[#e8b4bc]">İç boşaltma (bu sayfada)</p>
+                    <p className="mt-1 text-xs leading-relaxed text-white/50">
+                      Model dolu — ajur deliklerinin boşluğa açılması için önce içini boşaltın.
+                      Sculpt yüzeyine dokunulmaz.
+                    </p>
+                    <div className="mt-3">
+                      <Slider
+                        label="Duvar kalınlığı" value={hollowWallMm}
+                        min={0.6} max={2.0} step={0.1} unit="mm" onChange={setHollowWallMm}
+                      />
+                      <p className="-mt-1 mb-2 text-[11px] text-white/30">Ajur açılacaksa 1.0 mm ve üzeri önerilir.</p>
+                    </div>
+                    <button
+                      onClick={() => void runHollow()}
+                      disabled={hollowing}
+                      className="w-full rounded-xl bg-[linear-gradient(135deg,#c4838b,#b76e79)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                    >
+                      {hollowing ? "Boşaltılıyor…" : "İçini boşalt"}
+                    </button>
                   </div>
                 )}
 
@@ -641,9 +722,8 @@ export function AjurClient() {
                     />
                     {!model.isShell && (
                       <Scenario
-                        label="İç boşaltma (1.0 mm duvar)"
+                        label={`İç boşaltma (${fmt1(hollowWallMm)} mm duvar)`}
                         grams={hollowEstMm3 !== null ? gramForMetal(model.volumeMm3 - hollowEstMm3, metal) : null}
-                        href="/remaura/hollow"
                       />
                     )}
                   </div>
@@ -814,11 +894,25 @@ export function AjurClient() {
                   )}
                 </div>
 
+                {/* Çekme payı — döküm küçülmesi telafisi */}
+                <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
+                  <Slider
+                    label="Çekme payı (döküm)" value={shrinkPct}
+                    min={0} max={4} step={0.1} unit="%" onChange={setShrinkPct}
+                  />
+                  <p className="text-[11px] leading-relaxed text-white/30">
+                    İndirilen dosya %{shrinkPct.toLocaleString("tr-TR", { maximumFractionDigits: 1 })} büyütülür —
+                    döküm küçülmesini telafi eder. Seçili metal için öneri:{" "}
+                    %{rule.shrinkagePct.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}.
+                    Araçlar arası aktarım orijinal ölçüde kalır.
+                  </p>
+                </div>
+
                 <button
                   onClick={download}
                   className="w-full rounded-xl bg-[linear-gradient(135deg,#c4838b,#b76e79,#a65f69)] px-6 py-3.5 text-sm font-medium text-white hover:opacity-90"
                 >
-                  Ajurlu STL indir
+                  Ajurlu STL indir{shrinkPct > 0 ? ` (+%${shrinkPct.toLocaleString("tr-TR", { maximumFractionDigits: 1 })})` : ""}
                 </button>
                 <div className="flex gap-2">
                   <button

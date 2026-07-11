@@ -32,18 +32,23 @@ export type CastingRule = {
   ajourWallRecommendMm: number;
   /** dolum güçlüğü katsayısı (1 = kolay akar) — akışkanlık raporu tohumu */
   fillDifficulty: number;
+  /** çekme payı önerisi (%) — döküm küçülmesi telafisi; model export'ta bu
+   *  oranda büyütülür. Kaynak: investment casting toplam küçülme tipik
+   *  %1.25–2.5 (metal + kalıp; Formlabs casting guide, Gold Bulletin/Springer
+   *  investment casting literatürü). Platin daha yüksek (literatür pası: faz 2). */
+  shrinkagePct: number;
 };
 
 export const CASTING_RULES: Record<MetalKey, CastingRule> = {
   // Gümüş yumuşak + dolumu daha zor → muhafazakâr eşikler.
-  ag925: { minWallHardMm: 0.7, minWallSoftMm: 0.8, minBridgeMm: 0.8, ajourWallRecommendMm: 1.0, fillDifficulty: 1.25 },
+  ag925: { minWallHardMm: 0.7, minWallSoftMm: 0.8, minBridgeMm: 0.8, ajourWallRecommendMm: 1.0, fillDifficulty: 1.25, shrinkagePct: 2.0 },
   // Altın alaşımları daha rijit; 14K ile 18K pratikte yakın eşikler.
-  au14: { minWallHardMm: 0.6, minWallSoftMm: 0.8, minBridgeMm: 0.7, ajourWallRecommendMm: 1.0, fillDifficulty: 1.0 },
-  au18: { minWallHardMm: 0.6, minWallSoftMm: 0.8, minBridgeMm: 0.7, ajourWallRecommendMm: 1.0, fillDifficulty: 1.1 },
+  au14: { minWallHardMm: 0.6, minWallSoftMm: 0.8, minBridgeMm: 0.7, ajourWallRecommendMm: 1.0, fillDifficulty: 1.0, shrinkagePct: 1.5 },
+  au18: { minWallHardMm: 0.6, minWallSoftMm: 0.8, minBridgeMm: 0.7, ajourWallRecommendMm: 1.0, fillDifficulty: 1.1, shrinkagePct: 1.5 },
   // 22K çok yumuşak → gümüşe yakın yapısal eşikler (literatür pası: sonraki faz).
-  au22: { minWallHardMm: 0.7, minWallSoftMm: 0.9, minBridgeMm: 0.8, ajourWallRecommendMm: 1.1, fillDifficulty: 1.15 },
-  // Platin: yüksek ergime/dolum güçlüğü (literatür pası: sonraki faz).
-  pt: { minWallHardMm: 0.6, minWallSoftMm: 0.8, minBridgeMm: 0.7, ajourWallRecommendMm: 1.0, fillDifficulty: 1.4 },
+  au22: { minWallHardMm: 0.7, minWallSoftMm: 0.9, minBridgeMm: 0.8, ajourWallRecommendMm: 1.1, fillDifficulty: 1.15, shrinkagePct: 1.8 },
+  // Platin: yüksek ergime/dolum güçlüğü + yüksek küçülme (literatür pası: sonraki faz).
+  pt: { minWallHardMm: 0.6, minWallSoftMm: 0.8, minBridgeMm: 0.7, ajourWallRecommendMm: 1.0, fillDifficulty: 1.4, shrinkagePct: 2.5 },
 };
 
 /** PRD §8 mutlak taban — metal seçilmemişken kullanılan en gevşek alt sınır. */

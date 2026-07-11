@@ -55,10 +55,14 @@ const AXES: [THREE.Vector3, THREE.Vector3, THREE.Vector3] = [
   new THREE.Vector3(0, 0, 1),
 ];
 
-/** Yüzük: normali eksene (içe) bakan iç şank yüzeyi. */
+/** Yüzük: normali eksene (içe) bakan İÇ ŞANK yüzeyi. bvh verilirse GÖRÜNÜRLÜK
+ *  testi yapılır: eksenden vertexe ışın atılır; ilk vuruş o vertex değilse
+ *  (içi boş modelde KAVİTE duvarı gibi gizli yüzey) maskeye ALINMAZ. Yoksa
+ *  medyan iç yarıçap kaviteye kayar → ark ölçeği ve köprü hesabı bozulur. */
 export function autoMaskRing(
   geometry: THREE.BufferGeometry,
   ringAxis: 0 | 1 | 2,
+  bvh?: MeshBVH,
 ): { mask: Uint8Array; frame: MaskFrame } {
   const pos = geometry.attributes.position;
   if (!geometry.attributes.normal) geometry.computeVertexNormals();
@@ -70,27 +74,35 @@ export function autoMaskRing(
   const p = new THREE.Vector3();
   const nv = new THREE.Vector3();
   const radial = new THREE.Vector3();
+  const rayO = new THREE.Vector3();
   const radii: number[] = [];
   for (let i = 0; i < n; i += 1) {
     p.fromBufferAttribute(pos, i).sub(center);
+    const axial = p.getComponent(ringAxis);
     p.setComponent(ringAxis, 0);
     const r = p.length();
     if (r < 1e-6) continue;
     radial.copy(p).normalize();
     nv.fromBufferAttribute(nrm, i);
     // iç yüzey: normal eksene doğru (radyal dışın tersi)
-    if (radial.dot(nv) < -0.45) {
-      mask[i] = 1;
-      radii.push(r);
+    if (radial.dot(nv) >= -0.45) continue;
+    if (bvh) {
+      rayO.copy(center).setComponent(ringAxis, center.getComponent(ringAxis) + axial);
+      const hit = bvh.raycastFirst(new THREE.Ray(rayO, radial), THREE.DoubleSide);
+      if (!hit || Math.abs(hit.distance - r) > 0.05) continue; // gizli yüzey
     }
+    mask[i] = 1;
+    radii.push(r);
   }
   radii.sort((a, b) => a - b);
   const innerRadius = radii.length ? radii[Math.floor(radii.length / 2)] : 1;
   return { mask, frame: { kind: "cylindrical", axisIndex: ringAxis, center, innerRadius } };
 }
 
-/** Madalyon: en ince eksenin AZ yüzey alanlı (sade/düz) ucu = arka plaka. */
-export function autoMaskMedallion(geometry: THREE.BufferGeometry): { mask: Uint8Array; frame: MaskFrame } {
+/** Madalyon: en ince eksenin AZ yüzey alanlı (sade/düz) ucu = arka plaka.
+ *  bvh verilirse görünürlük testi: arkadan bakınca ilk görünen yüzey olmayan
+ *  (kavite duvarı gibi gizli) vertexler maskeye alınmaz. */
+export function autoMaskMedallion(geometry: THREE.BufferGeometry, bvh?: MeshBVH): { mask: Uint8Array; frame: MaskFrame } {
   geometry.computeBoundingBox();
   const bb = geometry.boundingBox!;
   const size = bb.getSize(new THREE.Vector3());
@@ -126,11 +138,22 @@ export function autoMaskMedallion(geometry: THREE.BufferGeometry): { mask: Uint8
   const n = pos.count;
   const mask = new Uint8Array(n);
   const nv = new THREE.Vector3();
+  const rayO = new THREE.Vector3();
+  const rayD = AXES[a].clone().multiplyScalar(-backSign); // arkadan içeri bakış
+  const vtx = new THREE.Vector3();
   for (let i = 0; i < n; i += 1) {
     nv.fromBufferAttribute(nrm, i);
     const alongBack = nv.getComponent(a) * backSign;
     const dist = Math.abs(pos.getComponent(i, a as 0 | 1 | 2) - backCoord);
-    if (alongBack > 0.6 && dist < thickness * 0.3) mask[i] = 1;
+    if (!(alongBack > 0.6 && dist < thickness * 0.3)) continue;
+    if (bvh) {
+      vtx.fromBufferAttribute(pos, i);
+      rayO.copy(vtx).setComponent(a, backCoord + backSign * (thickness * 0.5 + 1));
+      const hit = bvh.raycastFirst(new THREE.Ray(rayO, rayD), THREE.DoubleSide);
+      const expect = Math.abs(rayO.getComponent(a) - vtx.getComponent(a));
+      if (!hit || Math.abs(hit.distance - expect) > 0.05) continue; // gizli yüzey
+    }
+    mask[i] = 1;
   }
 
   const normal = AXES[a].clone().multiplyScalar(backSign);
