@@ -5,6 +5,7 @@
 
 import { useState } from "react";
 import type { NakkasStyleKey, NakkasMode } from "@/lib/remaura/nakkas/prompts";
+import { shrinkForUpload, readJsonSafe, uploadErrorMessage } from "@/lib/remaura/upload";
 
 const STYLES: { key: NakkasStyleKey; label: string }[] = [
   { key: "osmanli", label: "Osmanlı" },
@@ -86,9 +87,9 @@ export function NakkasClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ style, manual, mode }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Hata");
+      const data = await readJsonSafe<{ image?: string; promptUsed?: string }>(res);
+      if (!res.ok || !data.image) {
+        setError(uploadErrorMessage(res, data, "Desen üretilemedi"));
         return;
       }
       setImage(data.image);
@@ -134,14 +135,19 @@ export function NakkasClient() {
     try {
       // 1) Deseni yüzüğe oturt (açı/zemin ham kalabilir — son adım düzeltir).
       setBezeleStep("Desen yerleştiriliyor…");
+      // Vercel ~4.5MB govde limiti: iki gorsel ayni istekte -> gorsel basina ~1.6MB
+      const [safeDesen, safeRing] = await Promise.all([
+        shrinkForUpload(desenForBezele, 1_600_000),
+        shrinkForUpload(ringImage, 1_600_000),
+      ]);
       const r1 = await fetch("/api/remaura/nakkas/bezele", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ desenImage: desenForBezele, ringImage, note: ringNote.trim() || undefined }),
+        body: JSON.stringify({ desenImage: safeDesen, ringImage: safeRing, note: ringNote.trim() || undefined }),
       });
-      const d1 = await r1.json();
+      const d1 = await readJsonSafe<{ image?: string }>(r1);
       if (!r1.ok || !d1.image) {
-        setBezeleError(d1.error || "Hata");
+        setBezeleError(uploadErrorMessage(r1, d1, "Desen yerleştirilemedi"));
         return;
       }
       const ornamented: string = d1.image;
@@ -156,16 +162,18 @@ export function NakkasClient() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            image: ornamented,
+            image: await shrinkForUpload(ornamented),
             engine: "gemini",
             type: "yuzuk",
             upscaleFirst: true,
             shapeNote: ringNote.trim() || undefined,
           }),
         });
-        const d2 = await r2.json();
+        const d2 = await readJsonSafe<{ image?: string }>(r2);
         if (r2.ok && d2.image) finalImage = d2.image;
-      } catch {
+        else console.warn("[nakkas] açı düzeltme atlandı:", r2.status, d2.error);
+      } catch (err) {
+        console.warn("[nakkas] açı düzeltme atlandı:", err);
         /* açı-düzeltme atlandı → desenli ham görselle devam */
       }
       setBezeleImage(finalImage);
@@ -196,11 +204,11 @@ export function NakkasClient() {
       const res = await fetch("/api/remaura/nakkas/tasarla", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ desenImage: desenForBezele, prompt: tasarlaPrompt }),
+        body: JSON.stringify({ desenImage: await shrinkForUpload(desenForBezele), prompt: tasarlaPrompt }),
       });
-      const data = await res.json();
+      const data = await readJsonSafe<{ image?: string }>(res);
       if (!res.ok || !data.image) {
-        setTasarlaError(data.error || "Hata");
+        setTasarlaError(uploadErrorMessage(res, data, "Tasarım üretilemedi"));
         return;
       }
       setTasarlaImage(data.image);
@@ -227,7 +235,7 @@ export function NakkasClient() {
           <p className="mt-1 text-sm text-zinc-400">
             Forma uygulanacak <strong>DESEN</strong> üretir (bitmiş madalyon değil) — usta-kalite,{" "}
             <strong>taşsız</strong>, derin-rölyefli, düz-açı, 3D-uygun. <strong>Yüzey</strong> (forma
-            clip'lenir) veya <strong>Band</strong> (seamless, banda sarılır) modu. İzole süper-admin deney.
+            clip&apos;lenir) veya <strong>Band</strong> (seamless, banda sarılır) modu. İzole süper-admin deney.
           </p>
         </header>
 
