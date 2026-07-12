@@ -1,19 +1,15 @@
 "use client";
 
-// AÇI — kişisel tek-iş aracı: görsel yükle → açıyı düzelt (3D-hazır poz).
-// Nakkaş'taki açı-düzeltme adımının bağımsız sayfası; motor: aci-lab/repoz.
+// AÇI — kişisel tek-iş aracı. TEK KURAL: yüklenen parça imza "kahraman"
+// açısına çevrilir; taşlar/mine/cila/yazıt dahil her şey aynen korunur.
+// Motor: /api/remaura/aci (repoz'un 3D-hazırlık kurallarından arınmış varyant).
 
 import { useState } from "react";
 import { shrinkForUpload, readJsonSafe, uploadErrorMessage } from "@/lib/remaura/upload";
 
-type TypeKey = "yuzuk" | "madalyon";
-type EngineKey = "openai" | "gemini";
-
 export function AciClient() {
   const [image, setImage] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
-  const [type, setType] = useState<TypeKey>("yuzuk");
-  const [engine, setEngine] = useState<EngineKey>("gemini");
   const [upscaleFirst, setUpscaleFirst] = useState(true);
   const [shapeNote, setShapeNote] = useState("");
   const [loading, setLoading] = useState(false);
@@ -37,13 +33,11 @@ export function AciClient() {
     setError(null);
     setResult(null);
     try {
-      const res = await fetch("/api/remaura/aci-lab/repoz", {
+      const res = await fetch("/api/remaura/aci", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           image: await shrinkForUpload(image),
-          engine,
-          type,
           upscaleFirst,
           shapeNote: shapeNote.trim() || undefined,
         }),
@@ -80,7 +74,7 @@ export function AciClient() {
             Açı
           </h1>
           <p className="mt-1 text-xs" style={{ color: "#c9a88a" }}>
-            Görsel yükle → açıyı düzelt (3D&apos;ye hazır poz, düz tabla, temiz zemin).
+            Tek kural: yüklenen parça imza açıya çevrilir — taşlar, renkler ve cila aynen korunur.
           </p>
         </div>
 
@@ -97,54 +91,6 @@ export function AciClient() {
           <>
             {/* Ayarlar */}
             <div className="grid gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 sm:grid-cols-2">
-              <div className="flex items-center gap-2">
-                <span className="w-16 text-[10px] font-bold uppercase tracking-widest" style={{ color: "#c9a88a" }}>
-                  Tür
-                </span>
-                {(
-                  [
-                    { key: "yuzuk", label: "Yüzük" },
-                    { key: "madalyon", label: "Madalyon" },
-                  ] as const
-                ).map((t) => (
-                  <button
-                    key={t.key}
-                    onClick={() => setType(t.key)}
-                    className={BTN}
-                    style={{
-                      borderColor: type === t.key ? "#b76e79" : "rgba(255,255,255,0.1)",
-                      color: type === t.key ? "#b76e79" : "#9C9894",
-                      background: type === t.key ? "rgba(183,110,121,0.1)" : "transparent",
-                    }}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-16 text-[10px] font-bold uppercase tracking-widest" style={{ color: "#c9a88a" }}>
-                  Motor
-                </span>
-                {(
-                  [
-                    { key: "openai", label: "V1" },
-                    { key: "gemini", label: "V2" },
-                  ] as const
-                ).map((m) => (
-                  <button
-                    key={m.key}
-                    onClick={() => setEngine(m.key)}
-                    className={BTN}
-                    style={{
-                      borderColor: engine === m.key ? "#b76e79" : "rgba(255,255,255,0.1)",
-                      color: engine === m.key ? "#b76e79" : "#9C9894",
-                      background: engine === m.key ? "rgba(183,110,121,0.1)" : "transparent",
-                    }}
-                  >
-                    {m.label}
-                  </button>
-                ))}
-              </div>
               <div className="flex items-center gap-2">
                 <span className="w-16 text-[10px] font-bold uppercase tracking-widest" style={{ color: "#c9a88a" }}>
                   Netleştir
