@@ -42,6 +42,7 @@ import {
   LayoutGrid,
   Droplet,
   Aperture,
+  Hammer,
   Map,
   Hand,
 } from "lucide-react";
@@ -344,6 +345,13 @@ export const ADMIN_NAV_ENTRIES: AdminNavEntry[] = [
         labelTr: "Açı",
         labelEn: "Angle",
         icon: Aperture,
+      },
+      {
+        id: "iscilik",
+        href: "/remaura/iscilik",
+        labelTr: "İşçilik",
+        labelEn: "Craftsmanship",
+        icon: Hammer,
       },
       {
         id: "creative-studio",
