@@ -18,6 +18,7 @@ import { planHoles, applyAjur, type AjurParams, type HolePlan } from "./lib/appl
 import { solveAutoParams, type AutoLevel } from "./lib/autoParams";
 import { hollowModel } from "./lib/hollow";
 import { buildRingLiner } from "./lib/liner";
+import { exportObjGrouped } from "./lib/objExport";
 import { manifoldUnion } from "./lib/ajurBoolean";
 import { estimateHollowCavity, gramForMetal } from "./lib/estimate";
 import { CASTING_RULES, type MetalKey } from "./lib/castingRules";
@@ -59,6 +60,12 @@ const STEPS: { id: Step; label: string }[] = [
 
 const fmt1 = (x: number) => x.toLocaleString("tr-TR", { maximumFractionDigits: 1, minimumFractionDigits: 1 });
 const fmt2 = (x: number) => x.toLocaleString("tr-TR", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+
+/** İç astar (kapak) kartı — konforme motor yoğun-organik borlarda (sarkan süs
+ *  + gravür + konik flare) kanıt-testlerini geçene dek KAPALI. Taşan astar
+ *  üretmektense gizli; kapaklı görünümün kanıtlı yolu: Gelişmiş > Delik zemini.
+ *  Motor: lib/liner.ts · testler: scripts/test_liner.mts */
+const LINER_ENABLED = false;
 
 export function AjurClient() {
   const [step, setStep] = useState<Step>(1);
@@ -119,13 +126,15 @@ export function AjurClient() {
   const [floorMm, setFloorMm] = useState(0);
   const [linerThicknessMm, setLinerThicknessMm] = useState(0.5);
   const [linerMode, setLinerMode] = useState<"fused" | "separate">("fused");
-  const [linerGapMm, setLinerGapMm] = useState(0.15);
+  const [linerGapMm, setLinerGapMm] = useState(0.25);
   const [linerBusy, setLinerBusy] = useState(false);
   /** ayrı-parça astar (kendi STL'i); tek parçada null kalır */
   const [linerPart, setLinerPart] = useState<{ geometry: THREE.BufferGeometry; volumeMm3: number } | null>(null);
   /** astar eklenmeden önceki sonuç — "astarı kaldır" için */
   const preLinerRef = useRef<ResultState | null>(null);
   const [linerFused, setLinerFused] = useState(false);
+  /** gruplu OBJ dışa aktarımı için parçalar (gövde ayrı + astar ayrı) */
+  const linerObjRef = useRef<{ body: THREE.BufferGeometry; liner: THREE.BufferGeometry } | null>(null);
 
   // sonuç doğrulama + oto düzelt
   const [wallScan, setWallScan] = useState<MinWallScan | null>(null);
@@ -504,8 +513,9 @@ export function AjurClient() {
         thicknessMm: linerThicknessMm,
         gapMm: linerMode === "separate" ? linerGapMm : 0,
         axialRangeMm,
-      });
+      }, model.bvh);
       preLinerRef.current = result;
+      linerObjRef.current = { body: result.geometry, liner: liner.geometry };
       if (linerMode === "fused") {
         const u = await manifoldUnion(result.geometry, liner.geometry);
         const { geometryVolumeMm3 } = await import("./lib/manifoldKit");
@@ -528,9 +538,32 @@ export function AjurClient() {
   const removeLiner = useCallback(() => {
     if (preLinerRef.current) setResult(preLinerRef.current);
     preLinerRef.current = null;
+    linerObjRef.current = null;
     setLinerPart(null);
     setLinerFused(false);
   }, []);
+
+  // ZBrush iş akışı: STL grup taşıyamaz → gövde+astar tek OBJ'de ayrı gruplar
+  // (polygroup) olarak iner; Split Groups ile ayrılır. Çekme payı uygulanır.
+  const downloadGroupedObj = useCallback(() => {
+    const parts = linerObjRef.current;
+    if (!parts) return;
+    const scale = 1 + Math.max(0, shrinkPct) / 100;
+    const body = parts.body.clone();
+    const liner = parts.liner.clone();
+    if (scale !== 1) { body.scale(scale, scale, scale); liner.scale(scale, scale, scale); }
+    const blob = exportObjGrouped([
+      { name: "govde_ajur", geometry: body },
+      { name: "ic_astar", geometry: liner },
+    ]);
+    body.dispose(); liner.dispose();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = (model?.fileName ?? "model.stl").replace(/\.stl$/i, "") + "_ajur_gruplu.obj";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [shrinkPct, model]);
 
   // ---- indir + köprüye yaz ----
   // Çekme payı: döküm küçülmesi telafisi — YALNIZ indirilen dosyaya uygulanır
@@ -1155,7 +1188,7 @@ export function AjurClient() {
                 </div>
 
                 {/* KAPAK — yüzük iç astarı (kapaklı ajur) */}
-                {kind === "ring" && (
+                {LINER_ENABLED && kind === "ring" && (
                   <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
                     <p className="mb-1 text-sm font-medium text-white/70">İç Astar (Kapak)</p>
                     {!linerFused && !linerPart ? (
@@ -1175,7 +1208,7 @@ export function AjurClient() {
                         {linerMode === "separate" && (
                           <Slider
                             label="Lehim boşluğu" value={linerGapMm}
-                            min={0.05} max={0.3} step={0.01} unit="mm" onChange={setLinerGapMm}
+                            min={0.2} max={0.4} step={0.01} unit="mm" onChange={setLinerGapMm}
                           />
                         )}
                         <button
@@ -1192,6 +1225,12 @@ export function AjurClient() {
                           ✓ Astar eklendi — {fmt2(linerThicknessMm)} mm,{" "}
                           {linerFused ? "tek parça (kaynaşık)" : `ayrı parça (${fmt2(linerGapMm)} mm lehim boşluğu)`}
                         </p>
+                        <button
+                          onClick={downloadGroupedObj}
+                          className="w-full rounded-xl border border-[#b76e79]/30 bg-[#b76e79]/10 px-4 py-2.5 text-xs font-medium text-[#e8b4bc] hover:opacity-80"
+                        >
+                          Gövde + Astar indir (OBJ, ZBrush&apos;ta ayrı gruplar)
+                        </button>
                         {linerPart && (
                           <button
                             onClick={() => {

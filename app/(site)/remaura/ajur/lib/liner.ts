@@ -1,14 +1,23 @@
 import * as THREE from "three";
-import { loadManifold, manifoldToGeo, manifoldVolume, type ManifoldT } from "./manifoldKit";
+import { MeshBVH } from "three-mesh-bvh";
+import { geometryVolumeMm3 } from "./manifoldKit";
+import { orientNestedShells } from "./shells";
 import type { MaskFrame } from "./mask";
 
 // ---------------------------------------------------------------------------
-// KAPAK / İÇ ASTAR (kapaklı ajur, literatür: pierced work + backing) — v1:
-// YÜZÜK iç astar bandı. Delikli iç şankın altına ince, pürüzsüz bir tüp:
-//   - tek parça (kaynaşık): tüp yüzeye hafif gömülür → union'da kaynar
-//   - ayrı parça (lehimlik): tüp her noktada yüzeyden gapMm boşluklu kalır
-// Ten teması pürüzsüzleşir, kir girmez; desen delik derinliğinde okunur.
-// Madalyon tam arka plakası v2 (gövde-kırpma altyapısı gerekiyor).
+// KAPAK / İÇ ASTAR (kapaklı ajur; literatür: pierced work + backing) — v1 yüzük.
+//
+// YÖNTEM (ışın-ölçümlü parametrik tüp): (θ,v) düğüm ızgarasında her düğümün
+// yarıçapı eksenden atılan RADYAL IŞINLA ölçülür — medyan penceresine düşen
+// (giriş, çıkış) duvar çifti seçilir:
+//   - tek parça: rOut = min(giriş+0.35, çıkış−0.3) → duvara gömülür ama arka
+//     yüzü DELEMEZ (matematiksel sınır); union'da kaynar
+//   - ayrı parça: rOut = giriş − gap → lehimlik ayrı STL
+// Uçlar sektör sektör maskeden ölçülür + ışın-geçerliliğiyle kırpılır;
+// geçersiz düğüm komşu yarıçapı KOPYALAMAZ, son geçerli düğüme ÇÖKERTİLİR
+// (sarkma/taşma imkânsız). Denenip terk edilenler (bkz. proje notu):
+// global/sektörel sabit yarıçap (konik flare deler), vertex-kutulama (komşu
+// sızıntısı), SDF levelSet kabuğu (0.35mm gridde 0.5mm kabuk parçalanıyor).
 // ---------------------------------------------------------------------------
 
 export type LinerOpts = {
@@ -25,16 +34,17 @@ export type LinerOpts = {
 export type LinerResult = {
   geometry: THREE.BufferGeometry;
   volumeMm3: number;
-  /** bandın eksenel aralığı + yarıçapları (rapor için) */
+  /** bandın EN UZUN eksenel aralığı + pencere yarıçapları (rapor için) */
   spanMm: number;
   rOuterMm: number;
   rInnerMm: number;
+  spanMinMm?: number;
 };
 
-/** Maskeli vertexlerin (iç şank) yarıçap ve eksenel dağılımı — SADECE gerçek
- *  silindirik bor bandı: maske, kafaya doğru genişleyen iç yüzeyleri de
- *  içerebilir; medyan yarıçapın ±%12 (min 1mm) dışındakiler bant dışıdır,
- *  astar oraya uzanmamalı (dev tıpa/temas hatası üretir). */
+/** Maskeli vertexlerin bor bandı istatistiği. Çapa = MEDYAN yarıçap
+ *  (görünürlük-filtreli maskenin baskın kümesi; autoMaskRing.innerRadius ile
+ *  aynı tanım). Alt persentil ÇAPA OLAMAZ: sarkan diken uçları borden küçük
+ *  yarıçapta olabilir ve astarı parmak boşluğuna asılı tüpe çevirir (yaşandı). */
 function maskedRadialStats(
   geometry: THREE.BufferGeometry,
   mask: Uint8Array,
@@ -43,30 +53,17 @@ function maskedRadialStats(
   const pos = geometry.attributes.position;
   const a = frame.axisIndex;
   const p = new THREE.Vector3();
-  const all: { r: number; v: number }[] = [];
+  const radii: number[] = [];
   for (let i = 0; i < pos.count; i += 1) {
     if (!mask[i]) continue;
     p.fromBufferAttribute(pos, i).sub(frame.center);
-    const axial = p.getComponent(a);
     p.setComponent(a, 0);
-    all.push({ r: p.length(), v: axial });
+    radii.push(p.length());
   }
-  all.sort((x, y) => x.r - y.r);
-  // bor = EN KÜÇÜK yarıçaplı bant. Medyan güvenilmez: kafa altındaki geniş
-  // kemer yüzeyi vertex sayısıyla baskın çıkıp bandı yukarı çeker. Alt uca
-  // (2. persentil) demirle, dar toleransla bandı topla.
-  const rBase = all[Math.floor(all.length * 0.02)]?.r ?? 1;
-  const tol = Math.max(0.8, rBase * 0.1);
-  let rMin = Infinity, rMax = -Infinity, minV = Infinity, maxV = -Infinity, n = 0;
-  for (const e of all) {
-    if (e.r - rBase > tol) continue;
-    n += 1;
-    if (e.r < rMin) rMin = e.r;
-    if (e.r > rMax) rMax = e.r;
-    if (e.v < minV) minV = e.v;
-    if (e.v > maxV) maxV = e.v;
-  }
-  return { rMin, rMax, minV, maxV, n };
+  radii.sort((x, y) => x - y);
+  const median = radii[Math.floor(radii.length / 2)] ?? 1;
+  const tol = Math.max(0.8, median * 0.1);
+  return { median, tol, n: radii.length };
 }
 
 export async function buildRingLiner(
@@ -74,54 +71,212 @@ export async function buildRingLiner(
   mask: Uint8Array,
   frame: MaskFrame,
   opts: LinerOpts,
+  bvh?: MeshBVH,
 ): Promise<LinerResult> {
   if (frame.kind !== "cylindrical") {
     throw new Error("İç astar v1 yalnız yüzük (silindirik bölge) için — madalyon kapağı sırada.");
   }
+  const bvhL = bvh ?? new MeshBVH(geometry);
   const stats = maskedRadialStats(geometry, mask, frame);
   if (stats.n < 50) throw new Error("Güvenli bölge astar için çok küçük.");
 
   const t = Math.max(0.3, opts.thicknessMm);
-  const inset = opts.endInsetMm ?? 0.2;
-  let lowV = stats.minV, highV = stats.maxV;
-  if (opts.axialRangeMm) {
-    lowV = Math.max(lowV, opts.axialRangeMm[0]);
-    highV = Math.min(highV, opts.axialRangeMm[1]);
-  }
-  const span = highV - lowV - 2 * inset;
-  if (span < 1) throw new Error("Bölgenin eksenel genişliği astar için yetersiz.");
-
-  // tek parça: bandın EN GİRİNTİLİ noktasını da (gravür dibi) geçip gömülsün —
-  //   yoksa astar-yüzey arasında hapsolmuş mikro boşluk = döküm kabarcığı riski
-  // ayrı parça: bandın EN ÇIKINTILI noktasından bile gap kadar uzak (mutlak min)
-  const rOuter = opts.gapMm <= 0 ? stats.rMax + 0.2 : stats.rMin - opts.gapMm;
-  const rInner = rOuter - t;
-  if (rInner < 0.5) throw new Error("Astar iç yarıçapı anlamsız — kalınlığı azaltın.");
-
-  const w = await loadManifold();
-  const { Manifold } = w;
-  const outer = Manifold.cylinder(span, rOuter, rOuter, 128, true);
-  const inner = Manifold.cylinder(span + 1, rInner, rInner, 128, true);
-  let tube: ManifoldT = outer.subtract(inner);
-  outer.delete?.(); inner.delete?.();
-
-  // silindir Z eksenli üretilir → bant eksenine döndür + bant merkezine taşı
+  const gap = opts.gapMm <= 0 ? 0 : Math.max(0.2, opts.gapMm);
+  const inset = opts.endInsetMm ?? 0.25;
   const a = frame.axisIndex;
-  const mid = (lowV + highV) / 2;
-  const c = frame.center;
-  const m: number[] = new Array(16).fill(0);
-  // sütunlar = yerel eksenlerin dünya karşılığı; det=+1 kalsın (döngüsel permütasyon)
-  if (a === 2) { m[0] = 1; m[5] = 1; m[10] = 1; }           // Z→Z (birim)
-  else if (a === 0) { m[1] = 1; m[6] = 1; m[8] = 1; }       // Z→X: X→Y, Y→Z
-  else { m[2] = 1; m[4] = 1; m[9] = 1; }                    // Z→Y: X→Z, Y→X
-  m[12] = c.x + (a === 0 ? mid : 0);
-  m[13] = c.y + (a === 1 ? mid : 0);
-  m[14] = c.z + (a === 2 ? mid : 0);
-  m[15] = 1;
-  tube = tube.transform(m as unknown as Parameters<ManifoldT["transform"]>[0]);
+  const pos = geometry.attributes.position;
+  const p = new THREE.Vector3();
 
-  const volumeMm3 = manifoldVolume(tube);
-  const geo = manifoldToGeo(tube);
-  tube.delete?.();
-  return { geometry: geo, volumeMm3, spanMm: span, rOuterMm: rOuter, rInnerMm: rInner };
+  // ---- 1) SEKTÖR UÇLARI: borun eksenel uzunluğu açıya göre değişir ----
+  const N = 128;
+  const lows = new Array<number>(N).fill(Infinity);
+  const highs = new Array<number>(N).fill(-Infinity);
+  for (let i = 0; i < pos.count; i += 1) {
+    if (!mask[i]) continue;
+    p.fromBufferAttribute(pos, i).sub(frame.center);
+    const axial = p.getComponent(a);
+    p.setComponent(a, 0);
+    const r = p.length();
+    if (Math.abs(r - stats.median) > stats.tol + 0.4) continue; // yalnız bor bandı
+    const th = Math.atan2(p.getComponent((a + 2) % 3), p.getComponent((a + 1) % 3));
+    const si = ((Math.round((th / (2 * Math.PI)) * N) % N) + N) % N;
+    for (const s of [si, (si + 1) % N, (si + N - 1) % N]) {
+      if (axial < lows[s]) lows[s] = axial;
+      if (axial > highs[s]) highs[s] = axial;
+    }
+  }
+  const filled = (s: number) => Number.isFinite(lows[s]) && Number.isFinite(highs[s]);
+  if (!lows.some((_, s) => filled(s))) throw new Error("Bor bandı bulunamadı — bölgeyi genişletin.");
+  for (let s = 0; s < N; s += 1) {
+    if (filled(s)) continue;
+    let fw = -1, bw = -1;
+    for (let k = 1; k < N; k += 1) {
+      if (fw < 0 && filled((s + k) % N)) fw = (s + k) % N;
+      if (bw < 0 && filled((s - k + N) % N)) bw = (s - k + N) % N;
+      if (fw >= 0 && bw >= 0) break;
+    }
+    lows[s] = Math.max(lows[fw], lows[bw]);
+    highs[s] = Math.min(highs[fw], highs[bw]);
+  }
+  if (opts.axialRangeMm) {
+    for (let s = 0; s < N; s += 1) {
+      lows[s] = Math.max(lows[s], opts.axialRangeMm[0]);
+      highs[s] = Math.min(highs[s], opts.axialRangeMm[1]);
+    }
+  }
+  // dairesel EROZYON (ortalama değil): liner komşu sektörün aralığını aşamaz
+  const erode = (arr: number[], pickMax: boolean) => {
+    const out = new Array<number>(N);
+    for (let s = 0; s < N; s += 1) {
+      let v = arr[s];
+      for (let k = -2; k <= 2; k += 1) {
+        const x = arr[(s + k + N) % N];
+        v = pickMax ? Math.max(v, x) : Math.min(v, x);
+      }
+      out[s] = v;
+    }
+    return out;
+  };
+  const lo = erode(lows, true);
+  const hi = erode(highs, false);
+  for (let s = 0; s < N; s += 1) {
+    lo[s] += inset; hi[s] -= inset;
+    if (hi[s] - lo[s] < 1.2) {
+      const mid = (lo[s] + hi[s]) / 2;
+      lo[s] = mid - 0.6; hi[s] = mid + 0.6;
+    }
+  }
+
+  // ---- 2) DÜĞÜM YARIÇAPLARI: her düğüm kendi ışınıyla ----
+  const NV = 16;
+  const gi = (s: number, k: number) => s * (NV + 1) + k;
+  const ray = new THREE.Ray();
+  const win = stats.tol + 0.6;
+  const nodeRadius = (s: number, v: number): number => {
+    const th = (s / N) * 2 * Math.PI;
+    ray.origin.copy(frame.center);
+    ray.origin.setComponent(a, ray.origin.getComponent(a) + v);
+    ray.direction.set(0, 0, 0);
+    ray.direction.setComponent((a + 1) % 3, Math.cos(th));
+    ray.direction.setComponent((a + 2) % 3, Math.sin(th));
+    const raw = bvhL.raycast(ray, THREE.DoubleSide).map((x) => x.distance).sort((x, y) => x - y);
+    const hits: number[] = [];
+    for (const d of raw) if (hits.length === 0 || d - hits[hits.length - 1] > 1e-4) hits.push(d);
+    let enter = NaN, exit = NaN, best = Infinity;
+    for (let h2 = 0; h2 + 1 < hits.length; h2 += 2) {
+      const dE = Math.abs(hits[h2] - stats.median);
+      if (dE < best && dE <= win) { best = dE; enter = hits[h2]; exit = hits[h2 + 1]; }
+    }
+    if (!Number.isFinite(enter)) return NaN;
+    if (gap <= 0) {
+      // tek parça: duvara CÖMERTÇE göm (union affeder — metalle örtüşen kısım
+      // gövdeye karışır); tek yasak dış yüzeyden çıkmak → çıkış−0.3 tavanı
+      return Math.max(Math.min(enter + 0.6, exit - 0.3), enter + 0.05);
+    }
+    // ayrı parça: yüzeyden gap uzak (parmak boşluğu tarafı — taşma imkânsız)
+    return enter - gap;
+  };
+
+  // her sektör: düğümleri ölç; geçersiz uçlar SON GEÇERLİ düğüme çökertilir
+  // (komşu yarıçapı kopyalamak sarkma üretir — çökertme üretemez)
+  const rOutG = new Array<number>(N * (NV + 1)).fill(NaN);
+  const vG = new Array<number>(N * (NV + 1)).fill(NaN);
+  const sectorOk = new Array<boolean>(N).fill(false);
+  for (let s = 0; s < N; s += 1) {
+    const span0 = hi[s] - lo[s];
+    const rTmp = new Array<number>(NV + 1).fill(NaN);
+    for (let k = 0; k <= NV; k += 1) rTmp[k] = nodeRadius(s, lo[s] + (span0 * k) / NV);
+    const midK = Math.floor(NV / 2);
+    if (!Number.isFinite(rTmp[midK])) continue; // sektör ölçülemedi
+    let kLo = midK, kHi = midK;
+    while (kLo > 0 && Number.isFinite(rTmp[kLo - 1])) kLo -= 1;
+    while (kHi < NV && Number.isFinite(rTmp[kHi + 1])) kHi += 1;
+    if (kHi - kLo < 2) continue;
+    sectorOk[s] = true;
+    for (let k = 0; k <= NV; k += 1) {
+      let kc = k;
+      if (!Number.isFinite(rTmp[k]) || k < kLo || k > kHi) {
+        kc = Math.max(kLo, Math.min(kHi, k)); // uç dışı → koşu kenarına çökert
+      }
+      if (!Number.isFinite(rTmp[kc])) kc = midK; // koşu içi tekil boşluk
+      rOutG[gi(s, k)] = rTmp[kc];
+      vG[gi(s, k)] = lo[s] + (span0 * Math.max(kLo, Math.min(kHi, k))) / NV;
+    }
+  }
+  if (!sectorOk.some(Boolean)) throw new Error("Bor yüzeyi ölçülemedi — bölgeyi kontrol edin.");
+  // ölçülemeyen sektör: en yakın geçerli sektörün düğümlerini AYNEN al
+  // (yarıçap + v birlikte taşınır → yine ölçülmüş noktalara yapışır)
+  for (let s = 0; s < N; s += 1) {
+    if (sectorOk[s]) continue;
+    let src = -1;
+    for (let d = 1; d < N && src < 0; d += 1) {
+      if (sectorOk[(s + d) % N]) src = (s + d) % N;
+      else if (sectorOk[(s - d + N) % N]) src = (s - d + N) % N;
+    }
+    for (let k = 0; k <= NV; k += 1) {
+      rOutG[gi(s, k)] = rOutG[gi(src, k)];
+      vG[gi(s, k)] = vG[gi(src, k)];
+    }
+  }
+  // iç yüzey: tek parçada SABİT silindir (medyan−tol−t) → her delik girişinin
+  // altında kalır (kapama garantisi) + yerel et ≥ t; ayrı parçada rOut−t
+  const rInFused = stats.median - stats.tol - t;
+  const rInG = rOutG.map((r) => (gap <= 0 ? rInFused : r - t));
+  for (const r of rInG) {
+    if (r < 0.5) throw new Error("Astar iç yarıçapı anlamsız — kalınlığı azaltın.");
+  }
+  let spanMin = Infinity, spanMax = -Infinity;
+  for (let s = 0; s < N; s += 1) {
+    const sp = vG[gi(s, NV)] - vG[gi(s, 0)];
+    spanMin = Math.min(spanMin, sp);
+    spanMax = Math.max(spanMax, sp);
+  }
+
+  // ---- 3) WATERTIGHT KABUK: dış/iç yüzey ızgarası + iki uç şeridi ----
+  const verts: number[] = [];
+  const world = (r: number, th: number, v: number) => {
+    const out = [frame.center.x, frame.center.y, frame.center.z];
+    out[a] += v;
+    out[(a + 1) % 3] += Math.cos(th) * r;
+    out[(a + 2) % 3] += Math.sin(th) * r;
+    return out;
+  };
+  const OFF = N * (NV + 1);
+  for (let s = 0; s < N; s += 1) {
+    const th = (s / N) * 2 * Math.PI;
+    for (let k = 0; k <= NV; k += 1) verts.push(...world(rOutG[gi(s, k)], th, vG[gi(s, k)]));
+  }
+  for (let s = 0; s < N; s += 1) {
+    const th = (s / N) * 2 * Math.PI;
+    for (let k = 0; k <= NV; k += 1) verts.push(...world(rInG[gi(s, k)], th, vG[gi(s, k)]));
+  }
+  const idx: number[] = [];
+  const quad = (a0: number, b0: number, c0: number, d0: number) => {
+    idx.push(a0, b0, c0, a0, c0, d0);
+  };
+  for (let s = 0; s < N; s += 1) {
+    const s2 = (s + 1) % N;
+    for (let k = 0; k < NV; k += 1) {
+      quad(gi(s, k), gi(s2, k), gi(s2, k + 1), gi(s, k + 1));
+      quad(OFF + gi(s, k + 1), OFF + gi(s2, k + 1), OFF + gi(s2, k), OFF + gi(s, k));
+    }
+    quad(OFF + gi(s, 0), OFF + gi(s2, 0), gi(s2, 0), gi(s, 0));
+    quad(gi(s, NV), gi(s2, NV), OFF + gi(s2, NV), OFF + gi(s, NV));
+  }
+  let geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(verts), 3));
+  geo.setIndex(idx);
+  geo = orientNestedShells(geo).geometry; // sarım yönü garanti
+  geo.computeVertexNormals();
+  geo.computeBoundingBox();
+
+  const volumeMm3 = geometryVolumeMm3(geo);
+  return {
+    geometry: geo,
+    volumeMm3,
+    spanMm: spanMax,
+    rOuterMm: Math.max(...rOutG),
+    rInnerMm: Math.min(...rInG),
+    spanMinMm: spanMin,
+  };
 }
