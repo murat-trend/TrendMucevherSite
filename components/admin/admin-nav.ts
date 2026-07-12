@@ -339,6 +339,13 @@ export const ADMIN_NAV_ENTRIES: AdminNavEntry[] = [
     icon: Gem,
     children: [
       {
+        id: "aci",
+        href: "/remaura/aci",
+        labelTr: "Açı",
+        labelEn: "Angle",
+        icon: Aperture,
+      },
+      {
         id: "creative-studio",
         href: "/remaura/creative-studio",
         labelTr: "AI Creative Studio",
@@ -371,13 +378,6 @@ export const ADMIN_NAV_ENTRIES: AdminNavEntry[] = [
         href: "/remaura/aci-lab",
         labelTr: "Açı Lab",
         labelEn: "Angle Lab",
-        icon: Aperture,
-      },
-      {
-        id: "aci",
-        href: "/remaura/aci",
-        labelTr: "Açı",
-        labelEn: "Angle",
         icon: Aperture,
       },
       {
