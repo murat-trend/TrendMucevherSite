@@ -9,6 +9,7 @@ import { shrinkForUpload, readJsonSafe, uploadErrorMessage } from "@/lib/remaura
 
 export function AciClient() {
   const [image, setImage] = useState<string | null>(null);
+  const [poseImage, setPoseImage] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [look, setLook] = useState<"prep3d" | "natural">("prep3d");
   const [upscaleFirst, setUpscaleFirst] = useState(true);
@@ -38,7 +39,8 @@ export function AciClient() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          image: await shrinkForUpload(image),
+          image: await shrinkForUpload(image, 1_600_000),
+          poseImage: poseImage ? await shrinkForUpload(poseImage, 1_600_000) : undefined,
           look,
           upscaleFirst,
           shapeNote: shapeNote.trim() || undefined,
@@ -140,6 +142,45 @@ export function AciClient() {
                 placeholder="Geometri notu (ör: tabla tam yuvarlak)"
                 className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none placeholder:text-[#6B6560] focus:border-[#b76e79]/50"
               />
+              {/* Poz referansı — kamera açısı bu görselden birebir kopyalanır */}
+              <div className="sm:col-span-2">
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-widest" style={{ color: "#c9a88a" }}>
+                  Poz Referansı (isteğe bağlı — en isabetli yöntem)
+                </p>
+                <p className="mb-2 text-[10px]" style={{ color: "#6B6560" }}>
+                  Tripo&apos;da tablası DÜZ çıkmış bir girdi görseli yükle; kamera açısı ondan birebir kopyalanır
+                  (tasarımı değil, yalnız açısı alınır).
+                </p>
+                {poseImage ? (
+                  <div className="flex items-center gap-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={poseImage} alt="Poz referansı" className="h-16 w-16 rounded-lg border border-white/10 object-cover" />
+                    <button
+                      onClick={() => setPoseImage(null)}
+                      className="rounded-lg border border-white/10 px-3 py-2 text-[10px] font-bold uppercase tracking-wider"
+                      style={{ color: "#9C9894" }}
+                    >
+                      Kaldır
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex cursor-pointer items-center justify-center rounded-lg border border-dashed border-white/15 bg-black/30 px-3 py-4 text-[10px] transition-colors hover:border-[#b76e79]/40" style={{ color: "#9C9894" }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (!f || !f.type.startsWith("image/")) return;
+                        const r = new FileReader();
+                        r.onload = () => setPoseImage(r.result as string);
+                        r.readAsDataURL(f);
+                      }}
+                    />
+                    Poz referansı yükle
+                  </label>
+                )}
+              </div>
             </div>
 
             {/* Çalıştır */}

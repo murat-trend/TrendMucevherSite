@@ -27,7 +27,7 @@ const GEMINI_MODEL = "gemini-3.1-flash-image-preview";
  * look="prep3d": taşsız + mat + gölgesiz (image-to-3D girdisi — parlama ve
  * taşlar mesh'i bozduğu için repoz'daki kanıtlanmış yüzey kuralları).
  */
-function buildAciPrompt(look: "natural" | "prep3d", shapeNote?: string): string {
+function buildAciPrompt(look: "natural" | "prep3d", shapeNote?: string, hasPoseRef?: boolean): string {
   const noteLine = shapeNote?.trim()
     ? `DESIGNER'S GEOMETRY NOTE — AUTHORITATIVE (the designer knows the true CAD geometry; obey exactly): ${shapeNote.trim()}. Any apparent distortion in the reference is PERSPECTIVE from the viewing angle, NOT the real shape — render the stated geometry precisely.`
     : "";
@@ -38,11 +38,13 @@ function buildAciPrompt(look: "natural" | "prep3d", shapeNote?: string): string 
       : "STRICT: This is the SAME piece of jewelry shown in the reference image. Preserve its EXACT design identity — motifs, ornament, engraving and any lettering or inscriptions, silhouette, band/shoulder shape and proportions. Do NOT invent, restyle or simplify anything; only change the camera pose and the surface treatment rules below.";
 
   const cameraBlock = [
-    "CAMERA — 3D-SAFE LOW ANGLE (CRITICAL): near eye-level product shot. The camera is elevated only 10–15 degrees above the piece — a LOW elevation. NOT a high angle, NOT 30–45 degrees, NOT looking down at the piece.",
-    "HORIZONTAL ORBIT: camera orbits about 30 degrees to the right of front-center, so the front face and the right side band are both visible and the piece's depth reads clearly.",
-    "LENS: long telephoto look with MINIMAL perspective distortion (near-orthographic) — parallel edges must stay parallel; no wide-angle foreshortening.",
-    "RING POSE: standing upright on its shank, band vertical, decorative head on top. The flat top plate (tabla) must read PERFECTLY LEVEL and HORIZONTAL in world space — perpendicular to the finger axis, appearing as a very SHALLOW, SYMMETRIC ellipse. Do NOT tip or tilt the top face toward the camera. The finger opening is clearly OPEN and visible at the bottom.",
-    "IF THE PIECE IS NOT A RING (pendant, medallion, earring, bracelet): same spirit — low-elevation three-quarter view, main face level and undistorted, depth visible.",
+    "CAMERA — 3D-SAFE LOW ANGLE (CRITICAL, OVERRIDES YOUR DEFAULT PRODUCT-SHOT HABITS): the camera sits almost at the ring's OWN HEIGHT — a near eye-level SIDE view, elevated at most 10–15 degrees. You are looking at the ring's SIDE, not down at its face.",
+    "WHAT THIS MEANS VISUALLY: the flat top plate (tabla) is seen almost EDGE-ON — it appears only as a very thin, shallow sliver of an ellipse at the top. The face design is barely readable from this angle; that is CORRECT and intended. Most of the frame shows the ring's SIDE PROFILE: the band, the shoulder ornament, the thickness of the head.",
+    "WRONG (do NOT produce): any view where the full face/tabla design is readable from above; any camera elevated 25 degrees or more; any 'hero' three-quarter product shot looking down at the piece. If the face design is clearly readable, the angle is WRONG.",
+    "HORIZONTAL ORBIT: camera orbits about 30 degrees to the right of front-center, so front and right side both read and the piece's depth is visible.",
+    "LENS: long telephoto, MINIMAL perspective (near-orthographic) — parallel edges stay parallel; no wide-angle foreshortening.",
+    "RING POSE: standing upright on its shank, band vertical, head on top. The tabla plane stays PERFECTLY LEVEL and HORIZONTAL — perpendicular to the finger axis. Do NOT tip the face toward the camera. The finger opening is clearly OPEN and visible.",
+    "IF THE PIECE IS NOT A RING (pendant, medallion, earring, bracelet): same spirit — low-elevation near-side view, main face level and undistorted, depth visible.",
   ].join("\n");
 
   const surfaceLines =
@@ -58,10 +60,18 @@ function buildAciPrompt(look: "natural" | "prep3d", shapeNote?: string): string 
           "OUTPUT: pure seamless white background, NO shadow of any kind, single centered piece, no hands, no model, no text; crisp hard silhouette edges for clean mesh reconstruction.",
         ];
 
+  const poseRefLine = hasPoseRef
+    ? "CAMERA POSE REFERENCE — HIGHEST PRIORITY: a SECOND image is provided. It shows a DIFFERENT piece of jewelry — IGNORE its design, materials and colors entirely; it is ONLY a camera-pose reference. COPY ITS CAMERA POSE EXACTLY: same elevation, same orbit/rotation, same distance and framing, same perspective. Render the FIRST image's piece at precisely that camera pose. Where this reference and the textual camera description disagree, THE REFERENCE WINS."
+    : "";
+
   return [
+    hasPoseRef
+      ? "You are given two images. The FIRST image is the jewelry piece to re-photograph. The SECOND image is only a camera-pose reference."
+      : "",
     identityLine,
     noteLine,
     "TASK: Re-photograph this exact piece at the 3D-safe camera pose described below.",
+    poseRefLine,
     cameraBlock,
     ...surfaceLines,
   ]
@@ -109,6 +119,8 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as {
       image?: string;
+      /** İsteğe bağlı poz referansı: kamera açısı bu görselden birebir kopyalanır */
+      poseImage?: string;
       upscaleFirst?: boolean;
       shapeNote?: string;
       look?: "natural" | "prep3d";
@@ -135,7 +147,8 @@ export async function POST(req: Request) {
     }
 
     const jpeg = await prepareImage(sourceImage);
-    const promptUsed = buildAciPrompt(look, body.shapeNote);
+    const poseJpeg = body.poseImage ? await prepareImage(body.poseImage) : null;
+    const promptUsed = buildAciPrompt(look, body.shapeNote, Boolean(poseJpeg));
 
     const ai = new GoogleGenAI({ apiKey: googleKey });
     const result = await ai.models.generateContent({
@@ -145,6 +158,9 @@ export async function POST(req: Request) {
           role: "user" as const,
           parts: [
             { inlineData: { mimeType: "image/jpeg", data: jpeg.toString("base64") } },
+            ...(poseJpeg
+              ? [{ inlineData: { mimeType: "image/jpeg", data: poseJpeg.toString("base64") } }]
+              : []),
             { text: promptUsed },
           ],
         },
