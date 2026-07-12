@@ -38,9 +38,10 @@ function buildAciPrompt(look: "natural" | "prep3d", shapeNote?: string, hasPoseR
       : "STRICT: This is the SAME piece of jewelry shown in the reference image. Preserve its EXACT design identity — motifs, ornament, engraving and any lettering or inscriptions, silhouette, band/shoulder shape and proportions. Do NOT invent, restyle or simplify anything; only change the camera pose and the surface treatment rules below.";
 
   const cameraBlock = [
-    "CAMERA — 3D-SAFE LOW ANGLE (CRITICAL, OVERRIDES YOUR DEFAULT PRODUCT-SHOT HABITS): the camera is elevated about 20 degrees above the ring — a LOW vantage, clearly below a standard product shot. You see mostly the ring's SIDE, plus a shallow view of its top face.",
+    "CAMERA — RAISED SIDE VIEW (CRITICAL, OVERRIDES YOUR DEFAULT PRODUCT-SHOT HABITS): start from a PURE SIDE PROFILE of the ring — camera at the ring's own height, looking at its side — then raise the camera by only 15–20 degrees. The result is a side view seen slightly from above. It is NOT a product hero shot lowered down; it is a side profile raised up.",
     "WHAT THIS MEANS VISUALLY: the flat top plate (tabla) appears as a SHALLOW but READABLE ellipse — squashed to roughly one-third of its full height. The face design is partially readable at a glancing angle; the side profile (band, shoulder ornament, head thickness) still dominates the frame.",
-    "WRONG (do NOT produce): any camera elevated 30 degrees or more; any 'hero' three-quarter shot looking down where the face reads almost like a top view. ALSO WRONG: a pure edge-on side view where the top face is completely invisible. Target: face visible but strongly foreshortened.",
+    "LEVELNESS TEST — THE IMAGE MUST PASS THIS: the flat top plate behaves like a WATER LEVEL. Its NEAR edge and FAR edge are both HORIZONTAL, PARALLEL straight lines in the image. The plate must NOT slant left-to-right, must NOT tip toward the camera, must NOT tip away. If the plate's plane looks slanted in ANY direction, the image is WRONG — regenerate it level.",
+    "WRONG (do NOT produce): any camera elevated 30 degrees or more; any 'hero' three-quarter shot looking down where the face reads almost like a top view; any image where the top plate is slanted or tipped. ALSO WRONG: a pure edge-on side view where the top face is completely invisible.",
     "HORIZONTAL ORBIT: camera orbits about 30 degrees to the right of front-center, so front and right side both read and the piece's depth is visible.",
     "LENS: long telephoto, MINIMAL perspective (near-orthographic) — parallel edges stay parallel; no wide-angle foreshortening.",
     "RING POSE: standing upright on its shank, band vertical, head on top. The tabla plane stays PERFECTLY LEVEL and HORIZONTAL — perpendicular to the finger axis. Do NOT tip the face toward the camera. The finger opening is clearly OPEN and visible.",
@@ -61,7 +62,7 @@ function buildAciPrompt(look: "natural" | "prep3d", shapeNote?: string, hasPoseR
         ];
 
   const poseRefLine = hasPoseRef
-    ? "CAMERA POSE REFERENCE — HIGHEST PRIORITY: a SECOND image is provided. It shows a DIFFERENT piece of jewelry — IGNORE its design, materials and colors entirely; it is ONLY a camera-pose reference. COPY ITS CAMERA POSE EXACTLY: same elevation, same orbit/rotation, same distance and framing, same perspective. Render the FIRST image's piece at precisely that camera pose. Where this reference and the textual camera description disagree, THE REFERENCE WINS."
+    ? "CAMERA POSE REFERENCE — HIGHEST PRIORITY: a SECOND image is provided. It shows a DIFFERENT piece of jewelry — IGNORE its design, materials and colors entirely; it is ONLY a camera-pose reference. COPY ITS CAMERA POSE EXACTLY: same elevation, same orbit/rotation, same distance and framing, same perspective. Render the FIRST image's piece at precisely that camera pose. Where this reference and the textual camera description disagree, THE REFERENCE WINS — except the LEVELNESS TEST below, which always applies: the top plate stays perfectly level."
     : "";
 
   return [
