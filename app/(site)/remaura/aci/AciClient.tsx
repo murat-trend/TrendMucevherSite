@@ -4,18 +4,37 @@
 // açısına çevrilir; taşlar/mine/cila/yazıt dahil her şey aynen korunur.
 // Motor: /api/remaura/aci (repoz'un 3D-hazırlık kurallarından arınmış varyant).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { shrinkForUpload, readJsonSafe, uploadErrorMessage } from "@/lib/remaura/upload";
+
+// Kayıtlı varsayılan poz — sayfa açılınca otomatik aktif (Murat'ın kanıtlanmış açısı)
+const DEFAULT_POSE_URL = "/remaura-aci-poz.jpg";
+
+type PoseMode = "default" | "custom" | "none";
 
 export function AciClient() {
   const [image, setImage] = useState<string | null>(null);
-  const [poseImage, setPoseImage] = useState<string | null>(null);
+  const [poseMode, setPoseMode] = useState<PoseMode>("none");
+  const [customPose, setCustomPose] = useState<string | null>(null);
+  const [defaultPoseAvailable, setDefaultPoseAvailable] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [look, setLook] = useState<"prep3d" | "natural">("prep3d");
   const [upscaleFirst, setUpscaleFirst] = useState(true);
   const [shapeNote, setShapeNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Kayıtlı poz dosyası yayında mı? Varsa sayfa açılışında otomatik aktif et.
+  useEffect(() => {
+    fetch(DEFAULT_POSE_URL, { method: "HEAD" })
+      .then((r) => {
+        if (r.ok) {
+          setDefaultPoseAvailable(true);
+          setPoseMode("default");
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -40,7 +59,12 @@ export function AciClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           image: await shrinkForUpload(image, 1_600_000),
-          poseImage: poseImage ? await shrinkForUpload(poseImage, 1_600_000) : undefined,
+          poseImage:
+            poseMode === "default"
+              ? "default"
+              : poseMode === "custom" && customPose
+                ? await shrinkForUpload(customPose, 1_600_000)
+                : undefined,
           look,
           upscaleFirst,
           shapeNote: shapeNote.trim() || undefined,
@@ -142,44 +166,104 @@ export function AciClient() {
                 placeholder="Geometri notu (ör: tabla tam yuvarlak)"
                 className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs outline-none placeholder:text-[#6B6560] focus:border-[#b76e79]/50"
               />
-              {/* Poz referansı — kamera açısı bu görselden birebir kopyalanır */}
+              {/* Poz referansı — kamera açısı bu görselden birebir kopyalanır.
+                  Kayıtlı poz sayfa açılışında otomatik aktiftir. */}
               <div className="sm:col-span-2">
                 <p className="mb-2 text-[10px] font-bold uppercase tracking-widest" style={{ color: "#c9a88a" }}>
-                  Poz Referansı (isteğe bağlı — en isabetli yöntem)
+                  Poz Referansı
                 </p>
-                <p className="mb-2 text-[10px]" style={{ color: "#6B6560" }}>
-                  Tripo&apos;da tablası DÜZ çıkmış bir girdi görseli yükle; kamera açısı ondan birebir kopyalanır
-                  (tasarımı değil, yalnız açısı alınır).
-                </p>
-                {poseImage ? (
+                {poseMode !== "none" ? (
                   <div className="flex items-center gap-3">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={poseImage} alt="Poz referansı" className="h-16 w-16 rounded-lg border border-white/10 object-cover" />
-                    <button
-                      onClick={() => setPoseImage(null)}
-                      className="rounded-lg border border-white/10 px-3 py-2 text-[10px] font-bold uppercase tracking-wider"
-                      style={{ color: "#9C9894" }}
-                    >
-                      Kaldır
-                    </button>
+                    <img
+                      src={poseMode === "default" ? DEFAULT_POSE_URL : (customPose ?? "")}
+                      alt="Poz referansı"
+                      className="h-16 w-16 rounded-lg border object-cover"
+                      style={{ borderColor: poseMode === "default" ? "#b76e79" : "rgba(255,255,255,0.1)" }}
+                    />
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold" style={{ color: "#b76e79" }}>
+                        {poseMode === "default" ? "Kayıtlı poz aktif" : "Özel poz aktif"}
+                      </span>
+                      <div className="flex gap-2">
+                        <label
+                          className="cursor-pointer rounded-lg border border-white/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider"
+                          style={{ color: "#9C9894" }}
+                        >
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (!f || !f.type.startsWith("image/")) return;
+                              const r = new FileReader();
+                              r.onload = () => {
+                                setCustomPose(r.result as string);
+                                setPoseMode("custom");
+                              };
+                              r.readAsDataURL(f);
+                            }}
+                          />
+                          Değiştir
+                        </label>
+                        {poseMode === "custom" && defaultPoseAvailable && (
+                          <button
+                            onClick={() => setPoseMode("default")}
+                            className="rounded-lg border border-white/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider"
+                            style={{ color: "#9C9894" }}
+                          >
+                            Kayıtlıya Dön
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setPoseMode("none")}
+                          className="rounded-lg border border-white/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider"
+                          style={{ color: "#9C9894" }}
+                        >
+                          Kaldır
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ) : (
-                  <label className="flex cursor-pointer items-center justify-center rounded-lg border border-dashed border-white/15 bg-black/30 px-3 py-4 text-[10px] transition-colors hover:border-[#b76e79]/40" style={{ color: "#9C9894" }}>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="sr-only"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (!f || !f.type.startsWith("image/")) return;
-                        const r = new FileReader();
-                        r.onload = () => setPoseImage(r.result as string);
-                        r.readAsDataURL(f);
-                      }}
-                    />
-                    Poz referansı yükle
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <label
+                      className="flex flex-1 cursor-pointer items-center justify-center rounded-lg border border-dashed border-white/15 bg-black/30 px-3 py-4 text-[10px] transition-colors hover:border-[#b76e79]/40"
+                      style={{ color: "#9C9894" }}
+                    >
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (!f || !f.type.startsWith("image/")) return;
+                          const r = new FileReader();
+                          r.onload = () => {
+                            setCustomPose(r.result as string);
+                            setPoseMode("custom");
+                          };
+                          r.readAsDataURL(f);
+                        }}
+                      />
+                      Poz referansı yükle
+                    </label>
+                    {defaultPoseAvailable && (
+                      <button
+                        onClick={() => setPoseMode("default")}
+                        className="rounded-lg border px-3 py-4 text-[10px] font-bold uppercase tracking-wider"
+                        style={{ borderColor: "#b76e79", color: "#b76e79", background: "rgba(183,110,121,0.1)" }}
+                      >
+                        Kayıtlı Pozu Kullan
+                      </button>
+                    )}
+                  </div>
                 )}
+                <p className="mt-2 text-[10px]" style={{ color: "#6B6560" }}>
+                  Kamera açısı bu görselden birebir kopyalanır (tasarımı değil, yalnız açısı). Kaldırırsan
+                  metin kuralı devreye girer (yükseltilmiş yan görünüm).
+                </p>
               </div>
             </div>
 

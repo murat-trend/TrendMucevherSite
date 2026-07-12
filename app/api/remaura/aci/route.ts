@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { loadEnvConfig } from "@next/env";
 import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
@@ -17,6 +19,22 @@ export const maxDuration = 300;
  */
 
 const GEMINI_MODEL = "gemini-3.1-flash-image-preview";
+
+// Kayıtlı varsayılan poz (Murat'ın kanıtlanmış açı referansı).
+// İstemci "default" gönderir; dosya public/remaura-aci-poz.jpg'de yaşar.
+const DEFAULT_POSE_FILE = path.join(process.cwd(), "public", "remaura-aci-poz.jpg");
+
+async function resolvePoseImage(poseImage: string | undefined): Promise<string | null> {
+  if (!poseImage) return null;
+  if (poseImage !== "default") return poseImage;
+  try {
+    const buf = await readFile(DEFAULT_POSE_FILE);
+    return `data:image/jpeg;base64,${buf.toString("base64")}`;
+  } catch (e) {
+    console.warn("[aci] varsayılan poz dosyası okunamadı:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
 
 /**
  * TEK KURAL — 3D-GÜVENLİ ALÇAK AÇI (saha bulgusu: 30-45° yukarıdan kamera,
@@ -150,7 +168,8 @@ export async function POST(req: Request) {
     }
 
     const jpeg = await prepareImage(sourceImage);
-    const poseJpeg = body.poseImage ? await prepareImage(body.poseImage) : null;
+    const resolvedPose = await resolvePoseImage(body.poseImage);
+    const poseJpeg = resolvedPose ? await prepareImage(resolvedPose) : null;
     const promptUsed = buildAciPrompt(look, body.shapeNote, Boolean(poseJpeg));
 
     const ai = new GoogleGenAI({ apiKey: googleKey });
