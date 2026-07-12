@@ -61,19 +61,21 @@ function buildAciPrompt(look: "natural" | "prep3d", shapeNote?: string, hasPoseR
           "OUTPUT: pure seamless white background, NO shadow of any kind, single centered piece, no hands, no model, no text; crisp hard silhouette edges for clean mesh reconstruction.",
         ];
 
-  const poseRefLine = hasPoseRef
-    ? "CAMERA POSE REFERENCE — HIGHEST PRIORITY: a SECOND image is provided. It shows a DIFFERENT piece of jewelry — IGNORE its design, materials and colors entirely; it is ONLY a camera-pose reference. COPY ITS CAMERA POSE EXACTLY: same elevation, same orbit/rotation, same distance and framing, same perspective. Render the FIRST image's piece at precisely that camera pose. Where this reference and the textual camera description disagree, THE REFERENCE WINS — except the LEVELNESS TEST below, which always applies: the top plate stays perfectly level."
-    : "";
+  // Poz referansı varsa metin kamerası TAMAMEN devre dışı — referans tek otorite.
+  // (Ders: metin kamera bloğu referansla çatışınca model metni dinliyor.)
+  const poseRefBlock = [
+    "You are given two images. The FIRST image is the jewelry piece to re-photograph. The SECOND image is ONLY a camera-pose reference.",
+    "CAMERA = THE REFERENCE IMAGE. The second image defines the camera completely: copy its elevation, its orbit/rotation, its distance, its framing and its perspective EXACTLY. Render the FIRST image's piece at precisely that camera pose. IGNORE the reference's design, materials and colors — only its camera pose matters.",
+    "The top plate's plane must sit exactly as it sits in the reference pose — no extra tilt in any direction beyond what the reference shows.",
+  ].join("\n");
 
   return [
-    hasPoseRef
-      ? "You are given two images. The FIRST image is the jewelry piece to re-photograph. The SECOND image is only a camera-pose reference."
-      : "",
     identityLine,
     noteLine,
-    "TASK: Re-photograph this exact piece at the 3D-safe camera pose described below.",
-    poseRefLine,
-    cameraBlock,
+    hasPoseRef
+      ? "TASK: Re-photograph this exact piece at the camera pose of the reference image."
+      : "TASK: Re-photograph this exact piece at the 3D-safe camera pose described below.",
+    hasPoseRef ? poseRefBlock : cameraBlock,
     ...surfaceLines,
   ]
     .filter(Boolean)
