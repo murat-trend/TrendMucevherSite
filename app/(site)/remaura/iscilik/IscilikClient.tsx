@@ -18,6 +18,7 @@ export function IscilikClient() {
   const [defaultRefAvailable, setDefaultRefAvailable] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [upscaleFirst, setUpscaleFirst] = useState(false);
+  const [strength, setStrength] = useState(70);
   const [craftNote, setCraftNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +62,7 @@ export function IscilikClient() {
                 ? await shrinkForUpload(customRef, 1_600_000)
                 : undefined,
           upscaleFirst,
+          strength,
           craftNote: craftNote.trim() || undefined,
         }),
       });
@@ -200,6 +202,30 @@ export function IscilikClient() {
 
             {/* Ayarlar */}
             <div className="grid gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 sm:grid-cols-2">
+              {/* İşçilik şiddeti */}
+              <div className="sm:col-span-2">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#c9a88a" }}>
+                    İşçilik Şiddeti
+                  </span>
+                  <span className="text-[10px] font-mono" style={{ color: "#b76e79" }}>
+                    %{strength} — {strength <= 33 ? "Hafif rötuş" : strength <= 66 ? "Belirgin el işçiliği" : "Maksimum usta seviyesi"}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={strength}
+                  onChange={(e) => setStrength(Number(e.target.value))}
+                  className="w-full"
+                  style={{ accentColor: "#b76e79" }}
+                />
+                <div className="mt-0.5 flex justify-between text-[9px]" style={{ color: "#6B6560" }}>
+                  <span>Tasarıma sadık</span>
+                  <span>Tam dönüşüm</span>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <span className="w-16 text-[10px] font-bold uppercase tracking-widest" style={{ color: "#c9a88a" }}>
                   Netleştir

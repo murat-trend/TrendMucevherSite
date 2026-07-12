@@ -36,7 +36,19 @@ async function resolveRefImage(refImage: string | undefined): Promise<string | n
   }
 }
 
-function buildIscilikPrompt(craftNote?: string, hasRef?: boolean): string {
+// İşçilik şiddeti: sayısal kaydırıcı → kademeli komut dili (modeller
+// yüzdeden çok kademe tarifini dinler).
+function strengthBlock(strength: number): string {
+  if (strength <= 33) {
+    return "CRAFT INTENSITY — LIGHT (do NOT overdo): apply the craftsmanship gently. Keep the source's overall rendering character largely intact; add moderate relief depth, light surface texture and gentle material realism. The result reads as a refined, physically plausible version of the source — NOT a dramatic transformation.";
+  }
+  if (strength <= 66) {
+    return "CRAFT INTENSITY — MEDIUM: a clearly hand-crafted result. Pronounced relief depth, rich surface texture, believable real materials — a genuine crafted piece, while staying visually close to the source's character.";
+  }
+  return "CRAFT INTENSITY — MAXIMUM: push the workmanship to the highest master level — the deepest sculptural relief, the densest micro-detail, the richest hand-worked surfaces and finishing. The transformation from illustration to physical masterpiece is TOTAL.";
+}
+
+function buildIscilikPrompt(craftNote?: string, hasRef?: boolean, strength = 70): string {
   const noteLine = craftNote?.trim()
     ? `DESIGNER'S NOTE — AUTHORITATIVE (obey exactly): ${craftNote.trim()}.`
     : "";
@@ -51,6 +63,7 @@ function buildIscilikPrompt(craftNote?: string, hasRef?: boolean): string {
 
   return [
     refBlock,
+    strengthBlock(strength),
     "TASK: Re-create the FIRST image's design as a REAL, PHYSICALLY CRAFTED piece of master-level jewelry, photographed professionally. The result must look like an actual handcrafted piece a master goldsmith spent weeks on — not a digital illustration.",
     "PRESERVE FROM THE FIRST IMAGE — STRICT: the entire design identity — composition, motifs, silhouette, proportions, layout, and the COLOR/MATERIAL SCHEME (its gold areas stay gold; its colored areas become real enamel or stone inlay of the SAME colors). Do NOT redesign, simplify, add or remove any element; do NOT change the color scheme.",
     noteLine,
@@ -105,6 +118,8 @@ export async function POST(req: Request) {
       refImage?: string;
       upscaleFirst?: boolean;
       craftNote?: string;
+      /** 0-100 — işçilik şiddeti */
+      strength?: number;
     };
 
     if (!body.image) {
@@ -128,7 +143,8 @@ export async function POST(req: Request) {
     const jpeg = await prepareImage(sourceImage);
     const resolvedRef = await resolveRefImage(body.refImage);
     const refJpeg = resolvedRef ? await prepareImage(resolvedRef) : null;
-    const promptUsed = buildIscilikPrompt(body.craftNote, Boolean(refJpeg));
+    const strength = Math.min(100, Math.max(0, Number(body.strength) || 70));
+    const promptUsed = buildIscilikPrompt(body.craftNote, Boolean(refJpeg), strength);
 
     const ai = new GoogleGenAI({ apiKey: googleKey });
     const result = await ai.models.generateContent({
