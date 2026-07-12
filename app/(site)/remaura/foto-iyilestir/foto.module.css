@@ -1,0 +1,119 @@
+/* Foto İyileştir — sayfaya özel stiller (Kimi tasarımından) */
+
+.range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+  width: 100%;
+}
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #d4af37;
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.4);
+  transition: all 0.2s;
+}
+.range::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 14px rgba(212, 175, 55, 0.6);
+}
+.range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #d4af37;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.4);
+}
+
+.checker {
+  background-image: linear-gradient(45deg, #3a3a3a 25%, transparent 25%),
+    linear-gradient(-45deg, #3a3a3a 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #3a3a3a 75%),
+    linear-gradient(-45deg, transparent 75%, #3a3a3a 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+  background-color: #262626;
+}
+
+.sliderHandle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #d4af37;
+  cursor: ew-resize;
+  z-index: 10;
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.5);
+  touch-action: none;
+}
+.sliderHandle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #d4af37;
+  box-shadow: 0 0 16px rgba(212, 175, 55, 0.5);
+}
+.sliderHandle::before {
+  content: "|||";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+  font-weight: 800;
+  color: #050508;
+  letter-spacing: 1px;
+  z-index: 11;
+}
+
+.glassCard {
+  background: rgba(10, 8, 18, 0.85);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.btnGold {
+  background: linear-gradient(135deg, #d4af37, #e5c158);
+  color: #050508;
+  font-weight: 700;
+  transition: all 0.3s ease;
+}
+.btnGold:hover:not(:disabled) {
+  box-shadow: 0 6px 30px rgba(212, 175, 55, 0.4);
+  transform: translateY(-2px);
+}
+.btnGold:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.btnGold:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@keyframes pulseGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(212, 175, 55, 0.35);
+  }
+}
+.pulseGlow {
+  animation: pulseGlow 3s ease-in-out infinite;
+}
