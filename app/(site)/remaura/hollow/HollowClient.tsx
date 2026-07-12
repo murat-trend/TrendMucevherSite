@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { HollowViewer } from "./HollowViewer";
 import { writeBridge } from "@/lib/remaura/mesh-bridge";
+import { seqFileName } from "@/lib/remaura/fileSeq";
 
 type Stats = {
   wallThicknessMm: number;
@@ -256,6 +257,10 @@ export function HollowClient() {
                   <a
                     href={outputUrl}
                     download="hollow_output.stl"
+                    onClick={(e) => {
+                      // ardışık numara — dosyalar karışmasın (kullanıcı isteği)
+                      e.currentTarget.download = seqFileName(file?.name ?? "hollow.stl", "hollow", "stl");
+                    }}
                     className="flex items-center justify-center gap-2 rounded-xl border border-[#b76e79]/30 bg-[#b76e79]/10 px-4 py-2.5 text-sm font-medium text-[#b76e79] transition-opacity hover:opacity-80"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

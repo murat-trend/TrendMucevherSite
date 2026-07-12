@@ -24,6 +24,7 @@ import { estimateHollowCavity, gramForMetal } from "./lib/estimate";
 import { CASTING_RULES, type MetalKey } from "./lib/castingRules";
 import { METALS } from "../mesh-temizle/lib/meshOps";
 import { readBridge, writeBridge, clearBridge, type BridgeRecord } from "@/lib/remaura/mesh-bridge";
+import { seqFileName } from "@/lib/remaura/fileSeq";
 
 // ---------------------------------------------------------------------------
 // Ajur & Arka Kesim — yeniden yapım (PRD v1.0, Temmuz 2026)
@@ -560,7 +561,7 @@ export function AjurClient() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = (model?.fileName ?? "model.stl").replace(/\.stl$/i, "") + "_ajur_gruplu.obj";
+    a.download = seqFileName(model?.fileName ?? "model.stl", "ajur_gruplu", "obj");
     a.click();
     URL.revokeObjectURL(url);
   }, [shrinkPct, model]);
@@ -577,7 +578,7 @@ export function AjurClient() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = (model?.fileName ?? "model.stl").replace(/\.stl$/i, "") + "_ajur.stl";
+    a.download = seqFileName(model?.fileName ?? "model.stl", "ajur", "stl");
     a.click();
     URL.revokeObjectURL(url);
   }, [result, model, shrinkPct]);
@@ -1242,7 +1243,7 @@ export function AjurClient() {
                               const url = URL.createObjectURL(blob);
                               const a = document.createElement("a");
                               a.href = url;
-                              a.download = (model?.fileName ?? "model.stl").replace(/\.stl$/i, "") + "_astar.stl";
+                              a.download = seqFileName(model?.fileName ?? "model.stl", "astar", "stl");
                               a.click();
                               URL.revokeObjectURL(url);
                             }}
