@@ -374,6 +374,13 @@ export const ADMIN_NAV_ENTRIES: AdminNavEntry[] = [
         icon: Aperture,
       },
       {
+        id: "aci",
+        href: "/remaura/aci",
+        labelTr: "Açı",
+        labelEn: "Angle",
+        icon: Aperture,
+      },
+      {
         id: "uv",
         href: "/remaura/uv",
         labelTr: "UV Haritalama",
