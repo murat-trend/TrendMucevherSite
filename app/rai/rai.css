@@ -1,0 +1,281 @@
+/*
+ * REMAURA AI adası — izole stil katmanı.
+ * Kural: globals.css'e ve site token'larına dokunma; tüm ada stilleri
+ * .rai-root altında ve rai- önekiyle yaşar. Ada ayrılırken bu dosya
+ * olduğu gibi taşınır.
+ */
+
+.rai-root {
+  /* Palet — Kimi tasarımından (jewelry-studio-self-contained.html) */
+  --rai-bg: #050508;
+  --rai-card: #0a0812;
+  --rai-elevated: #0f0d18;
+  --rai-purple: #9b7fd4;
+  --rai-purple-light: #b8a0e8;
+  --rai-purple-dark: #7b5fb8;
+  --rai-purple-deep: #5b3a8f;
+  --rai-gold: #d4af37;
+  --rai-gold-light: #e5c158;
+  --rai-cyan: #5dd4e8;
+  --rai-text-sec: #94a3b8;
+  --rai-text-muted: #64748b;
+  --rai-error: #f87171;
+
+  font-family: var(--font-rai), system-ui, -apple-system, sans-serif;
+  background: var(--rai-bg);
+  color: #ffffff;
+  -webkit-font-smoothing: antialiased;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(155, 127, 212, 0.3) var(--rai-bg);
+}
+
+.rai-root ::-webkit-scrollbar {
+  width: 6px;
+}
+.rai-root ::-webkit-scrollbar-track {
+  background: var(--rai-bg);
+}
+.rai-root ::-webkit-scrollbar-thumb {
+  background: rgba(155, 127, 212, 0.3);
+  border-radius: 3px;
+}
+.rai-root ::-webkit-scrollbar-thumb:hover {
+  background: rgba(155, 127, 212, 0.5);
+}
+
+@keyframes rai-tool-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 6px var(--rai-gold), 0 0 12px rgba(212, 175, 55, 0.4);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 12px var(--rai-gold), 0 0 24px rgba(212, 175, 55, 0.6),
+      0 0 36px rgba(212, 175, 55, 0.2);
+    transform: scale(1.2);
+  }
+}
+
+@keyframes rai-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes rai-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes rai-bounce {
+  0%,
+  100% {
+    transform: translateY(-15%);
+    animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+  }
+  50% {
+    transform: translateY(0);
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+}
+
+.rai-anim-float {
+  animation: rai-float 4s ease-in-out infinite;
+}
+.rai-anim-tool-glow {
+  animation: rai-tool-glow 2s ease-in-out infinite;
+}
+.rai-anim-fade-in-up {
+  animation: rai-fade-in-up 0.6s ease-out forwards;
+}
+.rai-anim-bounce {
+  animation: rai-bounce 0.8s infinite;
+}
+
+.rai-btn-generate {
+  background: linear-gradient(135deg, var(--rai-purple), var(--rai-purple-dark));
+  box-shadow: 0 0 20px rgba(155, 127, 212, 0.25);
+  transition: all 0.3s ease;
+}
+.rai-btn-generate:hover:not(:disabled) {
+  box-shadow: 0 0 30px rgba(155, 127, 212, 0.4);
+  transform: translateY(-1px);
+}
+.rai-btn-generate:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+/* ── Landing katmanı (Kimi dashboard-source/index.css portu) ─────────────
+   Sınıf adları Kimi kaynağıyla aynı tutuldu ki bölüm bileşenleri birebir
+   taşınabilsin; hepsi .rai-root altında scope'lu — siteye sızmaz. */
+
+.rai-root .glass-card {
+  position: relative;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(10, 8, 18, 0.8);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+.rai-root .glass-card-hover {
+  position: relative;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(10, 8, 18, 0.8);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  transition: all 0.3s ease;
+}
+.rai-root .glass-card-hover:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 40px rgba(155, 127, 212, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transform: translateY(-4px);
+}
+
+.rai-root .gradient-text-purple {
+  background: linear-gradient(135deg, #b8a0e8 0%, #9b7fd4 50%, #7b5fb8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.rai-root .gradient-text-gold {
+  background: linear-gradient(135deg, #d4af37 0%, #e5c158 50%, #f0d878 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.rai-root .gradient-gold {
+  background: linear-gradient(135deg, #d4af37, #e5c158);
+}
+.rai-root .gold-border-glow {
+  box-shadow: 0 0 30px rgba(212, 175, 55, 0.08);
+}
+
+.rai-root .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #9b7fd4 0%, #7b5fb8 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 20px rgba(155, 127, 212, 0.3);
+}
+.rai-root .btn-primary:hover {
+  box-shadow: 0 6px 30px rgba(155, 127, 212, 0.5);
+  transform: translateY(-2px);
+}
+.rai-root .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+}
+.rai-root .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(155, 127, 212, 0.3);
+  transform: translateY(-2px);
+}
+
+.rai-root .section-padding {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+@media (min-width: 640px) {
+  .rai-root .section-padding {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+@media (min-width: 1024px) {
+  .rai-root .section-padding {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+@media (min-width: 1280px) {
+  .rai-root .section-padding {
+    padding-left: 3rem;
+    padding-right: 3rem;
+  }
+}
+@media (min-width: 1536px) {
+  .rai-root .section-padding {
+    padding-left: 5rem;
+    padding-right: 5rem;
+  }
+}
+
+.rai-root .nav-link {
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: color 0.2s ease;
+  color: #94a3b8;
+}
+.rai-root .nav-link:hover {
+  color: #ffffff;
+}
+
+.rai-root .tag-gold,
+.rai-root .tag-purple {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.rai-root .tag-gold {
+  background: rgba(212, 175, 55, 0.1);
+  color: #e5c158;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+}
+.rai-root .tag-purple {
+  background: rgba(155, 127, 212, 0.1);
+  color: #b8a0e8;
+  border: 1px solid rgba(155, 127, 212, 0.2);
+}
+
+.rai-root .animate-fade-in-up {
+  opacity: 0;
+  animation: rai-fade-in-up 0.6s ease-out forwards;
+}
+.rai-root .animate-fade-in {
+  animation: rai-fade-in 0.4s ease-out forwards;
+}
+.rai-root .animate-float {
+  animation: rai-float 6s ease-in-out infinite;
+}
+
+@keyframes rai-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
