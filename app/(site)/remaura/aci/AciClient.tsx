@@ -10,6 +10,7 @@ import { shrinkForUpload, readJsonSafe, uploadErrorMessage } from "@/lib/remaura
 export function AciClient() {
   const [image, setImage] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
+  const [look, setLook] = useState<"prep3d" | "natural">("prep3d");
   const [upscaleFirst, setUpscaleFirst] = useState(true);
   const [shapeNote, setShapeNote] = useState("");
   const [loading, setLoading] = useState(false);
@@ -38,6 +39,7 @@ export function AciClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           image: await shrinkForUpload(image),
+          look,
           upscaleFirst,
           shapeNote: shapeNote.trim() || undefined,
         }),
@@ -74,7 +76,8 @@ export function AciClient() {
             Açı
           </h1>
           <p className="mt-1 text-xs" style={{ color: "#c9a88a" }}>
-            Tek kural: yüklenen parça imza açıya çevrilir — taşlar, renkler ve cila aynen korunur.
+            Tek kural: 3D-güvenli alçak açı (~10-15°) — tabla düz, perspektif minimum.
+            3D Hazırlık: taşsız + mat (Tripo girdisi) · Doğal: taş ve cila korunur.
           </p>
         </div>
 
@@ -91,6 +94,30 @@ export function AciClient() {
           <>
             {/* Ayarlar */}
             <div className="grid gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 sm:grid-cols-2">
+              <div className="flex items-center gap-2">
+                <span className="w-16 text-[10px] font-bold uppercase tracking-widest" style={{ color: "#c9a88a" }}>
+                  Görünüm
+                </span>
+                {(
+                  [
+                    { key: "prep3d", label: "3D Hazırlık" },
+                    { key: "natural", label: "Doğal" },
+                  ] as const
+                ).map((m) => (
+                  <button
+                    key={m.key}
+                    onClick={() => setLook(m.key)}
+                    className={BTN}
+                    style={{
+                      borderColor: look === m.key ? "#b76e79" : "rgba(255,255,255,0.1)",
+                      color: look === m.key ? "#b76e79" : "#9C9894",
+                      background: look === m.key ? "rgba(183,110,121,0.1)" : "transparent",
+                    }}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
               <div className="flex items-center gap-2">
                 <span className="w-16 text-[10px] font-bold uppercase tracking-widest" style={{ color: "#c9a88a" }}>
                   Netleştir
