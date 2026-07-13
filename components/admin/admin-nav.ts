@@ -479,6 +479,13 @@ export const ADMIN_NAV_ENTRIES: AdminNavEntry[] = [
         labelEn: "Liquid — Mold Casting",
         icon: Droplet,
       },
+      {
+        id: "geometri",
+        href: "/remaura/geometri",
+        labelTr: "Geometri Çekirdeği",
+        labelEn: "Geometry Kernel",
+        icon: PenTool,
+      },
     ],
   },
 

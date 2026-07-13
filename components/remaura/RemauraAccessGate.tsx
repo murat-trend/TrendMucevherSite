@@ -9,9 +9,13 @@ type Props = {
 };
 
 export function RemauraAccessGate({ categoryId, children }: Props) {
-  const [status, setStatus] = useState<"loading" | "granted" | "denied">("loading");
+  // Lokal geliştirme: geçit atlanır (production build'de her zaman "loading" başlar)
+  const [status, setStatus] = useState<"loading" | "granted" | "denied">(
+    process.env.NODE_ENV === "development" ? "granted" : "loading",
+  );
 
   useEffect(() => {
+    if (process.env.NODE_ENV === "development") return;
     const supabase = createClient();
     void supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) { setStatus("denied"); return; }
