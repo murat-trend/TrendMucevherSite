@@ -128,6 +128,16 @@ Tarihli kısa girişler aşağıya da düşülür (son 10 tutulur, eskisi ilkele
 - 2026-07-14: Murat "iç içe halkalar bağlantısız / zar boşluğu / kesişme" →
   §1.1 boncuk, §1.5 zar, §1.2 grid-arama doğdu
 - 2026-07-14: tasarım değerlendirmesi → §3 estetik ilkeleri (Murat onayladı)
+- 2026-07-14 (Faz 1): analiz örneklemesi SEYRELTME değil YENİDEN örnekleme
+  olmalı — 2 noktalı düz tel ara nokta almazsa temaslar görünmez (bug yakalandı)
+- 2026-07-14 (Faz 1): burgu damarı döküm çap kuralında TEK başına değil
+  KOMPOZİT çapıyla değerlendirilir (ikili burgu ≈ toplam çapta tek tel gibi
+  dökülür) — AnalyzeWire.diaMm ayrımı bunun için var
+- 2026-07-14 (doku turu): ÇARŞI DİLİ esastır — "burma" (burgu değil), "boncuk
+  tel" (miligren=döküm sonrası çark işi, güherse=ayrık tane dizme; İKİSİ DE
+  boncuk tel değildir), "dalgalı/zikzak". Doku seti: düz/burma/yassı burma/
+  çift burma S+Z/örgü/boncuk/sarma(kazaziye)/dalgalı. Güherse (yüzeye tane
+  serpme) ileride AYRI özellik adayı. Kaynak: İKO sözlüğü + Midyat/Sardis.
 
 ## 8. DİL NOTU
 

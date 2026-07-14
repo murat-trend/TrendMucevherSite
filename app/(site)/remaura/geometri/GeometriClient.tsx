@@ -6,7 +6,7 @@ import { buildTelkariDrop } from "@/lib/remaura/geo/telkari";
 import { buildTelkariArabesk } from "@/lib/remaura/geo/telkariArabesk";
 import { buildTelkariKelebek } from "@/lib/remaura/geo/telkariKelebek";
 import { buildKelebekOzgun } from "@/lib/remaura/geo/kelebekOzgun";
-import { sweepWire, sweepTwistedWire } from "@/lib/remaura/geo/wire";
+import { sweepWire, sweepTwistedWire, sweepBeadedWire, makeWavyPath, offsetPathN } from "@/lib/remaura/geo/wire";
 import { analyzeSpans, AnalyzeWire, SPAN_WARN_RATIO } from "@/lib/remaura/geo/analyze";
 import { unionMeshes } from "@/lib/remaura/geo/union";
 import type { V3 } from "@/lib/remaura/geo/vec3";
@@ -23,10 +23,17 @@ const MATERIALS = {
 } as const;
 type MaterialId = keyof typeof MATERIALS;
 
+// adlar çarşı diliyle (terminoloji araştırması 2026-07-14): burma (burgu değil),
+// boncuk tel (miligren/güherse başka şeylerdir), dalgalı (zikzak)
 const DOKULAR = {
   duz: "Düz tel",
-  burgu: "Burgu",
-  "burgu-yassi": "Burgu + yassı",
+  burgu: "Burma",
+  "burgu-yassi": "Yassı burma",
+  "cift-burma": "Çift burma (S+Z)",
+  orgu: "Örgü tel (3 damar)",
+  boncuk: "Boncuk tel",
+  sarma: "Sarma (kazaziye)",
+  ondule: "Dalgalı (zikzak)",
 } as const;
 type DokuId = keyof typeof DOKULAR;
 
@@ -171,12 +178,13 @@ export function GeometriClient() {
     for (const tw of src.wires) {
       const isFine = tw.radiusMm * 2 === dFine;
       const kind = (isFine ? "fine" : "frame") as ViewMesh["kind"];
-      if (isFine && dDoku !== "duz") {
+      if (isFine && (dDoku === "burgu" || dDoku === "burgu-yassi" || dDoku === "orgu")) {
         const D = tw.radiusMm * 2;
         const strands = sweepTwistedWire(tw.path, D, {
-          pitchMm: D * 3.2,
+          strands: dDoku === "orgu" ? 3 : 2,
+          pitchMm: D * (dDoku === "orgu" ? 4 : 3.2),
           flattenZ: dDoku === "burgu-yassi" ? 0.55 : 1,
-          tolMm: 0.003, // burgu damarları görsel tolerans (3µm) — mesh patlamasın
+          tolMm: 0.003, // damar görsel toleransı (3µm) — mesh patlamasın
           minRingSpacingMm: 0.12,
         });
         for (const st of strands) {
@@ -189,6 +197,78 @@ export function GeometriClient() {
             anaPts: st.path.pts, anaR: st.mesh.requestedRadiusMm, anaDia: D, fineFlag: true,
           });
         }
+      } else if (isFine && dDoku === "cift-burma") {
+        // S+Z: ters yönlü iki burma yan yana (balıksırtı) — her biri D/2 kalınlıkta
+        const D = tw.radiusMm * 2;
+        for (const yon of [1, -1] as const) {
+          const off = offsetPathN(tw.path, (yon * D) / 4);
+          for (const st of sweepTwistedWire(off, D / 2, {
+            pitchMm: yon * (D / 2) * 3.2, tolMm: 0.003, minRingSpacingMm: 0.1,
+          })) {
+            wireRows.push({
+              view: { positions: st.mesh.positions, indices: st.mesh.indices, kind },
+              lengthMm: st.mesh.lengthMm,
+              vol: meshVolumeMm3(st.mesh.positions, st.mesh.indices),
+              meas: measureWire(st.mesh, st.path),
+              manifoldOk: edgeManifoldReport(st.mesh.indices).ok,
+              anaPts: st.path.pts, anaR: st.mesh.requestedRadiusMm, anaDia: D, fineFlag: true,
+            });
+          }
+        }
+      } else if (isFine && dDoku === "sarma") {
+        // kazaziye: kalın çekirdek + üstüne sık sarılan ince tel
+        const D = tw.radiusMm * 2;
+        const rCoil = 0.15 * D, rCore = 0.2 * D;
+        const core = sweepWire(tw.path, rCore);
+        wireRows.push({
+          view: { positions: core.positions, indices: core.indices, kind },
+          lengthMm: core.lengthMm,
+          vol: meshVolumeMm3(core.positions, core.indices),
+          meas: measureWire(core, tw.path),
+          manifoldOk: edgeManifoldReport(core.indices).ok,
+          anaPts: tw.path.pts, anaR: rCore, anaDia: D, fineFlag: true,
+        });
+        for (const st of sweepTwistedWire(tw.path, D, {
+          strands: 1, strandRadiusMm: rCoil, orbitMm: rCore + rCoil,
+          pitchMm: 2.1 * (2 * rCoil), tolMm: 0.003, minRingSpacingMm: 0.08,
+        })) {
+          wireRows.push({
+            view: { positions: st.mesh.positions, indices: st.mesh.indices, kind },
+            lengthMm: st.mesh.lengthMm,
+            vol: meshVolumeMm3(st.mesh.positions, st.mesh.indices),
+            meas: measureWire(st.mesh, st.path),
+            manifoldOk: edgeManifoldReport(st.mesh.indices).ok,
+            anaPts: st.path.pts, anaR: rCoil, anaDia: D, fineFlag: true,
+          });
+        }
+      } else if (isFine && dDoku === "boncuk") {
+        const D = tw.radiusMm * 2;
+        const b = sweepBeadedWire(tw.path, D, { tolMm: 0.003 });
+        wireRows.push({
+          view: { positions: b.mesh.positions, indices: b.mesh.indices, kind },
+          lengthMm: b.mesh.lengthMm,
+          vol: meshVolumeMm3(b.mesh.positions, b.mesh.indices),
+          meas: {
+            requestedDiaMm: D,
+            worstCircumErrUm: mmToUm(b.worstErrMm),        // dürüst yapı denetimi
+            minInscribedDiaMm: b.minNeckDiaMm,             // en ince nokta = boğaz
+            worstInradiusDeficitUm: 0,
+          },
+          manifoldOk: edgeManifoldReport(b.mesh.indices).ok,
+          anaPts: b.path.pts, anaR: tw.radiusMm, anaDia: D, fineFlag: true,
+        });
+      } else if (isFine && dDoku === "ondule") {
+        const D = tw.radiusMm * 2;
+        const wavy = makeWavyPath(tw.path, D * 0.8, D * 4);
+        const mesh = sweepWire(wavy, tw.radiusMm);
+        wireRows.push({
+          view: { positions: mesh.positions, indices: mesh.indices, kind },
+          lengthMm: mesh.lengthMm, // dalga gerçek tel tüketimini artırır
+          vol: meshVolumeMm3(mesh.positions, mesh.indices),
+          meas: measureWire(mesh, wavy),
+          manifoldOk: edgeManifoldReport(mesh.indices).ok,
+          anaPts: wavy.pts, anaR: tw.radiusMm, anaDia: D, fineFlag: true,
+        });
       } else {
         const mesh = sweepWire(tw.path, tw.radiusMm);
         wireRows.push({

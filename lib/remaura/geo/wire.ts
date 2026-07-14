@@ -116,6 +116,10 @@ export type TwistOpts = {
   tolMm?: number;
   /** halka aralığı tabanı (mm): pitch/16 çok küçükse mesh patlamasın (viewer dengesi) */
   minRingSpacingMm?: number;
+  /** sarma (kazaziye) gibi özel dokular için: damar yarıçapı + yörünge yarıçapını
+   *  formül yerine doğrudan ver (strands=1 ile çekirdek üstüne tek sargı olur) */
+  strandRadiusMm?: number;
+  orbitMm?: number;
 };
 
 /** BURGU TEL: omurga etrafında dönen N damar (gerçek telkari teli = 2 damar
@@ -129,13 +133,13 @@ export function sweepTwistedWire(
   // N damar merkezleri a yarıçaplı çemberde, komşular temas eder:
   // 2a·sin(π/N) = 2r ve toplam çap = 2(a+r)  =>  r = D / (2(1+1/sin(π/N)))
   const sinp = Math.sin(Math.PI / Math.max(2, strands));
-  const rStrand = totalDiaMm / (2 * (1 + 1 / sinp));
-  const a = rStrand / sinp;
-  const pitch = opts.pitchMm ?? totalDiaMm * 3;
+  const rStrand = opts.strandRadiusMm ?? totalDiaMm / (2 * (1 + 1 / sinp));
+  const a = opts.orbitMm ?? rStrand / sinp;
+  const pitch = opts.pitchMm ?? totalDiaMm * 3; // negatif pitch = ters yön burma (S/Z)
   const flatten = opts.flattenZ ?? 1;
   const tol = opts.tolMm ?? TOL_MEASURE_MM;
 
-  const base = resampleMaxSpacing(path, Math.max(pitch / 16, opts.minRingSpacingMm ?? 0.1));
+  const base = resampleMaxSpacing(path, Math.max(Math.abs(pitch) / 16, opts.minRingSpacingMm ?? 0.1));
   const P = base.pts;
   const { N, B } = transportFrames(P, base.closed);
   // yay uzunluğu (t parametresi DEĞİL — burgu sıklığı sabit kalsın)
@@ -221,6 +225,122 @@ export function sweepWire(path: Polyline, radiusMm: number, tolMm = TOL_MEASURE_
     positions, indices, radialSegments: n, ringCount: m,
     closed: path.closed, requestedRadiusMm: radiusMm, lengthMm,
   };
+}
+
+export type BeadOpts = {
+  pitchMm?: number;   // boncuk adımı (varsayılan 0.92 × çap — hafif gömülü dizi)
+  neck?: number;      // boğaz oranı (0-1): boncuklar arası bağlantı kalınlığı / yarıçap
+  tolMm?: number;
+};
+
+/** BONCUK TEL (miligren): omurga boyunca birbirine değen küre dizisi görünümü —
+ *  tek parça, değişken yarıçaplı süpürme (küreler ince boğazlarla bağlı: hem
+ *  mesh hafif hem manifold garantili, dökümde de boğaz lehim görevi görür). */
+export function sweepBeadedWire(
+  path: Polyline, beadDiaMm: number, opts: BeadOpts = {},
+): { mesh: WireMesh; path: Polyline; minNeckDiaMm: number; worstErrMm: number } {
+  const r = beadDiaMm / 2;
+  const neck = opts.neck ?? 0.32;
+  const tol = opts.tolMm ?? TOL_MEASURE_MM;
+  let pitch = opts.pitchMm ?? beadDiaMm * 0.92;
+
+  const base0 = resampleMaxSpacing(path, Math.max(pitch / 10, 0.04));
+  // kapalı halkada boncuk fazı dikişte kopmasın: pitch toplam uzunluğa bölünsün
+  let total = 0;
+  const Pp = base0.pts;
+  const segs = base0.closed ? Pp.length : Pp.length - 1;
+  for (let i = 0; i < segs; i++) total += dist(Pp[i], Pp[(i + 1) % Pp.length]);
+  if (base0.closed) pitch = total / Math.max(2, Math.round(total / pitch));
+
+  const base = base0;
+  const P = base.pts;
+  const m = P.length;
+  const { N: Ns, B: Bs } = transportFrames(P, base.closed);
+  const s: number[] = [0];
+  for (let i = 1; i < m; i++) s.push(s[i - 1] + dist(P[i], P[i - 1]));
+  const radii = s.map((si) => r * Math.max(neck, Math.abs(Math.sin((Math.PI * si) / pitch))));
+
+  const n = radialSegmentsFor(r, Math.max(tol, 0.003));
+  const capVerts = base.closed ? 0 : 2;
+  const positions = new Float64Array((m * n + capVerts) * 3);
+  for (let i = 0; i < m; i++) {
+    const N = Ns[i], B = Bs[i], rr = radii[i];
+    for (let j = 0; j < n; j++) {
+      const phi = (2 * Math.PI * j) / n;
+      const c = Math.cos(phi) * rr, sn = Math.sin(phi) * rr;
+      const k = (i * n + j) * 3;
+      positions[k] = P[i][0] + N[0] * c + B[0] * sn;
+      positions[k + 1] = P[i][1] + N[1] * c + B[1] * sn;
+      positions[k + 2] = P[i][2] + N[2] * c + B[2] * sn;
+    }
+  }
+  const tris: number[] = [];
+  const ringPairs = base.closed ? m : m - 1;
+  for (let i = 0; i < ringPairs; i++) {
+    const i2 = (i + 1) % m;
+    for (let j = 0; j < n; j++) {
+      const j2 = (j + 1) % n;
+      const a = i * n + j, b = i * n + j2, c = i2 * n + j2, d = i2 * n + j;
+      tris.push(a, b, c, a, c, d);
+    }
+  }
+  if (!base.closed) {
+    const c0 = m * n, c1 = m * n + 1;
+    positions.set(P[0], c0 * 3);
+    positions.set(P[m - 1], c1 * 3);
+    for (let j = 0; j < n; j++) {
+      const j2 = (j + 1) % n;
+      tris.push(c0, j2, j);
+      tris.push(c1, (m - 1) * n + j, (m - 1) * n + j2);
+    }
+  }
+  const indices = new Uint32Array(tris);
+  if (signedVolume(positions, indices) < 0) {
+    for (let k = 0; k < indices.length; k += 3) {
+      const tmp = indices[k + 1]; indices[k + 1] = indices[k + 2]; indices[k + 2] = tmp;
+    }
+  }
+  // dürüst geri-ölçüm: vertexler tasarım yarıçapına birebir mi?
+  let worstErrMm = 0;
+  for (let i = 0; i < m; i += Math.max(1, Math.floor(m / 50))) {
+    const k = i * n * 3;
+    const d = Math.hypot(positions[k] - P[i][0], positions[k + 1] - P[i][1], positions[k + 2] - P[i][2]);
+    worstErrMm = Math.max(worstErrMm, Math.abs(d - radii[i]));
+  }
+  const mesh: WireMesh = {
+    positions, indices, radialSegments: n, ringCount: m,
+    closed: base.closed, requestedRadiusMm: r, lengthMm: s[m - 1] + (base.closed ? dist(P[m - 1], P[0]) : 0),
+  };
+  return { mesh, path: base, minNeckDiaMm: 2 * r * neck, worstErrMm };
+}
+
+/** Omurgayı düzlem-içi sabit mesafeyle ofsetler (çift burma yan yana dizilimi için). */
+export function offsetPathN(path: Polyline, dMm: number): Polyline {
+  const base = resampleMaxSpacing(path, 0.5);
+  const { N } = transportFrames(base.pts, base.closed);
+  return {
+    pts: base.pts.map((p, i): V3 => [p[0] + N[i][0] * dMm, p[1] + N[i][1] * dMm, p[2] + N[i][2] * dMm]),
+    closed: base.closed,
+  };
+}
+
+/** ONDÜLE (dalgalı/zigzag tel): omurgayı düzlem-içi sinüs dalgasıyla ofsetler;
+ *  sonuç yine normal süpürmeyle tel olur (telkari dolgu klasiği). */
+export function makeWavyPath(path: Polyline, ampMm: number, pitchMm: number): Polyline {
+  const base = resampleMaxSpacing(path, pitchMm / 8);
+  const P = base.pts;
+  const { N } = transportFrames(P, base.closed);
+  let total = 0;
+  const segs = base.closed ? P.length : P.length - 1;
+  for (let i = 0; i < segs; i++) total += dist(P[i], P[(i + 1) % P.length]);
+  const pitch = base.closed ? total / Math.max(2, Math.round(total / pitchMm)) : pitchMm;
+  const s: number[] = [0];
+  for (let i = 1; i < P.length; i++) s.push(s[i - 1] + dist(P[i], P[i - 1]));
+  const pts: V3[] = P.map((p, i) => {
+    const a = ampMm * Math.sin((2 * Math.PI * s[i]) / pitch);
+    return [p[0] + N[i][0] * a, p[1] + N[i][1] * a, p[2] + N[i][2] * a];
+  });
+  return { pts, closed: base.closed };
 }
 
 /** Diverjans teoremiyle işaretli hacim (mm³) — float64. */
