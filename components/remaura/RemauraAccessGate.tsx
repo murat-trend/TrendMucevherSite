@@ -16,8 +16,40 @@ export function RemauraAccessGate({ categoryId, children }: Props) {
 
   useEffect(() => {
     if (process.env.NODE_ENV === "development") return;
-    const supabase = createClient();
-    void supabase.auth.getUser().then(async ({ data: { user } }) => {
+
+    // 1) USTA DAVET KODU (hesap gerekmez; kod kategoriye kilitli).
+    //    Linkteki ?davet=... doğrulanırsa tarayıcıda saklanır, sonraki
+    //    ziyaretlerde sessizce yeniden doğrulanır.
+    const davetKontrol = async (): Promise<boolean> => {
+      const sakliAnahtar = `remaura-davet-${categoryId}`;
+      const params = new URLSearchParams(window.location.search);
+      const kod = params.get("davet") ?? localStorage.getItem(sakliAnahtar);
+      if (!kod) return false;
+      try {
+        const r = await fetch(
+          `/api/remaura/davet?kod=${encodeURIComponent(kod)}&kategori=${encodeURIComponent(categoryId)}`,
+          { cache: "no-store" },
+        );
+        const j = await r.json();
+        if (j?.ok) {
+          localStorage.setItem(sakliAnahtar, kod);
+          if (params.has("davet")) {
+            params.delete("davet");
+            const q = params.toString();
+            history.replaceState(null, "", window.location.pathname + (q ? `?${q}` : ""));
+          }
+          setStatus("granted");
+          return true;
+        }
+        if (localStorage.getItem(sakliAnahtar) === kod) localStorage.removeItem(sakliAnahtar);
+      } catch { /* ağ hatası — normal akışa düş */ }
+      return false;
+    };
+
+    void (async () => {
+      if (await davetKontrol()) return;
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setStatus("denied"); return; }
 
       // Süperadmin kontrolü
@@ -30,7 +62,7 @@ export function RemauraAccessGate({ categoryId, children }: Props) {
       const walletData = await walletRes.json();
       const credits = Number(walletData?.wallet?.balanceCredits ?? 0);
       setStatus(credits > 0 ? "granted" : "denied");
-    });
+    })();
   }, [categoryId]);
 
   if (status === "loading") {
