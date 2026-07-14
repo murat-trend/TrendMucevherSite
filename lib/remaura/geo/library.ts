@@ -12,6 +12,7 @@ export type GeoRecipe = {
   heightMm: number;
   fineDiaMm: number;
   frameDiaMm: number;
+  kategori?: string;   // ürün kategorisi (kolye/bros/kupe/bilezik/yuzuk)
   createdAt: number;   // epoch ms
   thumb: string;       // küçük JPEG dataURL (viewer'dan)
 };

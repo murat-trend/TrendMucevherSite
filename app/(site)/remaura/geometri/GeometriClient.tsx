@@ -15,6 +15,7 @@ import { measureWire, meshVolumeMm3, edgeManifoldReport } from "@/lib/remaura/ge
 import { toBinarySTL } from "@/lib/remaura/geo/stl";
 import { fmtUm, mmToUm } from "@/lib/remaura/geo/units";
 import { GeoRecipe, listRecipes, saveRecipe, deleteRecipe, canvasThumb } from "@/lib/remaura/geo/library";
+import { applyKategori, KATEGORILER, KategoriId, Parcalar } from "@/lib/remaura/geo/kategori";
 
 // döküm yaklaşık yoğunluklar (g/mm³)
 const MATERIALS = {
@@ -81,6 +82,7 @@ function DiaControl({ label, value, onChange, min, max, step, jewelerUnit = true
 }
 
 export function GeometriClient() {
+  const [kategori, setKategori] = useState<KategoriId>("kolye");
   const [model, setModel] = useState<ModelId>("ozgun");
   const [material, setMaterial] = useState<MaterialId>("ag925");
   const [doku, setDoku] = useState<DokuId>("duz");
@@ -91,11 +93,33 @@ export function GeometriClient() {
   const [unionBusy, setUnionBusy] = useState(false);
   const [unionInfo, setUnionInfo] = useState<{ volumeMm3: number; parca: number } | null>(null);
 
+  // usta kullanım günlüğü: yalnız davet koduyla girenlerden olay toplar
+  const ustaLog = (olay: string, detay?: unknown) => {
+    try {
+      const kod = localStorage.getItem("remaura-davet-geometri");
+      if (!kod) return;
+      void fetch("/api/remaura/davet/log", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kod, olay, detay: detay ?? null }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch { /* günlük asla aracı bozmaz */ }
+  };
+  useEffect(() => { ustaLog("sayfa-acildi"); }, []);
+  const durum = () => ({ kategori, model, doku, malzeme: material, boyMm: heightMm, telMm: fineDiaMm });
+
   const switchModel = (m: ModelId) => {
     setModel(m);
     setFineDiaMm(MODELS[m].defaults.fine);
     setFrameDiaMm(MODELS[m].defaults.frame);
     setHeightMm(MODELS[m].defaults.height);
+    ustaLog("model-degisti", { model: m });
+  };
+  const switchKategori = (k: KategoriId) => {
+    setKategori(k);
+    setHeightMm(KATEGORILER[k].boyMm);
+    ustaLog("kategori-degisti", { kategori: k });
   };
 
   // Kütüphane: reçete defteri (model = reçete; mesh motordan yeniden doğar)
@@ -109,16 +133,19 @@ export function GeometriClient() {
     if (!canvas) return;
     await saveRecipe({
       id: crypto.randomUUID(),
-      ad: `${MODELS[model].label.split(" ")[0]} · ${new Date().toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`,
+      ad: `${KATEGORILER[kategori].label} · ${MODELS[model].label.split(" ")[0]} · ${new Date().toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`,
       model, material, heightMm, fineDiaMm, frameDiaMm,
+      kategori,
       createdAt: Date.now(),
       thumb: canvasThumb(canvas),
     });
     setRecipes(await listRecipes());
+    ustaLog("kaydedildi", durum());
   };
   const applyRecipe = (r: GeoRecipe) => {
     if (r.model in MODELS) setModel(r.model as ModelId);
     if (r.material in MATERIALS) setMaterial(r.material as MaterialId);
+    if (r.kategori && r.kategori in KATEGORILER) setKategori(r.kategori as KategoriId);
     setHeightMm(r.heightMm);
     setFineDiaMm(r.fineDiaMm);
     setFrameDiaMm(r.frameDiaMm);
@@ -132,6 +159,7 @@ export function GeometriClient() {
   // Kuyumcu dili desteklenir: "N mikron" = N/100 mm (30 mikron = 0.30mm).
   const [prompt, setPrompt] = useState("");
   const applyPrompt = () => {
+    ustaLog("komut", { metin: prompt.slice(0, 200) });
     const t = prompt.toLowerCase().replace(/,/g, ".");
     const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
     if (t.includes("kelebek")) switchModel("ozgun");
@@ -149,6 +177,7 @@ export function GeometriClient() {
   };
 
   // kaydırıcı sürüklenirken UI donmasın
+  const dKategori = useDeferredValue(kategori);
   const dModel = useDeferredValue(model);
   const dFine = useDeferredValue(fineDiaMm);
   const dFrame = useDeferredValue(frameDiaMm);
@@ -168,6 +197,12 @@ export function GeometriClient() {
       : { wires: buildTelkariDrop({ heightMm: dHeight, fineDiaMm: dFine, frameDiaMm: dFrame }), granules: [] };
     type SolidRow = { name: string; mesh: { positions: Float64Array; indices: Uint32Array } };
     const srcSolids = "solids" in src ? (src.solids as SolidRow[]) : [];
+    // KATEGORİ dönüşümü: yüzükte model tablaya yatar + band gelir; küpede kanca,
+    // broşta arka iğne, bilezikte yan halkalar eklenir (kolye olduğu gibi)
+    const kat = applyKategori(
+      { wires: src.wires, granules: src.granules, solids: srcSolids as Parcalar["solids"] },
+      dKategori,
+    );
 
     // teller: dolgu telleri (ince) doku seçimine göre düz veya BURGU süpürülür
     const wireRows: {
@@ -175,7 +210,7 @@ export function GeometriClient() {
       meas: ReturnType<typeof measureWire>; manifoldOk: boolean;
       anaPts: V3[]; anaR: number; anaDia?: number; fineFlag: boolean;
     }[] = [];
-    for (const tw of src.wires) {
+    for (const tw of kat.wires) {
       const isFine = tw.radiusMm * 2 === dFine;
       const kind = (isFine ? "fine" : "frame") as ViewMesh["kind"];
       if (isFine && (dDoku === "burgu" || dDoku === "burgu-yassi" || dDoku === "orgu")) {
@@ -281,7 +316,7 @@ export function GeometriClient() {
         });
       }
     }
-    const granRows = src.granules.map((g) => {
+    const granRows = kat.granules.map((g) => {
       const mesh = sphereMesh(g.center, g.radiusMm);
       return {
         view: { positions: mesh.positions, indices: mesh.indices, kind: "frame" as ViewMesh["kind"] },
@@ -291,7 +326,7 @@ export function GeometriClient() {
       };
     });
 
-    const solidRows = srcSolids.map((s) => ({
+    const solidRows = kat.solids.map((s) => ({
       view: { positions: s.mesh.positions, indices: s.mesh.indices, kind: "frame" as ViewMesh["kind"] },
       vol: meshVolumeMm3(s.mesh.positions, s.mesh.indices),
       manifoldOk: edgeManifoldReport(s.mesh.indices).ok,
@@ -302,7 +337,7 @@ export function GeometriClient() {
     if (dAnaliz) {
       const anaWires: AnalyzeWire[] = [
         ...wireRows.map((r) => ({ pts: r.anaPts, radiusMm: r.anaR, diaMm: r.anaDia })),
-        ...src.granules.map((g) => ({ pts: [g.center], radiusMm: g.radiusMm })),
+        ...kat.granules.map((g) => ({ pts: [g.center], radiusMm: g.radiusMm })),
       ];
       const { verdicts, worstRatio: wr } = analyzeSpans(anaWires);
       worstRatio = wr;
@@ -311,7 +346,7 @@ export function GeometriClient() {
         if (v.level === 1) { r.view.kind = "warn"; uyari++; }
         else if (v.level === 2) { r.view.kind = "danger"; riskli++; }
       });
-      src.granules.forEach((g, i) => {
+      kat.granules.forEach((g, i) => {
         const v = verdicts[wireRows.length + i];
         if (v.level === 2) { granRows[i].view.kind = "danger"; riskli++; }
       });
@@ -339,7 +374,7 @@ export function GeometriClient() {
         && solidRows.every((r) => r.manifoldOk),
       granuleCount: granRows.length,
     };
-  }, [dModel, dFine, dFrame, dHeight, dDoku, dAnaliz]);
+  }, [dModel, dFine, dFrame, dHeight, dDoku, dAnaliz, dKategori]);
 
   // parametre değişince birleşik gövde bilgisi bayatlar
   useEffect(() => { setUnionInfo(null); }, [built]);
@@ -356,6 +391,7 @@ export function GeometriClient() {
   };
   const downloadSTL = () => {
     indir(toBinarySTL(built.meshes, "Remaura Telkari"), `telkari-${dModel}-${dHeight}mm-tel${dFine.toFixed(2)}mm.stl`);
+    ustaLog("stl-indirildi", durum());
   };
   // TEK GÖVDE: tüm parçalar manifold-3d ile birleştirilir -> döküme hazır STL + GERÇEK gramaj
   const downloadUnionSTL = async () => {
@@ -366,6 +402,7 @@ export function GeometriClient() {
       setUnionInfo({ volumeMm3: u.volumeMm3, parca: u.parcaSayisi });
       indir(toBinarySTL([u], "Remaura Telkari (tek gövde)"),
         `telkari-${dModel}-${dHeight}mm-tekgovde.stl`);
+      ustaLog("tekgovde-indirildi", { ...durum(), hacimMm3: Math.round(u.volumeMm3) });
     } catch {
       setUnionInfo(null);
     } finally {
@@ -410,6 +447,18 @@ export function GeometriClient() {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
+                  <div className="mb-1.5 text-[13px] text-[#c9a88a]">Kategori</div>
+                  <select
+                    value={kategori}
+                    onChange={(e) => switchKategori(e.target.value as KategoriId)}
+                    className="w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-1.5 text-[12px] text-white/90 outline-none focus:border-[#b76e79]/50"
+                  >
+                    {Object.entries(KATEGORILER).map(([id, k]) => (
+                      <option key={id} value={id} className="bg-[#141414]">{k.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
                   <div className="mb-1.5 text-[13px] text-[#c9a88a]">Model</div>
                   <select
                     value={model}
@@ -421,25 +470,25 @@ export function GeometriClient() {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <div className="mb-1.5 text-[13px] text-[#c9a88a]">Malzeme</div>
-                  <select
-                    value={material}
-                    onChange={(e) => setMaterial(e.target.value as MaterialId)}
-                    className="w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-1.5 text-[12px] text-white/90 outline-none focus:border-[#b76e79]/50"
-                  >
-                    {Object.entries(MATERIALS).map(([id, m]) => (
-                      <option key={id} value={id} className="bg-[#141414]">{m.label}</option>
-                    ))}
-                  </select>
-                </div>
+              </div>
+              <div>
+                <div className="mb-1.5 text-[13px] text-[#c9a88a]">Malzeme</div>
+                <select
+                  value={material}
+                  onChange={(e) => { setMaterial(e.target.value as MaterialId); ustaLog("malzeme-degisti", { malzeme: e.target.value }); }}
+                  className="w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-1.5 text-[12px] text-white/90 outline-none focus:border-[#b76e79]/50"
+                >
+                  {Object.entries(MATERIALS).map(([id, m]) => (
+                    <option key={id} value={id} className="bg-[#141414]">{m.label}</option>
+                  ))}
+                </select>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <div className="mb-1.5 text-[13px] text-[#c9a88a]">Doku (dolgu teli)</div>
                   <select
                     value={doku}
-                    onChange={(e) => setDoku(e.target.value as DokuId)}
+                    onChange={(e) => { setDoku(e.target.value as DokuId); ustaLog("doku-degisti", { doku: e.target.value }); }}
                     className="w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-1.5 text-[12px] text-white/90 outline-none focus:border-[#b76e79]/50"
                   >
                     {Object.entries(DOKULAR).map(([id, ad]) => (
@@ -450,7 +499,7 @@ export function GeometriClient() {
                 <div>
                   <div className="mb-1.5 text-[13px] text-[#c9a88a]">Kırılganlık analizi</div>
                   <button
-                    onClick={() => setAnaliz((v) => !v)}
+                    onClick={() => { setAnaliz((v) => !v); ustaLog("analiz", { acik: !analiz }); }}
                     className={`w-full rounded-lg border px-2 py-1.5 text-[12px] font-medium transition-colors ${
                       analiz
                         ? "border-[#b76e79]/60 bg-[#b76e79]/20 text-[#e8b6bd]"
