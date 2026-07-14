@@ -8,7 +8,8 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 export type ViewMesh = {
   positions: Float64Array;
   indices: Uint32Array;
-  kind: "fine" | "frame"; // ince dolgu / kalın çerçeve-granül (ton farkı)
+  // fine/frame: malzeme tonu · warn/danger: kırılganlık analizi vurgusu
+  kind: "fine" | "frame" | "warn" | "danger";
 };
 
 type Props = { meshes: ViewMesh[]; material: "ag925" | "au14" };
@@ -118,18 +119,28 @@ export function GeometriViewer({ meshes, material }: Props) {
       (child.material as THREE.Material)?.dispose();
     }
     const pal = COLORS[material];
-    const matFine = new THREE.MeshStandardMaterial({
-      color: pal.fine, metalness: 0.95, roughness: 0.28, envMapIntensity: 0.85,
-    });
-    const matFrame = new THREE.MeshStandardMaterial({
-      color: pal.frame, metalness: 0.95, roughness: 0.38, envMapIntensity: 0.85,
-    });
+    const mats: Record<ViewMesh["kind"], THREE.MeshStandardMaterial> = {
+      fine: new THREE.MeshStandardMaterial({
+        color: pal.fine, metalness: 0.95, roughness: 0.28, envMapIntensity: 0.85,
+      }),
+      frame: new THREE.MeshStandardMaterial({
+        color: pal.frame, metalness: 0.95, roughness: 0.38, envMapIntensity: 0.85,
+      }),
+      warn: new THREE.MeshStandardMaterial({
+        color: 0xd08a1f, metalness: 0.5, roughness: 0.45,
+        emissive: 0x7a4a00, emissiveIntensity: 0.35, envMapIntensity: 0.5,
+      }),
+      danger: new THREE.MeshStandardMaterial({
+        color: 0xd23c3c, metalness: 0.5, roughness: 0.45,
+        emissive: 0x8a1010, emissiveIntensity: 0.45, envMapIntensity: 0.5,
+      }),
+    };
     for (const m of meshes) {
       const geom = new THREE.BufferGeometry();
       geom.setAttribute("position", new THREE.BufferAttribute(Float32Array.from(m.positions), 3));
       geom.setIndex(new THREE.BufferAttribute(m.indices, 1));
       geom.computeVertexNormals();
-      group.add(new THREE.Mesh(geom, m.kind === "frame" ? matFrame : matFine));
+      group.add(new THREE.Mesh(geom, mats[m.kind]));
     }
     if (!fittedRef.current && meshes.length && camRef.current && controlsRef.current) {
       fittedRef.current = true;

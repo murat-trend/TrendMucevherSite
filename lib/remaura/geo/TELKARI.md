@@ -25,6 +25,20 @@ eleştirileri + hakem ajanı raporları + görsel iterasyon dersleri.
    gibi ince elemanlar yük TAŞIYAMAZ.
 5. **Boşluk göze hitap etmeli:** yapısal boşluklar (kanat zarı gibi) boş
    bırakılmaz — ince, farklı açılı kafes zar gerilir.
+6. **Temas = gömme, teğet değil:** parçalar birbirine çapın %10-15'i kadar
+   (≈50-100µm) kasıtlı gömülür — hem boolean union sağlam olur hem "lehim
+   boynu" kalınlaşır (teğet temas union'da kum saati boynu = kopma noktası).
+   [Araştırma sentezi 2026-07-14; oran mühendislik önerisi, kalibre edilebilir]
+7. **Bombe OMURGAYA uygulanır, mesh'e değil:** 2D omurga noktaları jeodezik
+   polar haritayla küreye taşınır, süpürme haritalanmış omurga üzerinde koşar
+   — tel kesiti dairesel ve mikron-sabit kalır (Rhino FlowAlongSrf mantığı).
+   Z-displacement yasak (kesit yatırır).
+8. **Otantik burgu = burgu + YASSILAŞTIRMA:** gerçek telkari teli iki ince
+   telin burulup haddeden geçirilmesidir; burgu dokusuna flatten (eliptik
+   profil) parametresi eşlik etmeli. Pitch ≈ 2.5-4 × toplam çap.
+9. **Tel çapı malzeme özelliğidir (Murat, 2026-07-14):** parça ölçeklenince
+   omurga ölçeklenir, tel çapı SABİT kalır — kuyumcu teli çeker, şişirmez.
+   Düzenleme sonrası "ölçüleri standarda döndür" her zaman mümkün olmalı.
 
 ## 2. TEL HİYERARŞİSİ (çerçeve=1.00 bazlı, koç analizi standardı)
 
@@ -88,15 +102,15 @@ eleştirileri + hakem ajanı raporları + görsel iterasyon dersleri.
 - Koç araçları: `scripts/coach_extract_outline.py` (foto→silüet, doku
   kapılı) — ileride "kullanıcı foto yükler→temizlenir" ürün özelliğinin çekirdeği
 
-## 6. YAPILACAKLAR SIRASI (2026-07-14 durumu)
+## 6. YAPILACAKLAR SIRASI
 
-1. Ucuz estetik turu: fisto picot + kuyruk ucu boncuğu + apex kıvrımı +
-   odak/kademe ayarı (Murat komutu bekleniyor)
-2. Kanat bombesi (z-dome haritası)
-3. Burgu tel dokusu (helis süpürme)
-4. Boolean birleşim (manifold-3d): tek gövde STL + gerçek gramaj
-5. Yassı şerit tel (dikdörtgen profil süpürme)
-6. Taş yuvası primitifi (opsiyon)
+AYRINTILI PLAN → **YOL-HARITASI.md** (4 ajanlık araştırma sentezi, 2026-07-14):
+Faz 1 (kolay+etkili): döküm kural motoru+kırılganlık skoru · burgu tel
+(+yassılaştırma) · union ağacı+gömme kuralı. Faz 2: reçete v2 + parça editörü
+(seç/taşı/motif değiştir) · bombe (omurga-seviyesi) · SVG içe aktarma.
+Faz 3: SVG çizim penceresi (paper.js) · otomatik dolgu ailesi (Wong/Fermat/
+Zehnder) · stabilite budama. + bekleyen ucuz estetik turu (fisto picot,
+kuyruk boncuğu, apex kıvrımı, kademe ayarı) ve yassı şerit tel, taş yuvası.
 
 ## 7. DERS DEFTERİ RİTÜELİ (Murat'ın kuralı, 2026-07-14)
 

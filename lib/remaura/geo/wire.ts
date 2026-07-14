@@ -72,6 +72,92 @@ function initialNormal(t: V3): V3 {
   return norm(sub(ax, scale(t, dot(ax, t))));
 }
 
+/** Tanjantlar + paralel-taşıma çerçeveleri (RMF ailesi — burgu ve süpürme
+ *  aynı çerçeveyi paylaşır; Frenet KULLANILMAZ, düz segmentte patlar). */
+function transportFrames(P: V3[], closed: boolean): { T: V3[]; N: V3[]; B: V3[] } {
+  const m = P.length;
+  const T: V3[] = [];
+  for (let i = 0; i < m; i++) {
+    const prev = closed ? P[(i - 1 + m) % m] : P[Math.max(0, i - 1)];
+    const next = closed ? P[(i + 1) % m] : P[Math.min(m - 1, i + 1)];
+    T.push(norm(sub(next, prev)));
+  }
+  const N: V3[] = [initialNormal(T[0])];
+  for (let i = 1; i < m; i++) {
+    N.push(norm(sub(N[i - 1], scale(T[i], dot(N[i - 1], T[i])))));
+  }
+  const B = T.map((t, i) => cross(t, N[i]));
+  return { T, N, B };
+}
+
+/** Segmentleri maxMm'den uzun olmayacak şekilde ara nokta ekleyerek yoğunlaştırır
+ *  (burgu için halka sıklığı: aralık <= pitch/16 şartı). */
+export function resampleMaxSpacing(path: Polyline, maxMm: number): Polyline {
+  const P = path.pts;
+  const out: V3[] = [P[0]];
+  const segs = path.closed ? P.length : P.length - 1;
+  for (let i = 0; i < segs; i++) {
+    const a = P[i], b = P[(i + 1) % P.length];
+    const L = dist(a, b);
+    const n = Math.max(1, Math.ceil(L / maxMm));
+    for (let k = 1; k <= n; k++) {
+      if (path.closed && i === segs - 1 && k === n) break; // kapanış noktası tekrarlanmaz
+      out.push([a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n, a[2] + ((b[2] - a[2]) * k) / n]);
+    }
+  }
+  return { pts: out, closed: path.closed };
+}
+
+export type TwistOpts = {
+  strands?: number;   // damar sayısı (varsayılan 2 — klasik telkari çifti)
+  pitchMm?: number;   // bir tam turun yay uzunluğu (varsayılan 3 × toplam çap)
+  flattenZ?: number;  // hadde yassılaştırması: damar yörüngesinin z bileşeni çarpanı (1 = yok)
+  phaseRad?: number;  // başlangıç fazı
+  tolMm?: number;
+  /** halka aralığı tabanı (mm): pitch/16 çok küçükse mesh patlamasın (viewer dengesi) */
+  minRingSpacingMm?: number;
+};
+
+/** BURGU TEL: omurga etrafında dönen N damar (gerçek telkari teli = 2 damar
+ *  burgu + yassılaştırma). Her damar için ofset omurga üretilir ve mevcut
+ *  süpürme motoru o omurga üzerinde koşar — mikron sözü damar bazında korunur.
+ *  Döner: damar başına { mesh, path } (ölçüm/analiz için ofset omurga da verilir). */
+export function sweepTwistedWire(
+  path: Polyline, totalDiaMm: number, opts: TwistOpts = {},
+): { mesh: WireMesh; path: Polyline }[] {
+  const strands = opts.strands ?? 2;
+  // N damar merkezleri a yarıçaplı çemberde, komşular temas eder:
+  // 2a·sin(π/N) = 2r ve toplam çap = 2(a+r)  =>  r = D / (2(1+1/sin(π/N)))
+  const sinp = Math.sin(Math.PI / Math.max(2, strands));
+  const rStrand = totalDiaMm / (2 * (1 + 1 / sinp));
+  const a = rStrand / sinp;
+  const pitch = opts.pitchMm ?? totalDiaMm * 3;
+  const flatten = opts.flattenZ ?? 1;
+  const tol = opts.tolMm ?? TOL_MEASURE_MM;
+
+  const base = resampleMaxSpacing(path, Math.max(pitch / 16, opts.minRingSpacingMm ?? 0.1));
+  const P = base.pts;
+  const { N, B } = transportFrames(P, base.closed);
+  // yay uzunluğu (t parametresi DEĞİL — burgu sıklığı sabit kalsın)
+  const s: number[] = [0];
+  for (let i = 1; i < P.length; i++) s.push(s[i - 1] + dist(P[i], P[i - 1]));
+
+  const out: { mesh: WireMesh; path: Polyline }[] = [];
+  for (let k = 0; k < strands; k++) {
+    const phase = (opts.phaseRad ?? 0) + (2 * Math.PI * k) / strands;
+    const pts: V3[] = P.map((c, i) => {
+      const th = phase + (2 * Math.PI * s[i]) / pitch;
+      const ox = a * (Math.cos(th) * N[i][0] + Math.sin(th) * B[i][0]);
+      const oy = a * (Math.cos(th) * N[i][1] + Math.sin(th) * B[i][1]);
+      const oz = a * (Math.cos(th) * N[i][2] + Math.sin(th) * B[i][2]) * flatten;
+      return [c[0] + ox, c[1] + oy, c[2] + oz];
+    });
+    const strandPath: Polyline = { pts, closed: base.closed };
+    out.push({ mesh: sweepWire(strandPath, rStrand, tol), path: strandPath });
+  }
+  return out;
+}
+
 /** Dairesel profili yol boyunca süpürür. Açık yollar disk kapaklarla kapatılır;
  *  çıkan yüzey her zaman kapalı (hacmi ölçülebilir) bir mesh'tir. */
 export function sweepWire(path: Polyline, radiusMm: number, tolMm = TOL_MEASURE_MM): WireMesh {
@@ -80,27 +166,13 @@ export function sweepWire(path: Polyline, radiusMm: number, tolMm = TOL_MEASURE_
   if (m < 2) throw new Error("geo/wire: yol en az 2 nokta ister");
   const n = radialSegmentsFor(radiusMm, tolMm);
 
-  // tanjantlar (merkezi fark; açık uçlarda tek yönlü)
-  const tangents: V3[] = [];
-  for (let i = 0; i < m; i++) {
-    const prev = path.closed ? P[(i - 1 + m) % m] : P[Math.max(0, i - 1)];
-    const next = path.closed ? P[(i + 1) % m] : P[Math.min(m - 1, i + 1)];
-    tangents.push(norm(sub(next, prev)));
-  }
-
-  // paralel taşıma çerçeveleri
-  const Ns: V3[] = [initialNormal(tangents[0])];
-  for (let i = 1; i < m; i++) {
-    const t = tangents[i];
-    const proj = sub(Ns[i - 1], scale(t, dot(Ns[i - 1], t)));
-    Ns.push(norm(proj));
-  }
+  const { N: Ns, B: Bs } = transportFrames(P, path.closed);
 
   const capVerts = path.closed ? 0 : 2;
   const positions = new Float64Array((m * n + capVerts) * 3);
   for (let i = 0; i < m; i++) {
     const N = Ns[i];
-    const B = cross(tangents[i], N); // birim (t ⟂ N, ikisi de birim)
+    const B = Bs[i]; // birim (t ⟂ N, ikisi de birim)
     for (let j = 0; j < n; j++) {
       const phi = (2 * Math.PI * j) / n;
       const c = Math.cos(phi) * radiusMm, s = Math.sin(phi) * radiusMm;

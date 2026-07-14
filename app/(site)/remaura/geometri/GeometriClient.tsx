@@ -6,7 +6,10 @@ import { buildTelkariDrop } from "@/lib/remaura/geo/telkari";
 import { buildTelkariArabesk } from "@/lib/remaura/geo/telkariArabesk";
 import { buildTelkariKelebek } from "@/lib/remaura/geo/telkariKelebek";
 import { buildKelebekOzgun } from "@/lib/remaura/geo/kelebekOzgun";
-import { sweepWire } from "@/lib/remaura/geo/wire";
+import { sweepWire, sweepTwistedWire } from "@/lib/remaura/geo/wire";
+import { analyzeSpans, AnalyzeWire, SPAN_WARN_RATIO } from "@/lib/remaura/geo/analyze";
+import { unionMeshes } from "@/lib/remaura/geo/union";
+import type { V3 } from "@/lib/remaura/geo/vec3";
 import { sphereMesh, measureSphere } from "@/lib/remaura/geo/granule";
 import { measureWire, meshVolumeMm3, edgeManifoldReport } from "@/lib/remaura/geo/measure";
 import { toBinarySTL } from "@/lib/remaura/geo/stl";
@@ -19,6 +22,13 @@ const MATERIALS = {
   au14: { label: "Altın 14K", density: 0.01358 },
 } as const;
 type MaterialId = keyof typeof MATERIALS;
+
+const DOKULAR = {
+  duz: "Düz tel",
+  burgu: "Burgu",
+  "burgu-yassi": "Burgu + yassı",
+} as const;
+type DokuId = keyof typeof DOKULAR;
 
 const MODELS = {
   ozgun: { label: "Kelebek — özgün tasarım", defaults: { fine: 0.3, frame: 0.55, height: 44 } },
@@ -66,9 +76,13 @@ function DiaControl({ label, value, onChange, min, max, step, jewelerUnit = true
 export function GeometriClient() {
   const [model, setModel] = useState<ModelId>("ozgun");
   const [material, setMaterial] = useState<MaterialId>("ag925");
+  const [doku, setDoku] = useState<DokuId>("duz");
+  const [analiz, setAnaliz] = useState(false);
   const [fineDiaMm, setFineDiaMm] = useState<number>(MODELS.ozgun.defaults.fine);
   const [frameDiaMm, setFrameDiaMm] = useState<number>(MODELS.ozgun.defaults.frame);
   const [heightMm, setHeightMm] = useState<number>(MODELS.ozgun.defaults.height);
+  const [unionBusy, setUnionBusy] = useState(false);
+  const [unionInfo, setUnionInfo] = useState<{ volumeMm3: number; parca: number } | null>(null);
 
   const switchModel = (m: ModelId) => {
     setModel(m);
@@ -132,6 +146,8 @@ export function GeometriClient() {
   const dFine = useDeferredValue(fineDiaMm);
   const dFrame = useDeferredValue(frameDiaMm);
   const dHeight = useDeferredValue(heightMm);
+  const dDoku = useDeferredValue(doku);
+  const dAnaliz = useDeferredValue(analiz);
 
   const built = useMemo(() => {
     const src = dModel === "ozgun"
@@ -146,20 +162,45 @@ export function GeometriClient() {
     type SolidRow = { name: string; mesh: { positions: Float64Array; indices: Uint32Array } };
     const srcSolids = "solids" in src ? (src.solids as SolidRow[]) : [];
 
-    const wireRows = src.wires.map((tw) => {
-      const mesh = sweepWire(tw.path, tw.radiusMm);
-      const meas = measureWire(mesh, tw.path);
-      return {
-        view: {
-          positions: mesh.positions, indices: mesh.indices,
-          kind: (tw.radiusMm * 2 === dFine ? "fine" : "frame") as ViewMesh["kind"],
-        },
-        lengthMm: mesh.lengthMm,
-        vol: meshVolumeMm3(mesh.positions, mesh.indices),
-        meas,
-        manifoldOk: edgeManifoldReport(mesh.indices).ok,
-      };
-    });
+    // teller: dolgu telleri (ince) doku seçimine göre düz veya BURGU süpürülür
+    const wireRows: {
+      view: ViewMesh; lengthMm: number; vol: number;
+      meas: ReturnType<typeof measureWire>; manifoldOk: boolean;
+      anaPts: V3[]; anaR: number; anaDia?: number; fineFlag: boolean;
+    }[] = [];
+    for (const tw of src.wires) {
+      const isFine = tw.radiusMm * 2 === dFine;
+      const kind = (isFine ? "fine" : "frame") as ViewMesh["kind"];
+      if (isFine && dDoku !== "duz") {
+        const D = tw.radiusMm * 2;
+        const strands = sweepTwistedWire(tw.path, D, {
+          pitchMm: D * 3.2,
+          flattenZ: dDoku === "burgu-yassi" ? 0.55 : 1,
+          tolMm: 0.003, // burgu damarları görsel tolerans (3µm) — mesh patlamasın
+          minRingSpacingMm: 0.12,
+        });
+        for (const st of strands) {
+          wireRows.push({
+            view: { positions: st.mesh.positions, indices: st.mesh.indices, kind },
+            lengthMm: st.mesh.lengthMm, // gerçek tel tüketimi (burgu daha uzundur)
+            vol: meshVolumeMm3(st.mesh.positions, st.mesh.indices),
+            meas: measureWire(st.mesh, st.path),
+            manifoldOk: edgeManifoldReport(st.mesh.indices).ok,
+            anaPts: st.path.pts, anaR: st.mesh.requestedRadiusMm, anaDia: D, fineFlag: true,
+          });
+        }
+      } else {
+        const mesh = sweepWire(tw.path, tw.radiusMm);
+        wireRows.push({
+          view: { positions: mesh.positions, indices: mesh.indices, kind },
+          lengthMm: mesh.lengthMm,
+          vol: meshVolumeMm3(mesh.positions, mesh.indices),
+          meas: measureWire(mesh, tw.path),
+          manifoldOk: edgeManifoldReport(mesh.indices).ok,
+          anaPts: tw.path.pts, anaR: tw.radiusMm, fineFlag: isFine,
+        });
+      }
+    }
     const granRows = src.granules.map((g) => {
       const mesh = sphereMesh(g.center, g.radiusMm);
       return {
@@ -176,7 +217,27 @@ export function GeometriClient() {
       manifoldOk: edgeManifoldReport(s.mesh.indices).ok,
     }));
 
-    const fineRows = wireRows.filter((r) => r.view.kind === "fine");
+    // KIRILGANLIK ANALİZİ: teller + granüller (tek-nokta destek) omurgadan denetlenir
+    let uyari = 0, riskli = 0, worstRatio = 0;
+    if (dAnaliz) {
+      const anaWires: AnalyzeWire[] = [
+        ...wireRows.map((r) => ({ pts: r.anaPts, radiusMm: r.anaR, diaMm: r.anaDia })),
+        ...src.granules.map((g) => ({ pts: [g.center], radiusMm: g.radiusMm })),
+      ];
+      const { verdicts, worstRatio: wr } = analyzeSpans(anaWires);
+      worstRatio = wr;
+      wireRows.forEach((r, i) => {
+        const v = verdicts[i];
+        if (v.level === 1) { r.view.kind = "warn"; uyari++; }
+        else if (v.level === 2) { r.view.kind = "danger"; riskli++; }
+      });
+      src.granules.forEach((g, i) => {
+        const v = verdicts[wireRows.length + i];
+        if (v.level === 2) { granRows[i].view.kind = "danger"; riskli++; }
+      });
+    }
+
+    const fineRows = wireRows.filter((r) => r.fineFlag);
     const totalVol = wireRows.reduce((s, r) => s + r.vol, 0)
       + granRows.reduce((s, r) => s + r.vol, 0) + solidRows.reduce((s, r) => s + r.vol, 0);
     const meshes: ViewMesh[] = [
@@ -184,6 +245,7 @@ export function GeometriClient() {
     ];
     return {
       meshes,
+      uyari, riskli, worstRatio,
       totalLen: wireRows.reduce((s, r) => s + r.lengthMm, 0),
       totalVol,
       tris: meshes.reduce((s, m) => s + m.indices.length / 3, 0),
@@ -197,18 +259,38 @@ export function GeometriClient() {
         && solidRows.every((r) => r.manifoldOk),
       granuleCount: granRows.length,
     };
-  }, [dModel, dFine, dFrame, dHeight]);
+  }, [dModel, dFine, dFrame, dHeight, dDoku, dAnaliz]);
+
+  // parametre değişince birleşik gövde bilgisi bayatlar
+  useEffect(() => { setUnionInfo(null); }, [built]);
 
   const gram = built.totalVol * MATERIALS[material].density;
 
-  const downloadSTL = () => {
-    const buf = toBinarySTL(built.meshes, "Remaura Telkari");
+  const indir = (buf: ArrayBuffer, ad: string) => {
     const url = URL.createObjectURL(new Blob([buf], { type: "model/stl" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `telkari-${dModel}-${dHeight}mm-tel${dFine.toFixed(2)}mm.stl`;
+    a.download = ad;
     a.click();
     URL.revokeObjectURL(url);
+  };
+  const downloadSTL = () => {
+    indir(toBinarySTL(built.meshes, "Remaura Telkari"), `telkari-${dModel}-${dHeight}mm-tel${dFine.toFixed(2)}mm.stl`);
+  };
+  // TEK GÖVDE: tüm parçalar manifold-3d ile birleştirilir -> döküme hazır STL + GERÇEK gramaj
+  const downloadUnionSTL = async () => {
+    if (unionBusy) return;
+    setUnionBusy(true);
+    try {
+      const u = await unionMeshes(built.meshes);
+      setUnionInfo({ volumeMm3: u.volumeMm3, parca: u.parcaSayisi });
+      indir(toBinarySTL([u], "Remaura Telkari (tek gövde)"),
+        `telkari-${dModel}-${dHeight}mm-tekgovde.stl`);
+    } catch {
+      setUnionInfo(null);
+    } finally {
+      setUnionBusy(false);
+    }
   };
 
   return (
@@ -272,6 +354,33 @@ export function GeometriClient() {
                   </select>
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="mb-1.5 text-[13px] text-[#c9a88a]">Doku (dolgu teli)</div>
+                  <select
+                    value={doku}
+                    onChange={(e) => setDoku(e.target.value as DokuId)}
+                    className="w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-1.5 text-[12px] text-white/90 outline-none focus:border-[#b76e79]/50"
+                  >
+                    {Object.entries(DOKULAR).map(([id, ad]) => (
+                      <option key={id} value={id} className="bg-[#141414]">{ad}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <div className="mb-1.5 text-[13px] text-[#c9a88a]">Kırılganlık analizi</div>
+                  <button
+                    onClick={() => setAnaliz((v) => !v)}
+                    className={`w-full rounded-lg border px-2 py-1.5 text-[12px] font-medium transition-colors ${
+                      analiz
+                        ? "border-[#b76e79]/60 bg-[#b76e79]/20 text-[#e8b6bd]"
+                        : "border-white/[0.08] bg-white/[0.04] text-white/60 hover:text-white/85"
+                    }`}
+                  >
+                    {analiz ? "Açık — teller boyalı" : "Kapalı"}
+                  </button>
+                </div>
+              </div>
               <DiaControl label="İnce tel çapı" value={fineDiaMm} onChange={setFineDiaMm}
                 min={0.03} max={1.0} step={0.01} />
               <DiaControl label="Çerçeve tel çapı" value={frameDiaMm} onChange={setFrameDiaMm}
@@ -324,6 +433,24 @@ export function GeometriClient() {
                     {built.manifoldOk ? "✓ tüm parçalar" : "✗ sorun var"}
                   </dd>
                 </div>
+                {analiz && (
+                  <div className="flex justify-between">
+                    <dt className="text-white/50">Kırılganlık (L/d {">"} {SPAN_WARN_RATIO})</dt>
+                    <dd className={built.riskli ? "text-red-400" : built.uyari ? "text-amber-400" : "text-emerald-400"}>
+                      {built.riskli || built.uyari
+                        ? `${built.riskli} riskli · ${built.uyari} uyarı · en kötü ${built.worstRatio.toFixed(0)}`
+                        : `✓ temiz (en kötü L/d ${built.worstRatio.toFixed(1)})`}
+                    </dd>
+                  </div>
+                )}
+                {unionInfo && (
+                  <div className="flex justify-between">
+                    <dt className="text-white/50">Birleşik gövde (gerçek)</dt>
+                    <dd className="text-emerald-400">
+                      {unionInfo.volumeMm3.toFixed(2)} mm³ · {(unionInfo.volumeMm3 * MATERIALS[material].density).toFixed(3)} g
+                    </dd>
+                  </div>
+                )}
               </dl>
               <p className="mt-3 text-[11px] leading-relaxed text-white/35">
                 Ağırlık, tel kesişimlerini (lehim noktaları) çift sayar — birleşik gövde
@@ -345,6 +472,13 @@ export function GeometriClient() {
                 STL indir ({Math.round(built.tris).toLocaleString("tr-TR")} üçgen)
               </button>
             </div>
+            <button
+              onClick={downloadUnionSTL}
+              disabled={unionBusy}
+              className="w-full rounded-full border border-white/[0.12] bg-white/[0.04] px-6 py-3 text-sm font-medium text-white/85 transition-colors hover:bg-white/[0.08] disabled:opacity-50"
+            >
+              {unionBusy ? "Birleştiriliyor…" : "Tek gövde STL (döküme hazır) + gerçek gramaj"}
+            </button>
           </div>
 
           {/* viewer */}
