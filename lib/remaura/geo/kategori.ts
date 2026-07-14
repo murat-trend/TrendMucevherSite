@@ -1,8 +1,12 @@
-// Geometri çekirdeği — ÜRÜN KATEGORİLERİ (2026-07-14, Murat isteği)
-// Aynı motif farklı takıya dönüşür: kolye ucu / broş / küpe / bilezik / yüzük.
-// Kategori = model sonrası dönüşüm + donanım telleri (kanca, iğne, halka, band).
-// Donanım ölçüleri SABİT mm'dir (kanca kulağa, band parmağa göredir — motif
-// boyuyla ölçeklenmez).
+// Geometri çekirdeği — ÜRÜN KATEGORİLERİ
+// KATEGORİ SAF SEÇİMDİR (Murat düzeltmesi, 2026-07-14): model DÖNÜŞTÜRÜLMEZ —
+// her kategorinin kendi modelleri ileride eklenecek; seçici + tasarımda yer
+// hazırlığı için vardır. Sayfa yalnız KATEGORILER sabitini kullanır.
+//
+// NOT: applyKategori (aşağıda) ŞİMDİLİK PASİF — donanım katmanı (kulak
+// kancası, broş iğnesi, yan halkalar, yüzük tabla+band) kanıtlanmış kod
+// olarak duruyor; kategori modelleri gelince donanım eklentisi olarak döner.
+// Donanım ölçüleri SABİT mm'dir (kanca kulağa, band parmağa göredir).
 import { V3 } from "./vec3";
 import { Polyline, adaptiveSample } from "./wire";
 import { smoothChain } from "./curves";
@@ -14,7 +18,7 @@ export const KATEGORILER = {
   bros: { label: "Broş", boyMm: 44 },
   kupe: { label: "Küpe", boyMm: 22 },
   bilezik: { label: "Bilezik", boyMm: 34 },
-  yuzuk: { label: "Yüzük (tabla)", boyMm: 20 },
+  yuzuk: { label: "Yüzük", boyMm: 20 },
 } as const;
 export type KategoriId = keyof typeof KATEGORILER;
 

@@ -15,7 +15,7 @@ import { measureWire, meshVolumeMm3, edgeManifoldReport } from "@/lib/remaura/ge
 import { toBinarySTL } from "@/lib/remaura/geo/stl";
 import { fmtUm, mmToUm } from "@/lib/remaura/geo/units";
 import { GeoRecipe, listRecipes, saveRecipe, deleteRecipe, canvasThumb } from "@/lib/remaura/geo/library";
-import { applyKategori, KATEGORILER, KategoriId, Parcalar } from "@/lib/remaura/geo/kategori";
+import { KATEGORILER, KategoriId, Parcalar } from "@/lib/remaura/geo/kategori";
 
 // döküm yaklaşık yoğunluklar (g/mm³)
 const MATERIALS = {
@@ -118,7 +118,6 @@ export function GeometriClient() {
   };
   const switchKategori = (k: KategoriId) => {
     setKategori(k);
-    setHeightMm(KATEGORILER[k].boyMm);
     ustaLog("kategori-degisti", { kategori: k });
   };
 
@@ -197,12 +196,11 @@ export function GeometriClient() {
       : { wires: buildTelkariDrop({ heightMm: dHeight, fineDiaMm: dFine, frameDiaMm: dFrame }), granules: [] };
     type SolidRow = { name: string; mesh: { positions: Float64Array; indices: Uint32Array } };
     const srcSolids = "solids" in src ? (src.solids as SolidRow[]) : [];
-    // KATEGORİ dönüşümü: yüzükte model tablaya yatar + band gelir; küpede kanca,
-    // broşta arka iğne, bilezikte yan halkalar eklenir (kolye olduğu gibi)
-    const kat = applyKategori(
-      { wires: src.wires, granules: src.granules, solids: srcSolids as Parcalar["solids"] },
-      dKategori,
-    );
+    // KATEGORİ saf seçimdir (Murat, 2026-07-14): model dönüştürülmez —
+    // kolye dışındaki kategorilerin kendi modelleri ileride eklenecek.
+    const kat: Parcalar = {
+      wires: src.wires, granules: src.granules, solids: srcSolids as Parcalar["solids"],
+    };
 
     // teller: dolgu telleri (ince) doku seçimine göre düz veya BURGU süpürülür
     const wireRows: {
@@ -332,6 +330,7 @@ export function GeometriClient() {
       manifoldOk: edgeManifoldReport(s.mesh.indices).ok,
     }));
 
+    void dKategori; // kategori şimdilik salt seçim (yeniden üretimi etkilemez)
     // KIRILGANLIK ANALİZİ: teller + granüller (tek-nokta destek) omurgadan denetlenir
     let uyari = 0, riskli = 0, worstRatio = 0;
     if (dAnaliz) {
@@ -457,6 +456,11 @@ export function GeometriClient() {
                       <option key={id} value={id} className="bg-[#141414]">{k.label}</option>
                     ))}
                   </select>
+                  {kategori !== "kolye" && (
+                    <p className="mt-1 text-[10px] leading-snug text-[#c9a88a]/70">
+                      Bu kategorinin modelleri yakında — aşağıdakiler kolye ucu modelleridir.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <div className="mb-1.5 text-[13px] text-[#c9a88a]">Model</div>

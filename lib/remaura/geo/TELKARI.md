@@ -133,6 +133,11 @@ Tarihli kısa girişler aşağıya da düşülür (son 10 tutulur, eskisi ilkele
 - 2026-07-14 (Faz 1): burgu damarı döküm çap kuralında TEK başına değil
   KOMPOZİT çapıyla değerlendirilir (ikili burgu ≈ toplam çapta tek tel gibi
   dökülür) — AnalyzeWire.diaMm ayrımı bunun için var
+- 2026-07-14 (kategori düzeltmesi): "kategori ekleyelim" isteğini MODEL
+  DÖNÜŞÜMÜ olarak yorumladım (küpe=kanca ekle vs.) — Murat SAF SEÇİM/yer
+  hazırlığı istemişti. DERS: yapısal yeni boyut isteklerinde niyeti tek
+  cümleyle TEYİT ET (ucuz), varsayımla kurma (pahalı). Donanım kodu pasifte
+  (kategori.ts), kategori modelleri gelince eklenti olarak dönebilir.
 - 2026-07-14 (doku turu): ÇARŞI DİLİ esastır — "burma" (burgu değil), "boncuk
   tel" (miligren=döküm sonrası çark işi, güherse=ayrık tane dizme; İKİSİ DE
   boncuk tel değildir), "dalgalı/zikzak". Doku seti: düz/burma/yassı burma/
