@@ -98,7 +98,24 @@ eleştirileri + hakem ajanı raporları + görsel iterasyon dersleri.
 5. Yassı şerit tel (dikdörtgen profil süpürme)
 6. Taş yuvası primitifi (opsiyon)
 
-## 7. DİL NOTU
+## 7. DERS DEFTERİ RİTÜELİ (Murat'ın kuralı, 2026-07-14)
+
+**Her model üretiminden/iterasyonundan sonra bu dosya GÜNCELLENİR** — atölye
+kendi işinden öğrenir. Üç soru sorulur ve cevaplar ilgili bölüme işlenir:
+1. Bu turda hangi kural ihlali/eksiği yakalandı? → §1 (üretilebilirlik) veya
+   §3'e (estetik) kural olarak ekle.
+2. Murat'ın eleştirisi neydi, hangi genel ilkeye işaret ediyor? → tek seferlik
+   düzeltme değil, İLKE olarak yaz (örn. "boncuklar bağlasın" değil
+   "yerçekimi kanunu").
+3. Hakem/koç ne yakaladı, biz niye kaçırdık? → süreç dersi ise §4'e.
+Tarihli kısa girişler aşağıya da düşülür (son 10 tutulur, eskisi ilkelere erir):
+- 2026-07-13: foto kopyası başarısız → anatomiden tasarla (§4.1 doğdu)
+- 2026-07-13: hakem "havada spiral üretilemez" → yerçekimi kanunu (§1.1)
+- 2026-07-14: Murat "iç içe halkalar bağlantısız / zar boşluğu / kesişme" →
+  §1.1 boncuk, §1.5 zar, §1.2 grid-arama doğdu
+- 2026-07-14: tasarım değerlendirmesi → §3 estetik ilkeleri (Murat onayladı)
+
+## 8. DİL NOTU
 
 Murat "mikron" derken kuyumcu dilini kullanır: **N mikron = N/100 mm**
 (30 mikron = 0.30mm). UI'da mm + "kuyumcu mikronu" birlikte gösterilir;

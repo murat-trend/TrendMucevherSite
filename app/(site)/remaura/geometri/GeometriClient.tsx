@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useDeferredValue } from "react";
+import { useEffect, useMemo, useRef, useState, useDeferredValue } from "react";
 import { GeometriViewer, ViewMesh } from "./GeometriViewer";
 import { buildTelkariDrop } from "@/lib/remaura/geo/telkari";
 import { buildTelkariArabesk } from "@/lib/remaura/geo/telkariArabesk";
@@ -11,6 +11,7 @@ import { sphereMesh, measureSphere } from "@/lib/remaura/geo/granule";
 import { measureWire, meshVolumeMm3, edgeManifoldReport } from "@/lib/remaura/geo/measure";
 import { toBinarySTL } from "@/lib/remaura/geo/stl";
 import { fmtUm, mmToUm } from "@/lib/remaura/geo/units";
+import { GeoRecipe, listRecipes, saveRecipe, deleteRecipe, canvasThumb } from "@/lib/remaura/geo/library";
 
 // döküm yaklaşık yoğunluklar (g/mm³)
 const MATERIALS = {
@@ -74,6 +75,36 @@ export function GeometriClient() {
     setFineDiaMm(MODELS[m].defaults.fine);
     setFrameDiaMm(MODELS[m].defaults.frame);
     setHeightMm(MODELS[m].defaults.height);
+  };
+
+  // Kütüphane: reçete defteri (model = reçete; mesh motordan yeniden doğar)
+  const [recipes, setRecipes] = useState<GeoRecipe[]>([]);
+  const viewerBoxRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    listRecipes().then(setRecipes).catch(() => {});
+  }, []);
+  const saveCurrent = async () => {
+    const canvas = viewerBoxRef.current?.querySelector("canvas");
+    if (!canvas) return;
+    await saveRecipe({
+      id: crypto.randomUUID(),
+      ad: `${MODELS[model].label.split(" ")[0]} · ${new Date().toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`,
+      model, material, heightMm, fineDiaMm, frameDiaMm,
+      createdAt: Date.now(),
+      thumb: canvasThumb(canvas),
+    });
+    setRecipes(await listRecipes());
+  };
+  const applyRecipe = (r: GeoRecipe) => {
+    if (r.model in MODELS) setModel(r.model as ModelId);
+    if (r.material in MATERIALS) setMaterial(r.material as MaterialId);
+    setHeightMm(r.heightMm);
+    setFineDiaMm(r.fineDiaMm);
+    setFrameDiaMm(r.frameDiaMm);
+  };
+  const removeRecipe = async (id: string) => {
+    await deleteRecipe(id);
+    setRecipes(await listRecipes());
   };
 
   // Komut alanı v1: serbest metinden model/ölçü/malzeme/tel okur.
@@ -300,19 +331,60 @@ export function GeometriClient() {
               </p>
             </div>
 
-            <button
-              onClick={downloadSTL}
-              className="w-full rounded-full bg-[linear-gradient(135deg,#c4838b,#b76e79,#a65f69)] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90"
-            >
-              STL indir ({Math.round(built.tris).toLocaleString("tr-TR")} üçgen)
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={saveCurrent}
+                className="shrink-0 rounded-full border border-[#b76e79]/40 bg-[#b76e79]/10 px-5 py-3 text-sm font-medium text-[#b76e79] transition-colors hover:bg-[#b76e79]/20"
+              >
+                Kaydet
+              </button>
+              <button
+                onClick={downloadSTL}
+                className="min-w-0 flex-1 rounded-full bg-[linear-gradient(135deg,#c4838b,#b76e79,#a65f69)] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90"
+              >
+                STL indir ({Math.round(built.tris).toLocaleString("tr-TR")} üçgen)
+              </button>
+            </div>
           </div>
 
           {/* viewer */}
-          <div className="relative min-h-[70vh] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0a0b0e]">
+          <div ref={viewerBoxRef} className="relative min-h-[70vh] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0a0b0e]">
             <GeometriViewer meshes={built.meshes} material={material} />
           </div>
         </div>
+
+        {/* kütüphane — son 10 reçete (model=reçete; tıkla -> aynen geri yüklenir) */}
+        {recipes.length > 0 && (
+          <div className="mt-5">
+            <div className="mb-2.5 flex items-baseline gap-2">
+              <span className="text-[13px] font-medium text-[#c9a88a]">Kütüphane</span>
+              <span className="font-mono text-[11px] text-white/35">son {Math.min(10, recipes.length)} model</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              {recipes.slice(0, 10).map((r) => (
+                <div key={r.id} className="group relative overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.02] transition-colors hover:border-[#b76e79]/40">
+                  <button onClick={() => applyRecipe(r)} className="block w-full text-left">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- dataURL önizleme */}
+                    <img src={r.thumb} alt={r.ad} className="aspect-[4/3] w-full object-cover" />
+                    <div className="px-2.5 py-2">
+                      <div className="text-[12px] text-white/85">{r.ad}</div>
+                      <div className="font-mono text-[10px] text-white/40">
+                        {r.heightMm}mm · tel {Math.round(r.fineDiaMm * 100)} mikron
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => removeRecipe(r.id)}
+                    aria-label="Sil"
+                    className="absolute right-1.5 top-1.5 hidden h-6 w-6 items-center justify-center rounded-full bg-black/60 text-[13px] text-white/70 hover:text-white group-hover:flex"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
