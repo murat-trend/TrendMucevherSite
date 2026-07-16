@@ -6,6 +6,7 @@ import { buildTelkariDrop } from "@/lib/remaura/geo/telkari";
 import { buildTelkariArabesk } from "@/lib/remaura/geo/telkariArabesk";
 import { buildTelkariKelebek } from "@/lib/remaura/geo/telkariKelebek";
 import { buildKelebekOzgun } from "@/lib/remaura/geo/kelebekOzgun";
+import { buildSuyoluBileklik, SuyoluDesen } from "@/lib/remaura/geo/suyoluBileklik";
 import { sweepWire, sweepTwistedWire, sweepBeadedWire, makeWavyPath, offsetPathN } from "@/lib/remaura/geo/wire";
 import { analyzeSpans, AnalyzeWire, SPAN_WARN_RATIO } from "@/lib/remaura/geo/analyze";
 import { unionMeshes } from "@/lib/remaura/geo/union";
@@ -100,11 +101,15 @@ const DOKULAR = {
 } as const;
 type DokuId = keyof typeof DOKULAR;
 
+// kategori alanı: model hangi kategorinin listesinde görünür (bilezik artık
+// ilk gerçek modeline sahip; diğer kategoriler hâlâ kolye modellerini gösterir)
 const MODELS = {
-  ozgun: { label: "Kelebek — özgün tasarım", defaults: { fine: 0.3, frame: 0.55, height: 44 } },
-  kelebek: { label: "Kelebek (foto kopya, arşiv)", defaults: { fine: 0.26, frame: 0.5, height: 44 } },
-  arabesk: { label: "Arabesk (referans kopya)", defaults: { fine: 0.4, frame: 0.7, height: 36 } },
-  damla: { label: "Damla (parametrik)", defaults: { fine: 0.3, frame: 0.8, height: 30 } },
+  ozgun: { label: "Kelebek — özgün tasarım", kategori: "kolye", defaults: { fine: 0.3, frame: 0.55, height: 44 } },
+  kelebek: { label: "Kelebek (foto kopya, arşiv)", kategori: "kolye", defaults: { fine: 0.26, frame: 0.5, height: 44 } },
+  arabesk: { label: "Arabesk (referans kopya)", kategori: "kolye", defaults: { fine: 0.4, frame: 0.7, height: 36 } },
+  damla: { label: "Damla (parametrik)", kategori: "kolye", defaults: { fine: 0.3, frame: 0.8, height: 30 } },
+  // suyolu: height = bilek İÇ ÇEVRESİ (mm) — bant eni ve desen ayrı kontroller
+  suyolu: { label: "Suyolu bileklik", kategori: "bilezik", defaults: { fine: 0.3, frame: 0.6, height: 170 } },
 } as const;
 type ModelId = keyof typeof MODELS;
 
@@ -152,6 +157,9 @@ export function GeometriClient() {
   const [fineDiaMm, setFineDiaMm] = useState<number>(MODELS.ozgun.defaults.fine);
   const [frameDiaMm, setFrameDiaMm] = useState<number>(MODELS.ozgun.defaults.frame);
   const [heightMm, setHeightMm] = useState<number>(MODELS.ozgun.defaults.height);
+  // suyolu bileklik: bant eni + desen (diğer modeller bu ikisini kullanmaz)
+  const [bantEniMm, setBantEniMm] = useState(12);
+  const [desen, setDesen] = useState<SuyoluDesen>("dalga");
   const [unionBusy, setUnionBusy] = useState(false);
   const [unionInfo, setUnionInfo] = useState<{ volumeMm3: number; parca: number } | null>(null);
 
@@ -204,7 +212,7 @@ export function GeometriClient() {
     } catch { /* günlük asla aracı bozmaz */ }
   };
   useEffect(() => { ustaLog("sayfa-acildi"); }, []);
-  const durum = () => ({ kategori, model, doku, malzeme: material, boyMm: heightMm, telMm: fineDiaMm });
+  const durum = () => ({ kategori, model, doku, malzeme: material, boyMm: heightMm, telMm: fineDiaMm, desen, bantEniMm });
 
   const switchModel = (m: ModelId) => {
     setModel(m);
@@ -215,6 +223,9 @@ export function GeometriClient() {
   };
   const switchKategori = (k: KategoriId) => {
     setKategori(k);
+    // bilezik artık kendi modeline sahip — kategoriler arası geçişte model uyarlanır
+    if (k === "bilezik" && MODELS[model].kategori !== "bilezik") switchModel("suyolu");
+    else if (k !== "bilezik" && MODELS[model].kategori === "bilezik") switchModel("ozgun");
     ustaLog("kategori-degisti", { kategori: k });
   };
 
@@ -232,6 +243,7 @@ export function GeometriClient() {
       ad: `${KATEGORILER[kategori].label} · ${MODELS[model].label.split(" ")[0]} · ${new Date().toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`,
       model, material, heightMm, fineDiaMm, frameDiaMm,
       kategori,
+      bantEniMm, desen,
       createdAt: Date.now(),
       thumb: canvasThumb(canvas),
     });
@@ -245,6 +257,8 @@ export function GeometriClient() {
     setHeightMm(r.heightMm);
     setFineDiaMm(r.fineDiaMm);
     setFrameDiaMm(r.frameDiaMm);
+    if (r.bantEniMm) setBantEniMm(r.bantEniMm);
+    if (r.desen === "dalga" || r.desen === "meander") setDesen(r.desen);
   };
   const removeRecipe = async (id: string) => {
     await deleteRecipe(id);
@@ -272,13 +286,20 @@ export function GeometriClient() {
       }
     }
     setPromptMsg(null);
-    if (t.includes("kelebek")) switchModel("ozgun");
+    const suyoluMu = /bileklik|bilezik|suyolu|kelep[çc]e/.test(t) || model === "suyolu";
+    if (/bileklik|bilezik|suyolu|kelep[çc]e/.test(t)) { setKategori("bilezik"); switchModel("suyolu"); }
+    else if (t.includes("kelebek")) switchModel("ozgun");
     else if (t.includes("arabesk")) switchModel("arabesk");
     else if (t.includes("damla")) switchModel("damla");
+    if (/meander|k[öo][şs]eli|labirent|grek/.test(t)) setDesen("meander");
+    else if (/dalga|akan/.test(t)) setDesen("dalga");
     if (/alt[ıi]n|14k/.test(t)) setMaterial("au14");
     else if (/g[üu]m[üu]ş|gumus|925/.test(t)) setMaterial("ag925");
+    const hLo = suyoluMu ? 150 : 15, hHi = suyoluMu ? 210 : 60;
+    const cm = t.match(/(\d+(?:\.\d+)?)\s*cm/);
+    if (cm) setHeightMm(clamp(parseFloat(cm[1]) * 10, hLo, hHi));
     const mm = t.match(/(\d+(?:\.\d+)?)\s*mm/);
-    if (mm) setHeightMm(clamp(parseFloat(mm[1]), 15, 60));
+    if (mm) setHeightMm(clamp(parseFloat(mm[1]), hLo, hHi));
     for (const m of t.matchAll(/([çc]er[çc]eve\s+)?(\d+(?:\.\d+)?)\s*mikron/g)) {
       const v = parseFloat(m[2]) / 100; // kuyumcu mikronu -> mm
       if (m[1]) setFrameDiaMm(clamp(v, 0.3, 2));
@@ -295,9 +316,15 @@ export function GeometriClient() {
   const dHeight = useDeferredValue(heightMm);
   const dDoku = useDeferredValue(doku);
   const dAnaliz = useDeferredValue(analiz);
+  const dBant = useDeferredValue(bantEniMm);
+  const dDesen = useDeferredValue(desen);
 
   const built = useMemo(() => {
-    const src = dModel === "ozgun"
+    const src = dModel === "suyolu"
+      ? buildSuyoluBileklik({
+          icCevreMm: dHeight, bantEniMm: dBant, fineDiaMm: dFine, frameDiaMm: dFrame, desen: dDesen,
+        })
+      : dModel === "ozgun"
       ? buildKelebekOzgun({ wingspanMm: dHeight, fineDiaMm: dFine, frameDiaMm: dFrame })
       : dModel === "kelebek"
       ? buildTelkariKelebek({ heightMm: dHeight, fineDiaMm: dFine, frameDiaMm: dFrame })
@@ -379,7 +406,24 @@ export function GeometriClient() {
     for (const { tw, key } of edWires) {
       const isFine = tw.radiusMm * 2 === dFine;
       const kind = (isFine ? "fine" : "frame") as ViewMesh["kind"];
-      if (isFine && (dDoku === "burgu" || dDoku === "burgu-yassi" || dDoku === "orgu")) {
+      const burmaMi = (tw as { burma?: boolean }).burma === true;
+      if (burmaMi) {
+        // model burma istedi (suyolu omurgası — §3.5 doku kontrastı):
+        // doku seçiminden bağımsız, T1 omurga her zaman burmalı süpürülür
+        const D = tw.radiusMm * 2;
+        for (const st of sweepTwistedWire(tw.path, D, {
+          pitchMm: D * 3.2, tolMm: 0.003, minRingSpacingMm: 0.12,
+        })) {
+          wireRows.push({
+            view: { positions: st.mesh.positions, indices: st.mesh.indices, kind, partKey: key },
+            lengthMm: st.mesh.lengthMm,
+            vol: meshVolumeMm3(st.mesh.positions, st.mesh.indices),
+            meas: measureWire(st.mesh, st.path),
+            manifoldOk: edgeManifoldReport(st.mesh.indices).ok,
+            anaPts: st.path.pts, anaR: st.mesh.requestedRadiusMm, anaDia: D, fineFlag: false,
+          });
+        }
+      } else if (isFine && (dDoku === "burgu" || dDoku === "burgu-yassi" || dDoku === "orgu")) {
         const D = tw.radiusMm * 2;
         const strands = sweepTwistedWire(tw.path, D, {
           strands: dDoku === "orgu" ? 3 : 2,
@@ -542,7 +586,7 @@ export function GeometriClient() {
         && solidRows.every((r) => r.manifoldOk),
       granuleCount: granRows.length,
     };
-  }, [dModel, dFine, dFrame, dHeight, dDoku, dAnaliz, dKategori, dEdits]);
+  }, [dModel, dFine, dFrame, dHeight, dDoku, dAnaliz, dKategori, dEdits, dBant, dDesen]);
 
   // parametre değişince birleşik gövde bilgisi bayatlar
   useEffect(() => { setUnionInfo(null); }, [built]);
@@ -628,7 +672,7 @@ export function GeometriClient() {
                       <option key={id} value={id} className="bg-[#141414]">{k.label}</option>
                     ))}
                   </select>
-                  {kategori !== "kolye" && (
+                  {kategori !== "kolye" && kategori !== "bilezik" && (
                     <p className="mt-1 text-[10px] leading-snug text-[#c9a88a]/70">
                       Bu kategorinin modelleri yakında — aşağıdakiler kolye ucu modelleridir.
                     </p>
@@ -641,9 +685,11 @@ export function GeometriClient() {
                     onChange={(e) => switchModel(e.target.value as ModelId)}
                     className="w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-1.5 text-[12px] text-white/90 outline-none focus:border-[#b76e79]/50"
                   >
-                    {Object.entries(MODELS).map(([id, m]) => (
-                      <option key={id} value={id} className="bg-[#141414]">{m.label}</option>
-                    ))}
+                    {Object.entries(MODELS)
+                      .filter(([, m]) => m.kategori === (kategori === "bilezik" ? "bilezik" : "kolye"))
+                      .map(([id, m]) => (
+                        <option key={id} value={id} className="bg-[#141414]">{m.label}</option>
+                      ))}
                   </select>
                 </div>
               </div>
@@ -690,8 +736,28 @@ export function GeometriClient() {
                 min={0.03} max={1.0} step={0.01} />
               <DiaControl label="Çerçeve tel çapı" value={frameDiaMm} onChange={setFrameDiaMm}
                 min={0.3} max={2.0} step={0.05} />
-              <DiaControl label="Gövde boyu" value={heightMm} onChange={setHeightMm}
-                min={15} max={60} step={1} jewelerUnit={false} />
+              {model === "suyolu" ? (
+                <>
+                  <DiaControl label="Bilek iç çevresi" value={heightMm} onChange={setHeightMm}
+                    min={150} max={210} step={1} jewelerUnit={false} />
+                  <DiaControl label="Bant eni" value={bantEniMm} onChange={setBantEniMm}
+                    min={8} max={16} step={0.5} jewelerUnit={false} />
+                  <div>
+                    <div className="mb-1.5 text-[13px] text-[#c9a88a]">Suyolu deseni</div>
+                    <select
+                      value={desen}
+                      onChange={(e) => { setDesen(e.target.value as SuyoluDesen); ustaLog("desen-degisti", { desen: e.target.value }); }}
+                      className="w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-1.5 text-[12px] text-white/90 outline-none focus:border-[#b76e79]/50"
+                    >
+                      <option value="dalga" className="bg-[#141414]">Akan dalga</option>
+                      <option value="meander" className="bg-[#141414]">Köşeli (labirent)</option>
+                    </select>
+                  </div>
+                </>
+              ) : (
+                <DiaControl label="Gövde boyu" value={heightMm} onChange={setHeightMm}
+                  min={15} max={60} step={1} jewelerUnit={false} />
+              )}
             </div>
 
             {/* DÜZENLE (Faz 2): parça seç -> taşı / kat değiştir / boyutla / motife çevir */}
@@ -858,6 +924,7 @@ export function GeometriClient() {
             <GeometriViewer
               meshes={built.meshes}
               material={material}
+              fitKey={dModel}
               editMode
               selectedKey={selKey}
               onPick={(k) => {

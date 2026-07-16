@@ -39,6 +39,16 @@ eleştirileri + hakem ajanı raporları + görsel iterasyon dersleri.
 9. **Tel çapı malzeme özelliğidir (Murat, 2026-07-14):** parça ölçeklenince
    omurga ölçeklenir, tel çapı SABİT kalır — kuyumcu teli çeker, şişirmez.
    Düzenleme sonrası "ölçüleri standarda döndür" her zaman mümkün olmalı.
+10. **Spiral = SIKI sarımlı GÖZ, gevşek kangal değil (2026-07-16 suyolu dersi):**
+   tur sayısı yarıçaptan TÜRER (tur aralığı ≈ 2.45·telYarıçapı — komşu turlar
+   lehim temasında, kendine-lehim yapıyı taşır), tur sayısı ≤6 ile merkez AÇIK
+   bırakılır (disk değil göz okunur, ışık geçer, gram düşer). Gevşek kangalın
+   iç turları desteksiz yaydır — kırılganlık analizi 195 L/d ile yakaladı.
+11. **Kavisli form (bileklik/yüzük) = düz bantta tasarla, omurgayı silindire
+   sar (bend.ts):** §1.7'nin bant hali — x yay uzunluğu, y eksenel, z radyal;
+   sarmadan önce kiriş sapması toleransı için yoğunlaştır (s ≤ √(8·R·tol)).
+   Tel kesiti mikron-sabit kalır; iç çevre sözü tel İÇ YÜZEYİNDEN verilir
+   (omurga yarıçapı = Rin + telYarıçapı).
 
 ## 2. TEL HİYERARŞİSİ (çerçeve=1.00 bazlı, koç analizi standardı)
 
@@ -95,7 +105,9 @@ eleştirileri + hakem ajanı raporları + görsel iterasyon dersleri.
 - `fill.ts` — latticeFill (kafes, delik destekli), insetLoops, pointInPoly
 - `granule.ts` — küre (boncuk/inci) + latheMesh (torna: damla, gövde boğumu)
 - `measure.ts` — geri ölçüm + manifold denetimi; `stl.ts` — ikili STL
+- `bend.ts` — silindir sarma (bileklik/yüzük; form omurgaya, kesit sabit)
 - Modeller: `kelebekOzgun.ts` (ANA ÖRNEK — tüm kurallar uygulanmış),
+  `suyoluBileklik.ts` (bilezik; kavisli bant + burma omurga + göz/kafes dama),
   `telkari.ts` (damla), `telkariArabesk.ts`, `telkariKelebek.ts` (foto
   kopya, arşiv/ibret)
 - Sayfa: `app/(site)/remaura/geometri` · Testler: `scripts/geo_*.ts` (tsx)
@@ -143,6 +155,19 @@ Tarihli kısa girişler aşağıya da düşülür (son 10 tutulur, eskisi ilkele
   boncuk tel değildir), "dalgalı/zikzak". Doku seti: düz/burma/yassı burma/
   çift burma S+Z/örgü/boncuk/sarma(kazaziye)/dalgalı. Güherse (yüzeye tane
   serpme) ileride AYRI özellik adayı. Kaynak: İKO sözlüğü + Midyat/Sardis.
+- 2026-07-16 (suyolu bileklik): gevşek kangal spiral kırılganlık analizinde
+  patladı (L/d 195) → §1.10 doğdu (sıkı sarım + açık merkez göz); analyze.ts'e
+  KENDİNE-LEHİM desteği eklendi (aynı telin yay-uzak/uzay-yakın noktaları
+  destek; kapalı halkada kapalı — yüzen halka hâlâ havada sayılır).
+- 2026-07-16 (hakem turu, suyolu): omurga çıplak düz telken kafesin içinde
+  eriyordu → AKAN ÇİZGİ BURMA yapıldı (§3.5'in kanıtı: doku kontrastı tek
+  hamlede "gerçek telkari" okutur). Lehim kuyruğu rastgele köşeye değil
+  ANLAMLI hedefe gider (göz→omurga + göz→astar çift bağ çubuğu — "göz akan
+  çizgiden doğar"). Picot SEYREK değil DÜZENLİ seri olmalı (her yarım periyot,
+  iki rayda hizalı). Dama paritesi ZORLANIR (komşu hücre asla aynı dolgu).
+- 2026-07-16 (hakem, meander): mazgal omurga "panelli kutu dizisi" okunuyor —
+  gerçek meander SÜREKLİ anahtar-çizgidir (kanca kıvrımlı); anahtar-çizgi
+  üreteci yapılana kadar meander ikinci sınıf varyant. Karar Murat'ta.
 
 ## 8. DİL NOTU
 

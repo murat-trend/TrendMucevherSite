@@ -18,6 +18,8 @@ export type ViewMesh = {
 type Props = {
   meshes: ViewMesh[];
   material: "ag925" | "au14";
+  /** değişince kamera yeniden kadraj alır (model geçişi — bileklik ≫ kolye ucu) */
+  fitKey?: string;
   /** düzenleme modu: parça seçimi + taşıma gizmosu etkin */
   editMode?: boolean;
   selectedKey?: string | null;
@@ -32,7 +34,7 @@ const COLORS = {
 };
 const SEL_EMISSIVE = 0xb76e79;
 
-export function GeometriViewer({ meshes, material, editMode, selectedKey, onPick, onMoveCommit }: Props) {
+export function GeometriViewer({ meshes, material, fitKey, editMode, selectedKey, onPick, onMoveCommit }: Props) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const groupRef = useRef<THREE.Group | null>(null);
   const fittedRef = useRef(false);
@@ -149,6 +151,10 @@ export function GeometriViewer({ meshes, material, editMode, selectedKey, onPick
     const ro = new ResizeObserver(applySize);
     ro.observe(host);
 
+    if (process.env.NODE_ENV === "development") {
+      (window as unknown as Record<string, unknown>).__geoDebug = { scene, camera, renderer, group, controls };
+    }
+
     let frameId = 0;
     const animate = () => {
       if (!alive) return;
@@ -185,6 +191,11 @@ export function GeometriViewer({ meshes, material, editMode, selectedKey, onPick
       fittedRef.current = false;
     };
   }, []);
+
+  // model değişti: sonraki mesh listesi yeni ölçekte kadraj alsın
+  useEffect(() => {
+    fittedRef.current = false;
+  }, [fitKey]);
 
   // içerik değişince sahneyi yeniden kur
   useEffect(() => {

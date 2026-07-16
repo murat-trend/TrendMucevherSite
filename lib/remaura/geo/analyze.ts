@@ -53,20 +53,26 @@ function sampleArc(pts: V3[], stepMm: number): { p: V3; s: number }[] {
 
 /** Tüm teller için desteksiz açıklık analizi. Döner: tel sırasına göre verdicts. */
 export function analyzeSpans(wires: AnalyzeWire[]): { verdicts: WireVerdict[]; worstRatio: number } {
-  // 1) uzamsal ızgara: tüm örnek noktalar (telId ile)
+  // 1) uzamsal ızgara: tüm örnek noktalar (telId + yay konumu ile)
   const cell = 1.0; // mm
-  const grid = new Map<string, { w: number; p: V3 }[]>();
+  const grid = new Map<string, { w: number; p: V3; s: number }[]>();
   const samples = wires.map((w) => sampleArc(w.pts, SAMPLE_STEP_MM));
   const key = (x: number, y: number, z: number) =>
     `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
   samples.forEach((pts, wi) => {
-    for (const { p } of pts) {
+    for (const { p, s } of pts) {
       const k = key(p[0], p[1], p[2]);
       let arr = grid.get(k);
       if (!arr) { arr = []; grid.set(k, arr); }
-      arr.push({ w: wi, p });
+      arr.push({ w: wi, p, s });
     }
   });
+  // KENDİNE LEHİM (2026-07-16, suyolu dersi): sık sarımlı spiralde komşu
+  // turlar birbirine değer ve lehimlenir — aynı telin yay üzerinde uzak ama
+  // uzayda temas eden noktaları DESTEK sayılır. Kapalı halkalarda kapatılır
+  // (uçları buluşan yüzen halka kendi kendini "destekli" gösterirdi).
+  const selfSolderOk = wires.map((w) =>
+    w.pts.length > 1 && dist(w.pts[0], w.pts[w.pts.length - 1]) > 3 * SAMPLE_STEP_MM);
 
   // 2) tel başına: BAŞKA tele temas eden yay konumları -> en uzun boşluk
   const verdicts: WireVerdict[] = [];
@@ -83,7 +89,12 @@ export function analyzeSpans(wires: AnalyzeWire[]): { verdicts: WireVerdict[]; w
             const arr = grid.get(`${cx + dx},${cy + dy},${cz + dz}`);
             if (!arr) continue;
             for (const o of arr) {
-              if (o.w === wi) continue;
+              if (o.w === wi) {
+                // kendine lehim: yay üzerinde komşuluk sayılmaz, uzak temas sayılır
+                if (!selfSolderOk[wi] || Math.abs(o.s - s) < Math.max(1.2, 10 * rw)) continue;
+                if (dist(p, o.p) <= 2 * rw + CONTACT_EXTRA_MM) { touched = true; break; }
+                continue;
+              }
               const tol = rw + wires[o.w].radiusMm + CONTACT_EXTRA_MM;
               if (dist(p, o.p) <= tol) { touched = true; break; }
             }

@@ -13,6 +13,8 @@ export type GeoRecipe = {
   fineDiaMm: number;
   frameDiaMm: number;
   kategori?: string;   // ürün kategorisi (kolye/bros/kupe/bilezik/yuzuk)
+  bantEniMm?: number;  // suyolu bileklik: bant eni
+  desen?: string;      // suyolu bileklik: dalga | meander
   createdAt: number;   // epoch ms
   thumb: string;       // küçük JPEG dataURL (viewer'dan)
 };
