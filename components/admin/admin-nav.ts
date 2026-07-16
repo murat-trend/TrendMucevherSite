@@ -45,6 +45,7 @@ import {
   Hammer,
   Map,
   Hand,
+  Link2,
 } from "lucide-react";
 
 export type AdminNavItem = {
@@ -492,6 +493,13 @@ export const ADMIN_NAV_ENTRIES: AdminNavEntry[] = [
         labelTr: "Suyolu — Taşlı Bileklik",
         labelEn: "Tennis Bracelet Studio",
         icon: Gem,
+      },
+      {
+        id: "zincir",
+        href: "/remaura/zincir",
+        labelTr: "Zincir",
+        labelEn: "Chain",
+        icon: Link2,
       },
     ],
   },
