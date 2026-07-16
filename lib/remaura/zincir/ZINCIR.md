@@ -84,6 +84,15 @@ Genişlik W kullanıcı girdisidir; kalan her şey türer:
 - **B7 — figaro deseni:** adet oranı **3 kısa : 1 uzun** standart (2+1 varyant);
   3:1 ADET oranıdır, boy oranı değil — uzun bakla boyu ≈ **2-2.5 × kısa**
   (serbest parametre). `[PRATİK — gld, statementcollective + dikkat notu]`
+- **B8 — tel çapı KULLANICI PARAMETRESİDİR (Murat, 2026-07-16: "hedef gramajı
+  yakalayabilmeliyiz; altın maliyeti kullanıcı tercihinde"):** genişlik W dış
+  görünümü, tel çapı d metali belirler; iç ölçüler ikisinden türer
+  (W_i = W − 2d, L_i = L_o(W) − 2d — d inceldikçe bakla ferahlar, gram düşer;
+  gerçek dünya karşılığı ince telli/açık cuban'lar). Sınırlar kural-türevli:
+  **max** = iç ende komşu tel + C2 sığmalı → çapraz ailede (W−0.3)/3.41, dik
+  ailede (W−0.3)/3 (= eski "dolu" varsayılan üst sınırdır); **min** = 0.5 mm
+  (D7 döküm tabanı; 0.8 altı uyarılır). Anlık gram tahmini Pappus hacmi ×
+  kesin-üretim düzeltme katsayısıyla verilir. `[HESAP — B2-CAD + D7'den]`
 
 ---
 
@@ -244,6 +253,12 @@ piyasa değerleri yalnız sanity-check çapasıdır (profil farkı 3-5× oynatı
 - 2026-07-16 (lint dersi): alan-koruyan yarıçap düzeltmesi yazıldı ama
   KULLANILMAMIŞTI — eslint no-unused-vars yakaladı; "düzeltme eklendi" demek
   yetmez, hacim testi düzeltme SONRASI yeniden koşulmalı (koşuldu: −%0.2).
+- 2026-07-16 (Murat ilk eleştirisi → B8 doğdu): "model harika ama KALIN —
+  altın maliyeti/satış fiyatı; gramaj kullanıcı tercihine bırakılmalı."
+  İLKE: dolu (solid) hal varsayılan ÜST sınırdır, alıcıya sunulan ürünse
+  gram/maliyet dengesidir — her zincir tipinde metal dozu (tel çapı) slider
+  ile kullanıcıda, anlık gram tahmini yanında. Genişlik (görünüm) ile tel
+  (metal) ayrıştırıldı; eski tek-parametreli model iptal.
 
 ## 11. KAYNAKÇA (ana)
 

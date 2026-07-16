@@ -8,9 +8,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ZincirViewer, ViewMesh } from "./ZincirViewer";
 import {
-  MADENLER, MadenId, TIPLER, ZincirTipId, TRAS, AJUR, OLCU,
+  MADENLER, MadenId, TIPLER, ZincirTipId, TRAS, AJUR, OLCU, telSinir,
 } from "@/lib/remaura/zincir/kurallar";
-import { geoTuret, dizilim, montajDuz, montajDaire, rapor, ZincirRapor } from "@/lib/remaura/zincir/zincir";
+import {
+  geoTuret, dizilim, montajDuz, montajDaire, rapor, ZincirRapor,
+  gramTahmin, pappusHacimMm3,
+} from "@/lib/remaura/zincir/zincir";
 import { baklaUret, autoAjur, dizilimDenetim, KesisimSonuc, BaklaUretim } from "@/lib/remaura/zincir/islem";
 import { toBinarySTL } from "@/lib/remaura/zincir/stl";
 import { PATTERNS } from "@/app/(site)/remaura/ajur/lib/patterns";
@@ -45,6 +48,8 @@ type UretimSonuc = {
 export function ZincirClient() {
   const [tip, setTip] = useState<ZincirTipId>("kuba");
   const [genislikMm, setGenislikMm] = useState<number>(OLCU.genislikVarsayilanMm);
+  // B8: null = kural varsayılanı (dolu hal); sayı = kullanıcı seçimi (hedef gramaj)
+  const [telSecimMm, setTelSecimMm] = useState<number | null>(null);
   const [uzunlukMm, setUzunlukMm] = useState<number>(210);
   const [metalTur, setMetalTur] = useState<"altin" | "gumus" | "platin">("gumus");
   const [ayar, setAyar] = useState<MadenId>("au14");
@@ -59,10 +64,21 @@ export function ZincirClient() {
   const [meshes, setMeshes] = useState<ViewMesh[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const uretimSayac = useRef(0);
+  // B8 anlık gram tahmini düzeltmesi: kesinHacim/Pappus (traş+ajur kaybı)
+  const kFaktorRef = useRef<number>(1);
 
   const maden: MadenId = metalTur === "gumus" ? "ag925" : metalTur === "platin" ? "pt950" : ayar;
   const kart = TIPLER[tip];
-  const telCapMm = useMemo(() => genislikMm / kart.telOran, [genislikMm, kart]);
+  const sinir = useMemo(() => telSinir(tip, genislikMm), [tip, genislikMm]);
+  const telCapMm = useMemo(
+    () => Math.min(Math.max(telSecimMm ?? sinir.varsayilanMm, sinir.minMm), sinir.maxMm),
+    [telSecimMm, sinir],
+  );
+  const tahmin = useMemo(
+    () => gramTahmin({ tip, genislikMm, uzunlukMm, telCapMm, maden, kFaktor: kFaktorRef.current }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- kFaktorRef sonuc ile tazelenir
+    [tip, genislikMm, uzunlukMm, telCapMm, maden, sonuc],
+  );
 
   const bildir = useCallback((m: string) => {
     setToast(m);
@@ -70,7 +86,7 @@ export function ZincirClient() {
   }, []);
 
   const kurMeshler = useCallback((s: UretimSonuc, g: "yerde" | "kolyede") => {
-    const diz = dizilim(s.raporData.tip, genislikMm, uzunlukMm);
+    const diz = dizilim(s.raporData.tip, genislikMm, uzunlukMm, s.raporData.telCapMm);
     const set = {
       kisa: s.kisa.mesh,
       kisaAyna: s.kisa.mesh, // curb ailesi özdeş baklalar — ayna kullanılmıyor
@@ -88,7 +104,7 @@ export function ZincirClient() {
     setBusy(true);
     const benimSiram = ++uretimSayac.current;
     try {
-      const { kisa, uzun } = geoTuret(tip, genislikMm);
+      const { kisa, uzun } = geoTuret(tip, genislikMm, telCapMm);
       const k = TIPLER[tip];
       const ajur = ajurAcik && k.ajurUygun ? autoAjur(kisa, ajurDesen, ajurDoz) : null;
       const bKisa = await baklaUret({ ...kisa, yatisDeg: 0, trasOrani: k.bukumDeg ? trasOrani : 0, ajur });
@@ -99,8 +115,9 @@ export function ZincirClient() {
           })
         : null;
       if (benimSiram !== uretimSayac.current) return; // eski üretim, at
+      kFaktorRef.current = bKisa.hacimMm3 / pappusHacimMm3(kisa); // B8 tahmin düzeltmesi
       const r = rapor({
-        tip, genislikMm, uzunlukMm, maden,
+        tip, genislikMm, uzunlukMm, telCapMm, maden,
         hacimKisaMm3: bKisa.hacimMm3, hacimDoluKisaMm3: bKisa.hacimDoluMm3,
         hacimUzunMm3: bUzun?.hacimMm3, hacimDoluUzunMm3: bUzun?.hacimDoluMm3,
         kalinlikMm: bKisa.kalinlikMm,
@@ -127,7 +144,7 @@ export function ZincirClient() {
     } finally {
       setBusy(false);
     }
-  }, [busy, tip, genislikMm, uzunlukMm, maden, trasOrani, ajurAcik, ajurDesen, ajurDoz, gorunum, kurMeshler, bildir]);
+  }, [busy, tip, genislikMm, uzunlukMm, telCapMm, maden, trasOrani, ajurAcik, ajurDesen, ajurDoz, gorunum, kurMeshler, bildir]);
 
   const gorunumDegistir = (g: "yerde" | "kolyede") => {
     setGorunum(g);
@@ -137,6 +154,7 @@ export function ZincirClient() {
   const tipSec = (id: ZincirTipId) => {
     setTip(id);
     setTrasOrani(TIPLER[id].trasVarsayilan);
+    setTelSecimMm(null); // yeni tip → kural varsayılanı tel (B8)
     if (!TIPLER[id].ajurUygun) setAjurAcik(false);
   };
 
@@ -165,7 +183,7 @@ export function ZincirClient() {
   // C2/C3 uyarıları rapor panelinde
   const stlKomple = () => {
     if (!sonuc) return;
-    const diz = dizilim(tip, genislikMm, uzunlukMm);
+    const diz = dizilim(tip, genislikMm, uzunlukMm, sonuc.raporData.telCapMm);
     const set = {
       kisa: sonuc.kisa.mesh, kisaAyna: sonuc.kisa.mesh,
       uzun: sonuc.uzun?.mesh, uzunAyna: sonuc.uzun?.mesh,
@@ -275,19 +293,50 @@ export function ZincirClient() {
                 {/* ölçüler */}
                 <div className={panel}>
                   <h3 className="font-display text-lg font-semibold">Ölçüler</h3>
-                  <p className="mb-3 text-xs text-[#9CA3AF]">Genişlikten tel çapı ve bakla kurallardan türer (B1-B4)</p>
+                  <p className="mb-3 text-xs text-[#9CA3AF]">
+                    Genişlik dış görünümü, tel çapı metali belirler (B8) — teli
+                    incelterek hedef grama in; bakla iç ölçüleri kurallardan türer
+                  </p>
                   <div className="mb-1.5 flex items-baseline justify-between">
-                    <span className="text-xs text-[#9CA3AF]">Zincir genişliği</span>
-                    <span className="font-mono text-[13px]">
-                      {genislikMm.toFixed(1)} mm
-                      <span className="ml-2 text-[11px] text-[#D4AF37]">tel Ø {telCapMm.toFixed(2)} mm</span>
-                    </span>
+                    <span className="text-xs text-[#9CA3AF]">Zincir genişliği (dış görünüm)</span>
+                    <span className="font-mono text-[13px]">{genislikMm.toFixed(1)} mm</span>
                   </div>
                   <input
                     type="range" min={OLCU.genislikMinMm} max={OLCU.genislikMaxMm} step={0.5} value={genislikMm}
                     onChange={(e) => setGenislikMm(parseFloat(e.target.value))}
                     className="range-slider w-full"
                   />
+
+                  {/* B8: bakla kalınlığı (tel çapı) — hedef gramaj kullanıcıda */}
+                  <div className="mb-1.5 mt-4 flex items-baseline justify-between">
+                    <span className="text-xs text-[#9CA3AF]">Bakla kalınlığı (tel çapı)</span>
+                    <span className="font-mono text-[13px]">
+                      Ø {telCapMm.toFixed(2)} mm
+                      {telSecimMm !== null && (
+                        <button
+                          onClick={() => setTelSecimMm(null)}
+                          className="ml-2 rounded border border-[#2A2A35] px-1.5 py-0.5 text-[10px] text-[#9CA3AF] hover:text-white"
+                        >
+                          varsayılana dön
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                  <input
+                    type="range" min={sinir.minMm} max={sinir.maxMm} step={0.02} value={telCapMm}
+                    onChange={(e) => setTelSecimMm(parseFloat(e.target.value))}
+                    className="range-slider w-full"
+                  />
+                  <div className="mt-1 flex items-baseline justify-between">
+                    <span className="text-[10px] text-white/30">
+                      ince ← {sinir.minMm.toFixed(2)} · dolu → {sinir.maxMm.toFixed(2)} mm
+                      {telCapMm < 0.8 && " · △ 0.8 altı döküm riskli (D7)"}
+                    </span>
+                    <span className="font-mono text-[11px] text-[#D4AF37]">
+                      ≈ {tahmin.gram.toFixed(1)} g · {tahmin.gCm.toFixed(2)} g/cm
+                    </span>
+                  </div>
+
                   <div className="mb-1.5 mt-4 flex items-baseline justify-between">
                     <span className="text-xs text-[#9CA3AF]">Uzunluk (kilit hariç)</span>
                     <span className="font-mono text-[13px]">{(uzunlukMm / 10).toFixed(1)} cm</span>

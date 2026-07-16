@@ -6,7 +6,7 @@
 // z ekseninde yansıtmayla elde edilir — traş kesimi ve ajur prizmaları
 // z-simetrik olduğundan CSG'yi yeniden koşturmak gerekmez (bedava).
 import { BaklaGeoParams, BaklaMesh, baklaOlc } from "./bakla";
-import { MADENLER, MadenId, TIPLER, ZincirTipId, FIGARO, DOKUM, ADIM_PAYI_MM } from "./kurallar";
+import { MADENLER, MadenId, TIPLER, ZincirTipId, FIGARO, DOKUM, ADIM_PAYI_MM, telSinir } from "./kurallar";
 
 export type BaklaTuru = "kisa" | "uzun"; // figaro; diğer tiplerde hep "kisa"
 
@@ -17,18 +17,23 @@ export type Yer = {
   rotXDeg: number;    // yatış (B6)
 };
 
-/** Tip + genişlikten bakla geometrisi türet (B1-B4). */
-export function geoTuret(tip: ZincirTipId, genislikMm: number): {
+/** Tip + genişlik (+isteğe bağlı tel çapı) → bakla geometrisi (B1-B4, B8).
+ *  B8: W dış görünümdür, d metaldir — d verilmezse dolu (varsayılan) hal;
+ *  verilirse telSinir aralığına kıstırılır. İç ölçüler ikisinden türer. */
+export function geoTuret(tip: ZincirTipId, genislikMm: number, telCapMm?: number): {
   kisa: BaklaGeoParams;
   uzun: BaklaGeoParams | null;
   telCapMm: number;
 } {
   const k = TIPLER[tip];
-  const d = genislikMm / k.telOran;
+  const sinir = telSinir(tip, genislikMm);
+  const d = Math.min(Math.max(telCapMm ?? sinir.varsayilanMm, sinir.minMm), sinir.maxMm);
+  const icEn = genislikMm - 2 * d;
+  const icBoy = Math.max(k.disBoyFn(genislikMm) - 2 * d, icEn);
   const kisa: BaklaGeoParams = {
     telCapMm: d,
-    icBoyMm: Math.max(k.icBoyFn(d), k.icEnFn(d)),
-    icEnMm: k.icEnFn(d),
+    icBoyMm: icBoy,
+    icEnMm: icEn,
     bukumDeg: k.bukumDeg,
   };
   const uzun: BaklaGeoParams | null =
@@ -43,10 +48,10 @@ export function geoTuret(tip: ZincirTipId, genislikMm: number): {
  *  baklalarda L_i/2 + d + C2/2'ye iner; j±2 dış yüzeyleri arasında tam C2
  *  boşluğu kalır (tek parça döküm garantisi, C2). */
 export function dizilim(
-  tip: ZincirTipId, genislikMm: number, uzunlukMm: number,
+  tip: ZincirTipId, genislikMm: number, uzunlukMm: number, telCapMm?: number,
 ): { yerler: Yer[]; gercekUzunlukMm: number; adimOrtMm: number; n: number } {
   const k = TIPLER[tip];
-  const { kisa, uzun, telCapMm: d } = geoTuret(tip, genislikMm);
+  const { kisa, uzun, telCapMm: d } = geoTuret(tip, genislikMm, telCapMm);
   const curb = k.bukumDeg !== 0;
 
   const turuDizi = (i: number): BaklaTuru =>
@@ -152,6 +157,43 @@ function montaj(
   return { positions, indices };
 }
 
+// ---- anlık gram tahmini (B8 hedef gramaj) ---------------------------------
+
+/** Bakla omurga uzunluğu (stadyum çevresi) — Pappus hacmi için. */
+export function omurgaBoyMm(g: BaklaGeoParams): number {
+  const Rc = (g.icEnMm + g.telCapMm) / 2;
+  const S = g.icBoyMm - g.icEnMm;
+  return 2 * S + 2 * Math.PI * Rc;
+}
+
+/** Pappus hacmi: V = π·r²·L (traşsız/ajursız tam süpürme — kesin). */
+export function pappusHacimMm3(g: BaklaGeoParams): number {
+  const r = g.telCapMm / 2;
+  return Math.PI * r * r * omurgaBoyMm(g);
+}
+
+/** Anlık gram tahmini — slider oynarken CSG kurmadan hesap (B8).
+ *  kFaktor = kesinHacim / pappusHacim (son üretimden; traş+ajur kaybını taşır;
+ *  ilk üretimden önce 1 kullan, üretim sonrası kesinleşir). */
+export function gramTahmin(args: {
+  tip: ZincirTipId;
+  genislikMm: number;
+  uzunlukMm: number;
+  telCapMm?: number;
+  maden: MadenId;
+  kFaktor?: number;
+}): { gram: number; gCm: number; n: number; telCapMm: number } {
+  const { kisa, uzun, telCapMm: d } = geoTuret(args.tip, args.genislikMm, args.telCapMm);
+  const diz = dizilim(args.tip, args.genislikMm, args.uzunlukMm, args.telCapMm);
+  const k = args.kFaktor ?? 1;
+  const vKisa = pappusHacimMm3(kisa) * k;
+  const vUzun = uzun ? pappusHacimMm3(uzun) * k : vKisa;
+  let hacim = 0;
+  for (const y of diz.yerler) hacim += y.turu === "uzun" ? vUzun : vKisa;
+  const gram = hacim * MADENLER[args.maden].yogunlukGmm3;
+  return { gram, gCm: gram / (diz.gercekUzunlukMm / 10), n: diz.n, telCapMm: d };
+}
+
 // ---- rapor ---------------------------------------------------------------
 
 export type ZincirRapor = {
@@ -177,6 +219,7 @@ export function rapor(args: {
   tip: ZincirTipId;
   genislikMm: number;
   uzunlukMm: number;
+  telCapMm?: number;
   maden: MadenId;
   hacimKisaMm3: number;
   hacimDoluKisaMm3: number;
@@ -186,9 +229,9 @@ export function rapor(args: {
   delikSayisi: number;
   delikAlanOrani: number;
 }): ZincirRapor {
-  const { kisa, telCapMm: d } = geoTuret(args.tip, args.genislikMm);
+  const { kisa, telCapMm: d } = geoTuret(args.tip, args.genislikMm, args.telCapMm);
   const o = baklaOlc(kisa);
-  const diz = dizilim(args.tip, args.genislikMm, args.uzunlukMm);
+  const diz = dizilim(args.tip, args.genislikMm, args.uzunlukMm, args.telCapMm);
   let hacim = 0, hacimDolu = 0;
   for (const y of diz.yerler) {
     hacim += y.turu === "uzun" ? (args.hacimUzunMm3 ?? args.hacimKisaMm3) : args.hacimKisaMm3;

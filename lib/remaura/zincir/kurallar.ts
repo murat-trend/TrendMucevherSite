@@ -20,14 +20,18 @@ export type ZincirTipId = "forse" | "doc" | "gurmet" | "kuba" | "figaro";
 export type TipKart = {
   ad: string;
   aciklama: string;
-  // B1-B4: tel ve bakla oranları (W = zincir genişliği girdisi)
-  telOran: number;        // d = W / telOran (B1: Küba W/3.5 ağırlık-doğru)
-  icBoyFn: (d: number) => number;   // L_i
-  icEnFn: (d: number) => number;    // W_i
+  // B8 (2026-07-16, Murat): genişlik W = DIŞ GÖRÜNÜM, tel çapı d = METAL —
+  // ikisi AYRI parametredir. Bakla iç ölçüleri ikisinden türer:
+  //   W_i = W − 2d (iç en) · L_i = disBoyFn(W) − 2d (iç boy)
+  // d inceldikçe bakla ferahlar, gram düşer; görünüm genişliği korunur.
+  disBoyFn: (W: number) => number;  // L_o — bakla dış boyu (görünümden türer)
+  telVarsayilanBolen: number;       // d varsayılan = W / bölen (B1-B4 dolu hali)
+  caprazGecis: boolean;             // bükümlü aile: yuvadan tel 45° çapraz
+                                    // geçer → 1.41d yer ister (B2-CAD)
   bukumDeg: number;       // B5: curb ailesi 90 (uçlar ±45 — mating'i BÜKÜM
                           // sağlar, gövde düz yatar), forse 0
   yatisDeg: number;       // forse/doç: alternatif bakla dönüşü (90° dik);
-                          // curb ailesi 0 — ayna (z-yansıma) alternansı yeter
+                          // curb ailesi 0 — özdeş bakla dizilimi
   trasVarsayilan: number; // T1-T4: toplam kalınlıktan alınan oran (0 = yok)
   ajurUygun: boolean;     // A1: yalnız düz yatan geniş yüzlü tipler
 };
@@ -36,54 +40,76 @@ export type TipKart = {
 // — eş baklalarda L_i/2 + d + C2/2'ye iner; j±2 dış yüzeyleri arasında tam
 // C2 boşluğu kalır (tek parça döküm garantisi). Forse için de aynı formül
 // (L_o/2 + C2/2'ye denk gelir) ve taut sınırı L_i'nin altında kalır.
+//
+// disBoyFn/bölen katsayıları eski d-tabanlı oranların birebir W karşılığıdır
+// (varsayılan telde geometri değişmez): forse L_o=5d, dışEn=3.75d → 1.333W ·
+// doç L_o=dışEn=4.5d → W · gurmet L_o=4.7d, dışEn=4d → 1.175W ·
+// Küba L_o=4.83d+0.5, dışEn=3.55d → 1.361W+0.5 · figaro=gurmet bandı.
 export const TIPLER: Record<ZincirTipId, TipKart> = {
   forse: {
     ad: "Forse", aciklama: "Klasik oval halka — 90° dik alternasyon (cable)",
-    telOran: 3.5,
-    icBoyFn: (d) => 3.0 * d,          // B4: 2.5-3.5d ortası
-    icEnFn: (d) => 1.75 * d,          // B4: 1.5-2d ortası
+    disBoyFn: (W) => 1.333 * W,       // B4
+    telVarsayilanBolen: 3.75,
+    caprazGecis: false,
     bukumDeg: 0, yatisDeg: 90,
     trasVarsayilan: 0, ajurUygun: false,
   },
   doc: {
     ad: "Doç", aciklama: "Yuvarlak halka (rolo) — forsenin boy=en hali",
-    telOran: 3.5,
-    icBoyFn: (d) => 2.5 * d,          // B4 + AR alt sınırı 2.4 üstünde
-    icEnFn: (d) => 2.5 * d,
+    disBoyFn: (W) => W,               // daire: L_o = dış en
+    telVarsayilanBolen: 4.5,
+    caprazGecis: false,
     bukumDeg: 0, yatisDeg: 90,
     trasVarsayilan: 0, ajurUygun: false,
   },
   gurmet: {
     ad: "Gurmet", aciklama: "Curb — bükümlü bakla, düz yatar, traşlı yüz",
-    telOran: 3.5,
-    icBoyFn: (d) => 4.7 * d - 2 * d,  // B3: L_o≈4.7d → L_i = L_o − 2d
-    icEnFn: (d) => 2.0 * d,           // B3 üst bandı — CAD taraması: 2.0d'de
-                                      // C2 0.2mm boşluk sağlanır (2026-07-16)
+    disBoyFn: (W) => 1.175 * W,       // B3: L_o≈4.7d @ d=W/4
+    telVarsayilanBolen: 4.0,
+    caprazGecis: true,
     bukumDeg: 90, yatisDeg: 0,        // B5 + B6
     trasVarsayilan: 0.15, ajurUygun: true,
   },
   kuba: {
     ad: "Küba", aciklama: "Miami cuban — sıkı dizilim, dolgun kesit, çift traş",
-    telOran: 3.5,                     // B1 [TEK+HESAP, G1 çapasına KALİBRE]
-    // B2 CAD karşılığı: Ganoksin "L_i=2d+0.5 / W_i≈1.1d" PRES-SONRASI ölçüdür
-    // (tel temaslarda yassılaşır). Rijit CAD'de ±45° çapraz geçen tel yuvada
-    // d/cos45° = 1.41d yer ister → L_i = 2·1.41d + 0.5, W_i = 1.55d
-    // (kesişim taraması 2026-07-16: çakışma 0, boşluk 0.2 ✓; 1.5d alan-koruyan
-    // kesit şişkinliğiyle 0.2'yi kıl payı kaçırıyordu).
-    icBoyFn: (d) => 2.83 * d + 0.5,
-    icEnFn: (d) => 1.55 * d,
+    // B2-CAD: dolu Miami'de L_i = 2.83d + 0.5, W_i = 1.55d (kesişim taraması
+    // 2026-07-16). W karşılığı: L_o = 1.361W + 0.5; varsayılan tel W/3.55 =
+    // en dolgun (solid) hal — Murat 2026-07-16: gramaj kullanıcı tercihinde,
+    // tel inceltilerek hedef grama inilir (B8).
+    disBoyFn: (W) => 1.361 * W + 0.5,
+    telVarsayilanBolen: 3.55,
+    caprazGecis: true,
     bukumDeg: 90, yatisDeg: 0,
     trasVarsayilan: 0.2, ajurUygun: true,
   },
   figaro: {
     ad: "Figaro", aciklama: "3 kısa + 1 uzun desen (B7) — gurmet tabanlı",
-    telOran: 3.5,
-    icBoyFn: (d) => 2.7 * d,          // kısa bakla (gurmet bandı)
-    icEnFn: (d) => 2.0 * d,
+    disBoyFn: (W) => 1.175 * W,
+    telVarsayilanBolen: 4.0,
+    caprazGecis: true,
     bukumDeg: 90, yatisDeg: 0,
     trasVarsayilan: 0.15, ajurUygun: true,
   },
 };
+
+// B8 — tel çapı sınırları (kural-türevli, keyfi sayı yok):
+//   max: iç ende çapraz/dik geçen komşu tel + C2 boşluğu sığmalı:
+//        çapraz (curb ailesi): W − 2d ≥ 1.41d + C2 → d ≤ (W − C2)/3.41
+//        dik (forse/doç):      W − 2d ≥ d + C2     → d ≤ (W − C2)/3
+//   min: D7 döküm tabanı 0.5mm (0.5 dolar ama distorsiyonlu; 0.8 altı
+//        UI'da uyarılır — D5 yapısal duvar bandı).
+export function telSinir(tip: ZincirTipId, genislikMm: number): {
+  minMm: number; maxMm: number; varsayilanMm: number;
+} {
+  const k = TIPLER[tip];
+  const bosluk = DOKUM.baklaBoslukMm;
+  const max = k.caprazGecis
+    ? (genislikMm - bosluk) / 3.41
+    : (genislikMm - bosluk) / 3.0;
+  const min = Math.min(0.5, max);
+  const varsayilan = Math.min(Math.max(genislikMm / k.telVarsayilanBolen, min), max);
+  return { minMm: min, maxMm: max, varsayilanMm: varsayilan };
+}
 
 // D1 adım payı: p = (L_i(a)+L_i(b))/4 + d + adimPay — tarama sonuçları
 // (2026-07-16): forse/doç 0.15 · gurmet/figaro 0.25 · Küba 0.30 (C2 0.2 ✓)
