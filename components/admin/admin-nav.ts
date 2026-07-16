@@ -486,6 +486,13 @@ export const ADMIN_NAV_ENTRIES: AdminNavEntry[] = [
         labelEn: "Geometry Kernel",
         icon: PenTool,
       },
+      {
+        id: "suyolu",
+        href: "/remaura/suyolu",
+        labelTr: "Suyolu — Taşlı Bileklik",
+        labelEn: "Tennis Bracelet Studio",
+        icon: Gem,
+      },
     ],
   },
 
