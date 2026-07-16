@@ -18,7 +18,7 @@ const METAL_RENK: Record<string, number> = {
   ag925: 0xe8e6e2, pt950: 0xdfe2e6,
 };
 
-export function SuyoluViewer({ meshes, maden }: { meshes: ViewMesh[]; maden: string }) {
+export function SuyoluViewer({ meshes, maden, fitKey }: { meshes: ViewMesh[]; maden: string; fitKey?: string }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const groupRef = useRef<THREE.Group | null>(null);
   const camRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -97,6 +97,11 @@ export function SuyoluViewer({ meshes, maden }: { meshes: ViewMesh[]; maden: str
       fittedRef.current = false;
     };
   }, []);
+
+  // görünüm değişti (bilekte/yerde): yeni dizilim yeni kadraj ister
+  useEffect(() => {
+    fittedRef.current = false;
+  }, [fitKey]);
 
   useEffect(() => {
     const group = groupRef.current;

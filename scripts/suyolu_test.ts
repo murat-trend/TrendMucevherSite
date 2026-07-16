@@ -6,6 +6,7 @@ import { tasMesh, tasOlc } from "../lib/remaura/suyolu/tas";
 import { baklaUret, baklaOlc } from "../lib/remaura/suyolu/bakla";
 import { baklaSayisi, dizilim, rapor, montajMesh } from "../lib/remaura/suyolu/bileklik";
 import { toBinarySTL } from "../lib/remaura/suyolu/stl";
+import { mumaAt, duzSiraKonumlar } from "../lib/remaura/suyolu/mum";
 
 let pass = 0, fail = 0;
 function check(name: string, ok: boolean, detail: string) {
@@ -116,6 +117,29 @@ function manifoldOk(indices: Uint32Array): boolean {
     const b = await baklaUret(D);
     check("baklaOlc = baklaUret.olculer", JSON.stringify(o1) === JSON.stringify(b.olculer),
       `adım ${o1.adimMm.toFixed(3)}mm`);
+  }
+
+  // 7. muma at: grid + saport + raf tek gövde; z bandı doğru
+  {
+    const D = caratToCapMm(0.1);
+    const b = await baklaUret(D);
+    const m = mumaAt(b.mesh, b.olculer.boyMm, b.olculer.enMm, 32);
+    let minZ = Infinity, maxZ = -Infinity;
+    for (let i = 2; i < m.mesh.positions.length; i += 3) {
+      minZ = Math.min(minZ, m.mesh.positions[i]);
+      maxZ = Math.max(maxZ, m.mesh.positions[i]);
+    }
+    // raf altı −1.4 · bakla üstü = saport 3.0 + H
+    // bakla vertexleri manifold-3d'den float32 gelir — tolerans ona göre
+    const okZ = Math.abs(minZ - -1.4) < 1e-4 && Math.abs(maxZ - (3.0 + b.olculer.yukseklikMm)) < 1e-4;
+    const stl = toBinarySTL([m.mesh]);
+    check("muma at: 32 bakla grid + saport + raf",
+      okZ && m.sutun * m.satir >= 32 && m.rafMm[0] > 30 && stl.byteLength > 100000,
+      `${m.sutun}×${m.satir} grid · raf ${m.rafMm[0].toFixed(0)}×${m.rafMm[1].toFixed(0)}mm · ` +
+      `z [${minZ.toFixed(1)}, ${maxZ.toFixed(1)}] · STL ${(stl.byteLength / 1024 / 1024).toFixed(1)}MB`);
+    const duz = duzSiraKonumlar(5, 6);
+    check("düz seriliş konumları", duz.length === 5 && duz[0][0] === -12 && duz[4][0] === 12,
+      `5 bakla x: ${duz.map((k) => k[0]).join(", ")}`);
   }
 
   console.log(`\nSONUÇ: ${pass} PASS, ${fail} FAIL`);
