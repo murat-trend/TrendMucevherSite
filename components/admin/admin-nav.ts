@@ -509,6 +509,13 @@ export const ADMIN_NAV_ENTRIES: AdminNavEntry[] = [
         labelEn: "Clasp",
         icon: Lock,
       },
+      {
+        id: "montur",
+        href: "/remaura/montur",
+        labelTr: "Montür",
+        labelEn: "Setting",
+        icon: Gem,
+      },
     ],
   },
 
