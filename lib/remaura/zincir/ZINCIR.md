@@ -240,6 +240,18 @@ piyasa değerleri yalnız sanity-check çapasıdır (profil farkı 3-5× oynatı
 
 ---
 
+## 9-a. SAPORT / TİJ (SP) — Murat, 2026-07-17: "yandan saport veya reçine için alttan"
+
+- **SP1 — çap:** D11 (besleme kesiti bağlantının %70-150'i) → saport çapı =
+  **0.9 × tel çapı** (alan ≈ %81), taban 0.8 / tavan 3.0. `[KANITLI D11 + HESAP]`
+- **SP2 — konum:** *yandan* (+y, döküm ağacına yatay bağlantı) veya *alttan*
+  (−z, reçine baskı desteği). Çubuk baklaya **0.4 gömülür** (dilimleyicide
+  kaynar; TELKARI §1.6 gömme mantığı). Boy 2-6 mm (varsayılan 3). `[HESAP]`
+- **SP3 — sıklık:** bir atlamalı (varsayılan) / her bakla. Dik dönen baklalara
+  (forse/doç/venedik tek indeksler) TAKILMAZ — çubuk yüzeye oturmaz. `[HESAP]`
+- **SP4:** saport gramı rapora KATILMAZ (tij dökümde kesilir, geri kazanılır);
+  STL'e ayrı gövde olarak gömülü iner. `[PRATİK]`
+
 ## 9-b. STİL / DOKU (S) — Murat foto referansı (2026-07-16: "tek modelde kalmamak lazım")
 
 Referans foto 6 stil: parlak dolgun gurmet · faset (diamond-cut) gümüş ·
@@ -297,6 +309,16 @@ Referans foto 6 stil: parlak dolgun gurmet · faset (diamond-cut) gümüş ·
 - 2026-07-16 (lint dersi): alan-koruyan yarıçap düzeltmesi yazıldı ama
   KULLANILMAMIŞTI — eslint no-unused-vars yakaladı; "düzeltme eklendi" demek
   yetmez, hacim testi düzeltme SONRASI yeniden koşulmalı (koşuldu: −%0.2).
+- 2026-07-17 (Murat: "kareler doğru çalışmıyor… ezbere yaptın" → iki düzeltme):
+  (1) büküm KÖŞE BAŞINA açı veriyordu → kare kesit makaslanıyordu; kesit
+  başına RİJİT dönüşe alındı (rotasyon x'i korur, halka rijit döner).
+  (2) venedik yuvarlak halkaya kare tel giydirilmişti → omurga da KARE
+  ÇERÇEVE yapıldı (kareNokta yolu; köşe yayı ≥ d/2 döküm kuralı).
+  İLKE: yeni geometri varyantı "parametre değişikliği" ile geçiştirilmez —
+  kesit VE omurga gerçek ürün formundan doğrulanır, görsel tur şart.
+- 2026-07-17 (aynı tur, sarım dersi tekrarı): saport silindirinin yan yüzü
+  kapaklarla ters sarılmıştı — hacim 3× küçük çıktı (divergans testi yakaladı).
+  KURAL: her yeni kapalı mesh üreticisine hacim ≈ analitik testi yazılır.
 - 2026-07-17 (Murat: "dağınık menü + tüm tipler aktif" → K5 doğdu): sol menü
   gruplu katalog (Baklalı/Örme/Boru), sağ panel numaralı akış kartları
   (1·Ölçüler 2·Stil&Doku 3·Maden). Örme/boru tipleri masif yorumla aktive

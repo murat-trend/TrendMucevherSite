@@ -14,11 +14,14 @@ export type BaklaMesh = { positions: Float64Array; indices: Uint32Array };
 export type TelKesit = "yuvarlak" | "kare";
 export type YuzeyDoku = "parlak" | "cekic" | "faset";
 
+export type BaklaOmurga = "stadyum" | "kare"; // K4: venedik = kare çerçeve
+
 export type BaklaGeoParams = {
   telCapMm: number;   // d — tel çapı (kare kesitte alan-eşdeğer çap; gram eşit)
   icBoyMm: number;    // Li — iç uzunluk (zincir yönü). Şart: Li ≥ Wi
   icEnMm: number;     // Wi — iç genişlik
   bukumDeg: number;   // uçlar arası toplam büküm (curb/cuban); 0 = cable
+  omurga?: BaklaOmurga; // K4 — varsayılan stadyum; venedik kare çerçeve
   kesit?: TelKesit;   // S1 — varsayılan yuvarlak
   doku?: YuzeyDoku;   // S2 — varsayılan parlak (düz)
   tolMm?: number;     // kiriş sapması toleransı (örnekleme buradan türer)
@@ -36,6 +39,17 @@ const TOL_VARSAYILAN_MM = 0.02; // measure.ts toleransıyla aynı mertebe
 
 export function baklaOlc(p: BaklaGeoParams): BaklaOlcum {
   const d = p.telCapMm;
+  if (p.omurga === "kare") {
+    // kare çerçeve: omurga kenarı = içEn + d (merkez hat); dış = kenar + d
+    const kenar = p.icEnMm + d;
+    return {
+      disBoyMm: kenar + d,
+      disEnMm: kenar + d,
+      kalinlikMm: d,           // venedik bükümsüz — z zarfı tel çapı
+      duzBoyMm: kenar,         // kenar başına düz segment (~köşe payı hariç)
+      omurgaYariEnMm: kenar / 2,
+    };
+  }
   const Rc = (p.icEnMm + d) / 2;
   const S = p.icBoyMm - p.icEnMm;
   const xMax = S / 2 + Rc;
@@ -50,6 +64,33 @@ export function baklaOlc(p: BaklaGeoParams): BaklaOlcum {
     duzBoyMm: S,
     omurgaYariEnMm: Rc,
   };
+}
+
+/** Kare çerçeve omurga (K4 venedik): yuvarlatılmış köşeli kare, kenar `kenar`,
+ *  köşe yarıçapı rk. s ∈ [0,L) yay uzunluğu; L = 4·(kenar − 2rk) + 2π·rk. */
+function kareNokta(s: number, kenar: number, rk: number): [number, number] {
+  const h = kenar / 2;
+  const duz = kenar - 2 * rk;      // kenar başına düz parça
+  const ceyrek = (Math.PI * rk) / 2;
+  const m = h - rk;                // köşe yay merkezi ofseti
+  let t = s % (4 * (duz + ceyrek));
+  // kenar sırası: üst (+y, x artar) → sağ köşe → sağ (−y'ye iner) → ...
+  const kenarlar: { p0: [number, number]; dx: number; dy: number; cc: [number, number]; a0: number }[] = [
+    { p0: [-m, h], dx: 1, dy: 0, cc: [m, m], a0: Math.PI / 2 },     // üst, sonra sağ-üst köşe
+    { p0: [h, m], dx: 0, dy: -1, cc: [m, -m], a0: 0 },              // sağ, sağ-alt köşe
+    { p0: [m, -h], dx: -1, dy: 0, cc: [-m, -m], a0: -Math.PI / 2 }, // alt, sol-alt köşe
+    { p0: [-h, -m], dx: 0, dy: 1, cc: [-m, m], a0: Math.PI },       // sol, sol-üst köşe
+  ];
+  for (const k of kenarlar) {
+    if (t < duz) return [k.p0[0] + k.dx * t, k.p0[1] + k.dy * t];
+    t -= duz;
+    if (t < ceyrek) {
+      const a = k.a0 - t / rk; // saat yönü (dış sarım CW — yönelim hacim denetimiyle düzelir)
+      return [k.cc[0] + rk * Math.cos(a), k.cc[1] + rk * Math.sin(a)];
+    }
+    t -= ceyrek;
+  }
+  return [-m, h];
 }
 
 /** Stadyum omurga üzerinde nokta: s ∈ [0,L) yay uzunluğu. */
@@ -79,16 +120,22 @@ export function buildBaklaTube(p: BaklaGeoParams): BaklaMesh {
   const tol = p.tolMm ?? TOL_VARSAYILAN_MM;
   const d = p.telCapMm;
   const r = d / 2;
+  const omurga = p.omurga ?? "stadyum";
   const Rc = (p.icEnMm + d) / 2;
   const S = p.icBoyMm - p.icEnMm;
-  const L = 2 * S + 2 * Math.PI * Rc;
-  const xMax = S / 2 + Rc;
+  // kare çerçeve (K4 venedik): kenar + köşe yarıçapı (köşe döküm yayı ≥ d/2)
+  const kenar = p.icEnMm + d;
+  const rk = Math.max(d / 2, 0.18 * kenar);
+  const L = omurga === "kare"
+    ? 4 * (kenar - 2 * rk) + 2 * Math.PI * rk
+    : 2 * S + 2 * Math.PI * Rc;
+  const xMax = omurga === "kare" ? kenar / 2 : S / 2 + Rc;
 
   // ---- örnekleme yoğunluğu toleranstan türer
-  // omurga: yay kirişi sapması ≤ tol → adım ≤ √(8·Rc·tol); büküm deformasyonu
+  // omurga: yay kirişi sapması ≤ tol → adım ≤ √(8·R·tol); büküm deformasyonu
   // düz segmentleri helise büker → adım ayrıca bükümden sınırlanır.
   const bukumRad = (Math.abs(p.bukumDeg) * Math.PI) / 180;
-  const hYay = Math.sqrt(8 * Rc * tol);
+  const hYay = Math.sqrt(8 * (omurga === "kare" ? rk : Rc) * tol);
   // büküm: adım başına dönme ≤ ~4.5° → yüzey kirişi telde tol mertebesinde kalır
   const hBukum = bukumRad > 1e-6 ? (L * (Math.PI / 40)) / bukumRad : Infinity;
   const N = Math.max(64, Math.ceil(L / Math.min(hYay, hBukum)));
@@ -138,7 +185,9 @@ export function buildBaklaTube(p: BaklaGeoParams): BaklaMesh {
   // ---- omurga noktaları + teğetten kesit çerçevesi (düzlemsel eğri: B = +z)
   const cx = new Float64Array(N), cy = new Float64Array(N);
   for (let i = 0; i < N; i++) {
-    const [x, y] = stadyumNokta((i / N) * L, S, Rc);
+    const [x, y] = omurga === "kare"
+      ? kareNokta((i / N) * L, kenar, rk)
+      : stadyumNokta((i / N) * L, S, Rc);
     cx[i] = x; cy[i] = y;
   }
 
@@ -168,6 +217,13 @@ export function buildBaklaTube(p: BaklaGeoParams): BaklaMesh {
       ? 0.33 * Math.sin(i * 1.71) + 0.17 * Math.sin(i * 0.53 + 1.1)
       : 0;
     const cf = Math.cos(faz), sf = Math.sin(faz);
+    // ---- curb bükümü KESİT BAŞINA RİJİTTİR (halka merkezi x'inden):
+    // köşe başına açı vermek kare kesiti MAKASLIYORDU (Murat, 2026-07-17 —
+    // "kareler doğru çalışmıyor"); rotasyon x'i korur, halka rijit döner.
+    const alHalka = bukumRad > 1e-9
+      ? (bukumRad / 2) * (cx[i] / xMax) * Math.sign(p.bukumDeg || 1)
+      : 0;
+    const caH = Math.cos(alHalka), saH = Math.sin(alHalka);
     for (let j = 0; j < nC; j++) {
       let u = sec[j][0], v = sec[j][1];
       if (faz !== 0) {
@@ -184,12 +240,9 @@ export function buildBaklaTube(p: BaklaGeoParams): BaklaMesh {
       const X = cx[i] + nx * u;
       let Y = cy[i] + ny * u;
       let Z = v;
-      // ---- curb bükümü: x'e orantılı x-ekseni dönmesi (uçlar ±büküm/2)
-      if (bukumRad > 1e-9) {
-        const al = (bukumRad / 2) * (X / xMax) * Math.sign(p.bukumDeg || 1);
-        const ca = Math.cos(al), sa = Math.sin(al);
-        const Y2 = Y * ca - Z * sa;
-        Z = Y * sa + Z * ca;
+      if (alHalka !== 0) {
+        const Y2 = Y * caH - Z * saH;
+        Z = Y * saH + Z * caH;
         Y = Y2;
       }
       const k = kOf(i, j);

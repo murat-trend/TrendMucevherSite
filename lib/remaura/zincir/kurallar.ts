@@ -33,6 +33,7 @@ export type TipKart = {
   aciklama: string;
   yapi: ZincirYapi;       // K5 — client akışı ve denetim seti buradan dallanır
   kesitVarsayilan?: import("./bakla").TelKesit; // venedik: kare
+  omurga?: import("./bakla").BaklaOmurga;       // K4 — venedik: kare çerçeve
   // B8 (2026-07-16, Murat): genişlik W = DIŞ GÖRÜNÜM, tel çapı d = METAL —
   // ikisi AYRI parametredir. Bakla iç ölçüleri ikisinden türer:
   //   W_i = W − 2d (iç en) · L_i = disBoyFn(W) − 2d (iç boy)
@@ -78,9 +79,11 @@ export const TIPLER: Record<ZincirTipId, TipKart> = {
     trasVarsayilan: 0, ajurUygun: false,
   },
   venedik: {
-    ad: "Venedik", aciklama: "Küp/box — kare halka + kare tel, sıkı dizilim",
+    ad: "Venedik", aciklama: "Küp/box — kare çerçeve bakla + kare tel",
     yapi: "bakla",
     kesitVarsayilan: "kare",          // K4 venedik kimliği (kare kesit)
+    omurga: "kare",                   // K4: omurga da KARE ÇERÇEVE (2026-07-17
+                                      // düzeltmesi — yuvarlak halka "ezbere"ydi)
     disBoyFn: (W) => W,               // kare çerçeve: L_o = dış en
     telVarsayilanBolen: 4.5,
     caprazGecis: false,
@@ -209,6 +212,21 @@ export const AJUR = {
   delikAlanTavan: 0.30,     // A3: serbest bölgede delik alanı ≤ %30
   delikAlanUyari: 0.20,     // A3/A6: %20 üstü "etkin E −%26+" uyarısı
   duvarMm: 0.8,             // A4: delik-kenar köprüsü (döküm duvarı)
+} as const;
+
+// ---- SP: saport/tij kuralları (D11 tabanlı — Murat, 2026-07-17:
+// "yandan saport veya reçine için alttan takabilmeliyiz")
+// D11: besleme kesiti bağlantının %70-150'i → çap ≈ 0.9×tel (alan ~%81);
+// mutlak taban 0.8 (D5 duvar ailesi). Gömme: uç bakla yüzeyine 0.4 gömülür
+// (traş/kavis yüzeyinde güvenli temas — TELKARI §1.6 mantığı).
+export const SAPORT = {
+  capOran: 0.9,
+  capTabanMm: 0.8,
+  capTavanMm: 3.0,
+  boyVarsayilanMm: 3,
+  boyMinMm: 2,
+  boyMaxMm: 6,
+  gommeMm: 0.4,
 } as const;
 
 // ---- C kuralları: döküm

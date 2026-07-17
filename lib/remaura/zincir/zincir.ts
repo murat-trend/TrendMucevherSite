@@ -5,7 +5,7 @@
 // Curb ailesinde komşu bakla AYNA baklasıdır (büküm işareti ters). Ayna,
 // z ekseninde yansıtmayla elde edilir — traş kesimi ve ajur prizmaları
 // z-simetrik olduğundan CSG'yi yeniden koşturmak gerekmez (bedava).
-import { BaklaGeoParams, BaklaMesh, baklaOlc } from "./bakla";
+import { BaklaGeoParams, BaklaMesh, baklaOlc, isaretliHacim } from "./bakla";
 import { MADENLER, MadenId, TIPLER, ZincirTipId, FIGARO, DOKUM, ADIM_PAYI_MM, telSinir } from "./kurallar";
 
 export type BaklaTuru = "kisa" | "uzun"; // figaro; diğer tiplerde hep "kisa"
@@ -36,6 +36,7 @@ export function geoTuret(tip: ZincirTipId, genislikMm: number, telCapMm?: number
     icBoyMm: icBoy,
     icEnMm: icEn,
     bukumDeg: k.bukumDeg,
+    omurga: k.omurga,
   };
   const uzun: BaklaGeoParams | null =
     tip === "figaro"
@@ -164,6 +165,85 @@ function montaj(
     vOff += m.positions.length;
     iOff += m.indices.length;
   });
+  return { positions, indices };
+}
+
+// ---- SP: saport (tij/destek) çubukları -------------------------------------
+
+/** Kapalı silindir mesh — saport çubuğu. Eksen y (yandan) veya z (alttan). */
+export function silindirMesh(rMm: number, boyMm: number, eksen: "y" | "z", merkez: [number, number, number]): BaklaMesh {
+  const nC = 20;
+  const positions = new Float64Array((nC * 2 + 2) * 3);
+  const yaz = (idx: number, a: number, b: number, c: number) => {
+    positions[idx * 3] = merkez[0] + a;
+    positions[idx * 3 + 1] = merkez[1] + (eksen === "y" ? c : b);
+    positions[idx * 3 + 2] = merkez[2] + (eksen === "y" ? b : c);
+  };
+  for (let j = 0; j < nC; j++) {
+    const ph = (j / nC) * 2 * Math.PI;
+    const a = rMm * Math.cos(ph), b = rMm * Math.sin(ph);
+    yaz(j, a, b, -boyMm / 2);
+    yaz(nC + j, a, b, boyMm / 2);
+  }
+  yaz(nC * 2, 0, 0, -boyMm / 2);
+  yaz(nC * 2 + 1, 0, 0, boyMm / 2);
+  const indices = new Uint32Array(nC * 12);
+  let w = 0;
+  for (let j = 0; j < nC; j++) {
+    const jp = (j + 1) % nC;
+    // yan yüzey: dış normal (kapaklarla TUTARLI sarım — hacim/STL doğru)
+    indices[w++] = j; indices[w++] = jp; indices[w++] = nC + jp;
+    indices[w++] = j; indices[w++] = nC + jp; indices[w++] = nC + j;
+    indices[w++] = nC * 2; indices[w++] = jp; indices[w++] = j;         // alt kapak
+    indices[w++] = nC * 2 + 1; indices[w++] = nC + j; indices[w++] = nC + jp; // üst kapak
+  }
+  const mesh: BaklaMesh = { positions, indices };
+  if (isaretliHacim(mesh) < 0) {
+    for (let t = 0; t < indices.length; t += 3) {
+      const tmp = indices[t + 1]; indices[t + 1] = indices[t + 2]; indices[t + 2] = tmp;
+    }
+  }
+  return mesh;
+}
+
+export type SaportKonum = "yandan" | "alttan";
+
+/** SP: seçili baklalara saport çubukları (yerde/düz dizilim çerçevesinde).
+ *  Dik alternasyonlu tiplerde (rotX≠0) dönük baklalar ATLANIR — çubuk
+ *  yüzeye oturmaz. Çubuk gövdeye `gomme` kadar gömülür (dilimleyici birleşir). */
+export function saportlar(args: {
+  yerler: Yer[];
+  konum: SaportKonum;
+  capMm: number;
+  boyMm: number;
+  disEnMm: number;
+  kalinlikMm: number;
+  herBakla: boolean;
+  gommeMm?: number;
+}): BaklaMesh {
+  const gomme = args.gommeMm ?? 0.4;
+  const rodlar: BaklaMesh[] = [];
+  args.yerler.forEach((y, i) => {
+    if (Math.abs(y.rotXDeg) > 1e-9) return;           // dönük bakla — yüzey belirsiz
+    if (!args.herBakla && i % 2 === 1) return;        // bir atlamalı
+    const merkez: [number, number, number] = args.konum === "yandan"
+      ? [y.dxMm, args.disEnMm / 2 - gomme + args.boyMm / 2, 0]
+      : [y.dxMm, 0, -(args.kalinlikMm / 2) + gomme - args.boyMm / 2];
+    rodlar.push(silindirMesh(args.capMm / 2, args.boyMm, args.konum === "yandan" ? "y" : "z", merkez));
+  });
+  // birleştir
+  let vT = 0, iT = 0;
+  for (const r of rodlar) { vT += r.positions.length; iT += r.indices.length; }
+  const positions = new Float64Array(vT);
+  const indices = new Uint32Array(iT);
+  let vo = 0, io = 0;
+  for (const r of rodlar) {
+    positions.set(r.positions, vo);
+    const base = vo / 3;
+    for (let t = 0; t < r.indices.length; t++) indices[io + t] = r.indices[t] + base;
+    vo += r.positions.length;
+    io += r.indices.length;
+  }
   return { positions, indices };
 }
 

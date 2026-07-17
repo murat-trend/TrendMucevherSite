@@ -8,11 +8,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ZincirViewer, ViewMesh } from "./ZincirViewer";
 import {
-  MADENLER, MadenId, TIPLER, ZincirTipId, TRAS, AJUR, OLCU, telSinir,
+  MADENLER, MadenId, TIPLER, ZincirTipId, TRAS, AJUR, OLCU, telSinir, SAPORT,
 } from "@/lib/remaura/zincir/kurallar";
 import {
   geoTuret, dizilim, montajDuz, montajDaire, rapor, ZincirRapor, Yer,
-  gramTahmin, pappusHacimMm3, daireBuk,
+  gramTahmin, pappusHacimMm3, daireBuk, saportlar, SaportKonum,
 } from "@/lib/remaura/zincir/zincir";
 import type { BaklaMesh, TelKesit, YuzeyDoku } from "@/lib/remaura/zincir/bakla";
 import { isaretliHacim } from "@/lib/remaura/zincir/bakla";
@@ -78,6 +78,10 @@ export function ZincirClient() {
   const [dokuDesen, setDokuDesen] = useState<"hepsi" | "atlamali">("hepsi");
   const [ciftMetal, setCiftMetal] = useState(false);
   const [maden2, setMaden2] = useState<MadenId>("ag925");
+  // SP: saport (Murat 2026-07-17 — yandan döküm tiji / alttan reçine desteği)
+  const [saportKonum, setSaportKonum] = useState<"yok" | SaportKonum>("yok");
+  const [saportBoyMm, setSaportBoyMm] = useState<number>(SAPORT.boyVarsayilanMm);
+  const [saportHer, setSaportHer] = useState(false);
   const [ajurAcik, setAjurAcik] = useState(false);
   const [ajurDesen, setAjurDesen] = useState<string>("petek");
   const [ajurDoz, setAjurDoz] = useState(0.7);
@@ -128,6 +132,12 @@ export function ZincirClient() {
     setTimeout(() => setToast(null), 2400);
   }, []);
 
+  // SP: kural-türevli saport çapı (D11: ≈0.9×tel, taban 0.8)
+  const saportCapMm = useMemo(
+    () => Math.min(SAPORT.capTavanMm, Math.max(SAPORT.capTabanMm, SAPORT.capOran * telCapMm)),
+    [telCapMm],
+  );
+
   const kurMeshler = useCallback((s: UretimSonuc, g: "yerde" | "kolyede") => {
     if (s.yapi === "govde") {
       // K5: tek gövde — kolyede görünümü gerçek BÜKME'dir (masif yorum)
@@ -147,15 +157,22 @@ export function ZincirClient() {
     const yerler: Yer[] = diz.yerler.map((y, i) => ({ ...y, varyant: i % 2 === 1 }));
     const montaj = (yl: Yer[]) =>
       g === "kolyede" ? montajDaire(set, yl, diz.gercekUzunlukMm) : montajDuz(set, yl);
-    if (ciftMetal) {
-      setMeshes([
-        { ...montaj(yerler.filter((_, i) => i % 2 === 0)), maden },
-        { ...montaj(yerler.filter((_, i) => i % 2 === 1)), maden: maden2 },
-      ]);
-    } else {
-      setMeshes([montaj(yerler)]);
+    const sonMeshler: ViewMesh[] = ciftMetal
+      ? [
+          { ...montaj(yerler.filter((_, i) => i % 2 === 0)), maden },
+          { ...montaj(yerler.filter((_, i) => i % 2 === 1)), maden: maden2 },
+        ]
+      : [montaj(yerler)];
+    // SP: saportlar yalnız YERDE (düz) diziliminde gösterilir/eklenir
+    if (saportKonum !== "yok" && g === "yerde") {
+      sonMeshler.push(saportlar({
+        yerler, konum: saportKonum, capMm: saportCapMm, boyMm: saportBoyMm,
+        disEnMm: s.raporData.baklaDisEnMm, kalinlikMm: s.raporData.kalinlikMm,
+        herBakla: saportHer, gommeMm: SAPORT.gommeMm,
+      }));
     }
-  }, [genislikMm, uzunlukMm, ciftMetal, maden, maden2]);
+    setMeshes(sonMeshler);
+  }, [genislikMm, uzunlukMm, ciftMetal, maden, maden2, saportKonum, saportCapMm, saportBoyMm, saportHer]);
 
   const olustur = useCallback(async () => {
     if (busy) return;
@@ -285,6 +302,12 @@ export function ZincirClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız ilk render
   }, []);
 
+  // SP: saport ayarı değişince görünümü tazele (yeniden üretim gerekmez)
+  useEffect(() => {
+    if (sonuc) kurMeshler(sonuc, gorunum);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız saport ayarları
+  }, [saportKonum, saportBoyMm, saportHer]);
+
   const indir = (buf: ArrayBuffer, ad: string) => {
     const url = URL.createObjectURL(new Blob([buf], { type: "model/stl" }));
     const a = document.createElement("a");
@@ -296,7 +319,16 @@ export function ZincirClient() {
 
   const stlTekBakla = () => {
     if (!sonuc || sonuc.yapi !== "bakla") return;
-    indir(toBinarySTL([sonuc.kisa.mesh], "Remaura Zincir — tek bakla"),
+    const parcalar = [sonuc.kisa.mesh];
+    if (saportKonum !== "yok") {
+      parcalar.push(saportlar({
+        yerler: [{ turu: "kisa", ayna: false, dxMm: 0, rotXDeg: 0 }],
+        konum: saportKonum, capMm: saportCapMm, boyMm: saportBoyMm,
+        disEnMm: sonuc.raporData.baklaDisEnMm, kalinlikMm: sonuc.raporData.kalinlikMm,
+        herBakla: true, gommeMm: SAPORT.gommeMm,
+      }));
+    }
+    indir(toBinarySTL(parcalar, "Remaura Zincir — tek bakla"),
       `zincir-${tip}-bakla-${genislikMm}mm.stl`);
     bildir("Tek bakla STL indirildi (üretim birimi)");
   };
@@ -320,18 +352,30 @@ export function ZincirClient() {
     };
     const yerler: Yer[] = diz.yerler.map((y, i) => ({ ...y, varyant: i % 2 === 1 }));
     const cmAd = (sonuc.raporData.gercekUzunlukMm / 10).toFixed(0);
+    // SP: saport çubukları (varsa) dosyaya gömülü iner
+    const rods = saportKonum !== "yok"
+      ? saportlar({
+          yerler, konum: saportKonum, capMm: saportCapMm, boyMm: saportBoyMm,
+          disEnMm: sonuc.raporData.baklaDisEnMm, kalinlikMm: sonuc.raporData.kalinlikMm,
+          herBakla: saportHer, gommeMm: SAPORT.gommeMm,
+        })
+      : null;
     if (ciftMetal) {
       // S4: metal başına ayrı STL — dökümde iki metal ayrı dökülüp geçirilir
-      indir(toBinarySTL([montajDuz(set, yerler.filter((_, i) => i % 2 === 0))], "Remaura Zincir — metal A"),
+      const aParca = [montajDuz(set, yerler.filter((_, i) => i % 2 === 0))];
+      if (rods) aParca.push(rods);
+      indir(toBinarySTL(aParca, "Remaura Zincir — metal A"),
         `zincir-${tip}-${cmAd}cm-${maden}.stl`);
       indir(toBinarySTL([montajDuz(set, yerler.filter((_, i) => i % 2 === 1))], "Remaura Zincir — metal B"),
         `zincir-${tip}-${cmAd}cm-${maden2}.stl`);
       bildir("İki STL indirildi (metal başına) — montaj: baklalar geçirilip lehimlenir (C6)");
       return;
     }
-    indir(toBinarySTL([montajDuz(set, yerler)], "Remaura Zincir — komple"),
-      `zincir-${tip}-${cmAd}cm-${genislikMm}mm.stl`);
-    bildir(`Komple STL indirildi: ${sonuc.raporData.n} bakla iç içe (C2 boşluk denetimine bak)`);
+    const parcalar = [montajDuz(set, yerler)];
+    if (rods) parcalar.push(rods);
+    indir(toBinarySTL(parcalar, "Remaura Zincir — komple"),
+      `zincir-${tip}-${cmAd}cm-${genislikMm}mm${rods ? "-saportlu" : ""}.stl`);
+    bildir(`Komple STL indirildi: ${sonuc.raporData.n} bakla iç içe${rods ? " + saportlar" : ""} (C2 boşluk denetimine bak)`);
   };
 
   const ekranGoruntusu = () => {
@@ -713,6 +757,65 @@ export function ZincirClient() {
                     </div>
                   )}
                 </div>
+
+                {/* SP: saport — yandan döküm tiji / alttan reçine desteği */}
+                {kart.yapi === "bakla" && (
+                  <div className={panel}>
+                    <div className="mb-2 flex items-baseline justify-between">
+                      <h3 className="font-display text-base font-semibold">Saport</h3>
+                      <span className="font-mono text-[11px] text-white/35">
+                        Ø {saportCapMm.toFixed(2)} mm (D11: ≈0.9×tel)
+                      </span>
+                    </div>
+                    <div className="mb-2 grid grid-cols-3 gap-1.5">
+                      {([["yok", "Yok"], ["yandan", "Yandan (döküm)"], ["alttan", "Alttan (reçine)"]] as const).map(([id, ad]) => (
+                        <button
+                          key={id}
+                          onClick={() => setSaportKonum(id)}
+                          className={`rounded-md border py-1.5 text-[11px] transition-colors ${
+                            saportKonum === id ? "border-[#D4AF37] text-[#D4AF37]" : "border-[#2A2A35] text-[#9CA3AF] hover:text-white"
+                          }`}
+                        >
+                          {ad}
+                        </button>
+                      ))}
+                    </div>
+                    {saportKonum !== "yok" && (
+                      <>
+                        <div className="mb-1 flex items-baseline justify-between">
+                          <span className="text-[11px] text-[#9CA3AF]">Saport boyu</span>
+                          <span className="font-mono text-[12px]">{saportBoyMm.toFixed(1)} mm</span>
+                        </div>
+                        <input
+                          type="range" min={SAPORT.boyMinMm} max={SAPORT.boyMaxMm} step={0.5} value={saportBoyMm}
+                          onChange={(e) => setSaportBoyMm(parseFloat(e.target.value))}
+                          className="range-slider w-full"
+                        />
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="text-[11px] text-[#9CA3AF]">Sıklık</span>
+                          <div className="flex gap-1.5">
+                            {([["atlamali", "Bir atlamalı"], ["hepsi", "Her bakla"]] as const).map(([id, ad]) => (
+                              <button
+                                key={id}
+                                onClick={() => setSaportHer(id === "hepsi")}
+                                className={`rounded-md border px-2 py-1 text-[10px] transition-colors ${
+                                  (id === "hepsi") === saportHer ? "border-[#D4AF37] text-[#D4AF37]" : "border-[#2A2A35] text-[#9CA3AF] hover:text-white"
+                                }`}
+                              >
+                                {ad}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <p className="mt-1.5 text-[10px] leading-relaxed text-white/30">
+                          Çubuk baklaya {SAPORT.gommeMm} mm gömülür, STL&apos;e dahil iner;
+                          gram raporuna katılmaz (tij dökümde kesilir). Dik dönen
+                          baklalara (forse/doç/venedik tek indeksler) takılmaz.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )}
 
                 {/* aksiyonlar */}
                 <div className="flex gap-2">
