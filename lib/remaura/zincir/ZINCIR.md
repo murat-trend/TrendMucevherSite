@@ -309,6 +309,16 @@ Referans foto 6 stil: parlak dolgun gurmet · faset (diamond-cut) gümüş ·
 - 2026-07-16 (lint dersi): alan-koruyan yarıçap düzeltmesi yazıldı ama
   KULLANILMAMIŞTI — eslint no-unused-vars yakaladı; "düzeltme eklendi" demek
   yetmez, hacim testi düzeltme SONRASI yeniden koşulmalı (koşuldu: −%0.2).
+- 2026-07-17 (Murat: "parladığı için görünmüyor + Cuban bilgisi balıksırtında"
+  → iki sistemik düzeltme): (1) VIEWER VARSAYILANI MAT — form-okuma kil
+  görünümü (env IBL kapalı, renkler EKRAN ÖLÇÜMÜYLE kalibre: aydınlık yüz
+  ~175 sRGB, patlamış piksel %0); Parlak ayrı düğme (sunum, kısılmış).
+  İLKE: inceleme aracında güzellik değil OKUNURLUK varsayılandır.
+  (2) TİP İZOLASYONU: tip değişince eski model/rapor ANINDA temizlenir +
+  yeni tip otomatik üretilir (eski Küba modeli balıksırtı başlığı altında
+  duruyordu — kafa karışıklığının kökü buydu); gram düzeltme katsayısı TİP
+  BAŞINA tutulur; tip kimliği kesiti kilitler (venedik=kare, değiştirilemez).
+  İLKE: bir tipin durumu/katsayısı/kontrolü başka tipe SIZMAZ.
 - 2026-07-17 (Murat: "kareler doğru çalışmıyor… ezbere yaptın" → iki düzeltme):
   (1) büküm KÖŞE BAŞINA açı veriyordu → kare kesit makaslanıyordu; kesit
   başına RİJİT dönüşe alındı (rotasyon x'i korur, halka rijit döner).

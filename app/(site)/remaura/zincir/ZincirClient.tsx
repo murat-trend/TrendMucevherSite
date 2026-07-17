@@ -6,7 +6,7 @@
 // (ZINCIR.md kural kütüphanesi — her sayı kural kimliği taşır, keyfi sayı yok).
 // Ajur delme, ajur sayfasının desen kütüphanesini yeniden kullanır.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ZincirViewer, ViewMesh } from "./ZincirViewer";
+import { ZincirViewer, ViewMesh, ViewerMod } from "./ZincirViewer";
 import {
   MADENLER, MadenId, TIPLER, ZincirTipId, TRAS, AJUR, OLCU, telSinir, SAPORT,
 } from "@/lib/remaura/zincir/kurallar";
@@ -87,13 +87,19 @@ export function ZincirClient() {
   const [ajurDoz, setAjurDoz] = useState(0.7);
   const [busy, setBusy] = useState(false);
   const [gorunum, setGorunum] = useState<"yerde" | "kolyede">("yerde");
+  // varsayılan MAT: form okunur (Murat 2026-07-17: "parladığı için görünmüyor")
+  const [viewerMod, setViewerMod] = useState<ViewerMod>("mat");
   const [sonuc, setSonuc] = useState<UretimSonuc | null>(null);
   const [denetim, setDenetim] = useState<KesisimSonuc | "calisiyor" | null>(null);
   const [meshes, setMeshes] = useState<ViewMesh[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const uretimSayac = useRef(0);
-  // B8 anlık gram tahmini düzeltmesi: kesinHacim/Pappus (traş+ajur kaybı)
-  const kFaktorRef = useRef<number>(1);
+  // B8 anlık gram tahmini düzeltmesi: kesinHacim/analitik — TİP BAŞINA tutulur
+  // (Murat 2026-07-17: "her model kendi kuralları içinde çalışır" — Küba
+  // katsayısı balıksırtı tahminine karışmaz). Başlangıçlar ölçülmüş bantlardan.
+  const kFaktorlar = useRef<Partial<Record<ZincirTipId, number>>>({});
+  const kFaktorOku = (t: ZincirTipId): number =>
+    kFaktorlar.current[t] ?? (TIPLER[t].yapi === "bakla" ? 0.95 : TIPLER[t].yapi === "orgu" ? 0.89 : 1);
 
   const maden: MadenId = metalTur === "gumus" ? "ag925" : metalTur === "platin" ? "pt950" : ayar;
   const kart = TIPLER[tip];
@@ -108,15 +114,15 @@ export function ZincirClient() {
     if (kart.yapi === "orgu") {
       const o = orguOlc(tip as "halat" | "spiga", genislikMm, uzunlukMm);
       const r = o.damarCapMm / 2;
-      const gram = o.damarSayisi * Math.PI * r * r * o.damarBoyMm * kFaktorRef.current * rho;
+      const gram = o.damarSayisi * Math.PI * r * r * o.damarBoyMm * kFaktorOku(tip) * rho;
       return { gram, gCm: gram / (uzunlukMm / 10) };
     }
     if (kart.yapi === "boru") {
       const gram = boruKesitAlanMm2(tip as "yilan" | "baliksirti", genislikMm) *
-        uzunlukMm * kFaktorRef.current * rho;
+        uzunlukMm * kFaktorOku(tip) * rho;
       return { gram, gCm: gram / (uzunlukMm / 10) };
     }
-    const t = gramTahmin({ tip, genislikMm, uzunlukMm, telCapMm, maden, kFaktor: kFaktorRef.current });
+    const t = gramTahmin({ tip, genislikMm, uzunlukMm, telCapMm, maden, kFaktor: kFaktorOku(tip) });
     if (ciftMetal) {
       // S4: baklaların ~yarısı 2. metal — ortalama yoğunluk düzeltmesi
       const oran = (MADENLER[maden].yogunlukGmm3 + MADENLER[maden2].yogunlukGmm3) /
@@ -124,7 +130,7 @@ export function ZincirClient() {
       return { ...t, gram: t.gram * oran, gCm: t.gCm * oran };
     }
     return t;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- kFaktorRef sonuc ile tazelenir
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- kFaktorlar sonuc ile tazelenir
   }, [tip, kart, genislikMm, uzunlukMm, telCapMm, maden, maden2, ciftMetal, sonuc]);
 
   const bildir = useCallback((m: string) => {
@@ -175,7 +181,8 @@ export function ZincirClient() {
   }, [genislikMm, uzunlukMm, ciftMetal, maden, maden2, saportKonum, saportCapMm, saportBoyMm, saportHer]);
 
   const olustur = useCallback(async () => {
-    if (busy) return;
+    // busy kilidi YOK: tip değişiminde otomatik yeniden üretim üst üste
+    // gelebilir — bayat sonuçları uretimSayac eler (son tıklanan kazanır)
     setBusy(true);
     const benimSiram = ++uretimSayac.current;
     try {
@@ -189,7 +196,7 @@ export function ZincirClient() {
           mesh = u.mesh; hacim = u.hacimMm3;
           const rD = u.bilgi.damarCapMm / 2;
           const analitik = u.bilgi.damarSayisi * Math.PI * rD * rD * u.bilgi.damarBoyMm;
-          kFaktorRef.current = hacim / analitik;
+          kFaktorlar.current[tip] = hacim / analitik;
           bilgi = [
             ["Damar", `${u.bilgi.damarSayisi} × Ø ${u.bilgi.damarCapMm.toFixed(2)} mm`],
             ["Sarım adımı", `${u.bilgi.pitchMm.toFixed(1)} mm`],
@@ -201,7 +208,7 @@ export function ZincirClient() {
             : buildBaliksirti(genislikMm, uzunlukMm);
           if (benimSiram !== uretimSayac.current) return;
           mesh = u.mesh; hacim = isaretliHacim(u.mesh);
-          kFaktorRef.current = hacim / (boruKesitAlanMm2(tip as "yilan" | "baliksirti", genislikMm) * uzunlukMm);
+          kFaktorlar.current[tip] = hacim / (boruKesitAlanMm2(tip as "yilan" | "baliksirti", genislikMm) * uzunlukMm);
           bilgi = tip === "yilan"
             ? [["Et kalınlığı", "0.80 mm (C4)"],
                ["Yapı", "açık uçlu dokulu boru (K5) — uçlar döküm drenajı (A5)"]]
@@ -237,7 +244,7 @@ export function ZincirClient() {
       const bKisaB = atlamali ? await uretKisa(doku) : null;
       const bUzunB = atlamali ? await uretUzun(doku) : null;
       if (benimSiram !== uretimSayac.current) return; // eski üretim, at
-      kFaktorRef.current = bKisa.hacimMm3 / pappusHacimMm3(kisa); // B8 tahmin düzeltmesi
+      kFaktorlar.current[tip] = bKisa.hacimMm3 / pappusHacimMm3(kisa); // B8 tahmin düzeltmesi
       const r = rapor({
         tip, genislikMm, uzunlukMm, telCapMm, maden,
         hacimKisaMm3: bKisa.hacimMm3, hacimDoluKisaMm3: bKisa.hacimDoluMm3,
@@ -281,7 +288,7 @@ export function ZincirClient() {
     } finally {
       setBusy(false);
     }
-  }, [busy, tip, genislikMm, uzunlukMm, telCapMm, maden, maden2, ciftMetal, trasOrani, kesit, doku, dokuDesen, ajurAcik, ajurDesen, ajurDoz, gorunum, kurMeshler, bildir]);
+  }, [tip, genislikMm, uzunlukMm, telCapMm, maden, maden2, ciftMetal, trasOrani, kesit, doku, dokuDesen, ajurAcik, ajurDesen, ajurDoz, gorunum, kurMeshler, bildir]);
 
   const gorunumDegistir = (g: "yerde" | "kolyede") => {
     setGorunum(g);
@@ -289,12 +296,26 @@ export function ZincirClient() {
   };
 
   const tipSec = (id: ZincirTipId) => {
+    if (id === tip) return;
     setTip(id);
     setTrasOrani(TIPLER[id].trasVarsayilan);
     setTelSecimMm(null); // yeni tip → kural varsayılanı tel (B8)
     setKesit(TIPLER[id].kesitVarsayilan ?? "yuvarlak"); // venedik = kare (K4)
     if (!TIPLER[id].ajurUygun) setAjurAcik(false);
+    // TİP İZOLASYONU (Murat 2026-07-17): eski tipin modeli/raporu ekranda
+    // KALMAZ — anında temizlenir, yeni tip otomatik üretilir (aşağıdaki effect)
+    setSonuc(null);
+    setDenetim(null);
+    setMeshes([]);
   };
+
+  // tip değişince otomatik yeniden üret (eski model yeni tipin altında durmasın)
+  const ilkTipRef = useRef(true);
+  useEffect(() => {
+    if (ilkTipRef.current) { ilkTipRef.current = false; return; }
+    void olustur();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız tip değişimi
+  }, [tip]);
 
   // ilk açılışta bir kez üret
   useEffect(() => {
@@ -457,24 +478,40 @@ export function ZincirClient() {
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
               {/* viewer */}
               <div id="zincir-viewer" className="relative min-h-[440px] overflow-hidden rounded-2xl border border-[#2A2A35] bg-[#101014] lg:col-span-7">
-                <ZincirViewer meshes={meshes} maden={maden} fitKey={`${gorunum}-${tip}`} />
+                <ZincirViewer meshes={meshes} maden={maden} fitKey={`${gorunum}-${tip}`} mod={viewerMod} />
                 {busy && (
                   <div className="pointer-events-none absolute left-3 top-3 rounded-lg bg-black/60 px-3 py-1.5 font-mono text-[11px] text-[#D4AF37]">
                     üretiliyor…
                   </div>
                 )}
-                <div className="absolute right-3 top-3 flex overflow-hidden rounded-lg border border-[#2A2A35] bg-black/50 font-mono text-[11px]">
-                  {([["yerde", "Yerde"], ["kolyede", "Kolyede"]] as const).map(([id, ad]) => (
-                    <button
-                      key={id}
-                      onClick={() => gorunumDegistir(id)}
-                      className={`px-3 py-1.5 transition-colors ${
-                        gorunum === id ? "bg-[#D4AF37] font-semibold text-[#0A0A0C]" : "text-[#9CA3AF] hover:text-white"
-                      }`}
-                    >
-                      {ad}
-                    </button>
-                  ))}
+                <div className="absolute right-3 top-3 flex gap-2">
+                  {/* malzeme modu: MAT varsayılan — form okunur; Parlak = sunum */}
+                  <div className="flex overflow-hidden rounded-lg border border-[#2A2A35] bg-black/50 font-mono text-[11px]">
+                    {([["mat", "Mat"], ["metal", "Parlak"]] as const).map(([id, ad]) => (
+                      <button
+                        key={id}
+                        onClick={() => setViewerMod(id)}
+                        className={`px-3 py-1.5 transition-colors ${
+                          viewerMod === id ? "bg-[#D4AF37] font-semibold text-[#0A0A0C]" : "text-[#9CA3AF] hover:text-white"
+                        }`}
+                      >
+                        {ad}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex overflow-hidden rounded-lg border border-[#2A2A35] bg-black/50 font-mono text-[11px]">
+                    {([["yerde", "Yerde"], ["kolyede", "Kolyede"]] as const).map(([id, ad]) => (
+                      <button
+                        key={id}
+                        onClick={() => gorunumDegistir(id)}
+                        className={`px-3 py-1.5 transition-colors ${
+                          gorunum === id ? "bg-[#D4AF37] font-semibold text-[#0A0A0C]" : "text-[#9CA3AF] hover:text-white"
+                        }`}
+                      >
+                        {ad}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -575,19 +612,27 @@ export function ZincirClient() {
                   </h3>
                   {/* S1-S4: kesit / doku / desen / çift metal */}
                   <div className="mb-3 rounded-lg border border-[#2A2A35] bg-[#0A0A0C] p-3">
-                    <div className="mb-2 grid grid-cols-2 gap-1.5">
-                      {([["yuvarlak", "Yuvarlak tel"], ["kare", "Kare tel"]] as const).map(([id, ad]) => (
-                        <button
-                          key={id}
-                          onClick={() => { setKesit(id); if (id === "kare" && doku === "faset") setDoku("parlak"); }}
-                          className={`rounded-md border py-1.5 text-[11px] transition-colors ${
-                            kesit === id ? "border-[#D4AF37] text-[#D4AF37]" : "border-[#2A2A35] text-[#9CA3AF] hover:text-white"
-                          }`}
-                        >
-                          {ad}
-                        </button>
-                      ))}
-                    </div>
+                    {kart.kesitVarsayilan ? (
+                      // tip kimliği kesiti KİLİTLER (venedik = kare; K4) —
+                      // başka tipin kuralı buraya sızmaz
+                      <div className="mb-2 rounded-md border border-[#2A2A35] px-2 py-1.5 text-[11px] text-white/40">
+                        Tel kesiti: <span className="text-[#D4AF37]">kare</span> — {kart.ad} kimliği (K4), değiştirilemez
+                      </div>
+                    ) : (
+                      <div className="mb-2 grid grid-cols-2 gap-1.5">
+                        {([["yuvarlak", "Yuvarlak tel"], ["kare", "Kare tel"]] as const).map(([id, ad]) => (
+                          <button
+                            key={id}
+                            onClick={() => { setKesit(id); if (id === "kare" && doku === "faset") setDoku("parlak"); }}
+                            className={`rounded-md border py-1.5 text-[11px] transition-colors ${
+                              kesit === id ? "border-[#D4AF37] text-[#D4AF37]" : "border-[#2A2A35] text-[#9CA3AF] hover:text-white"
+                            }`}
+                          >
+                            {ad}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <div className="mb-2 grid grid-cols-3 gap-1.5">
                       {([["parlak", "Parlak"], ["cekic", "Çekiç (dövme)"], ["faset", "Faset"]] as const).map(([id, ad]) => {
                         const kapali = id === "faset" && kesit === "kare";
