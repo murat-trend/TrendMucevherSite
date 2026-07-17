@@ -46,6 +46,7 @@ import {
   Map,
   Hand,
   Link2,
+  Lock,
 } from "lucide-react";
 
 export type AdminNavItem = {
@@ -500,6 +501,13 @@ export const ADMIN_NAV_ENTRIES: AdminNavEntry[] = [
         labelTr: "Zincir",
         labelEn: "Chain",
         icon: Link2,
+      },
+      {
+        id: "kilit",
+        href: "/remaura/kilit",
+        labelTr: "Kilit",
+        labelEn: "Clasp",
+        icon: Lock,
       },
     ],
   },
