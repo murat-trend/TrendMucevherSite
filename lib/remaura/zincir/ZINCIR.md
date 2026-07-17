@@ -226,6 +226,36 @@ piyasa değerleri yalnız sanity-check çapasıdır (profil farkı 3-5× oynatı
 
 ---
 
+## 9-b. STİL / DOKU (S) — Murat foto referansı (2026-07-16: "tek modelde kalmamak lazım")
+
+Referans foto 6 stil: parlak dolgun gurmet · faset (diamond-cut) gümüş ·
+çekiç/antik gümüş · roz atlamalı dokulu · iki metal panter · kare kesit koyu Küba.
+
+- **S1 — tel kesiti:** yuvarlak (varsayılan) / **kare** (köşe yuvarlatmalı,
+  rc=0.2s). Kare kesit ALAN-EŞDEĞER kurulur (alan = πr² — gram ve Pappus
+  tahmini yuvarlakla aynı kalır) `[HESAP]`. Köşegen yarıçapı > r → kilitlenme
+  zarfı büyür; D4 denetimi gerçek kesitle koşar, taşma orada görünür.
+- **S2 — yüzey dokusu (geometriye işlenir, STL'e döker):**
+  - *parlak* — düz süpürme (varsayılan).
+  - *çekiç (dövme)* — içe basan deterministik çukur alanı; çukur adımı ≈2.6r,
+    genlik 0.16r `[KALİBRE — zanaat dokusu, yayın yok]`. Yalnız içe basar →
+    zarf büyümez, kendine-kesişme yok.
+  - *faset* — az segmentli kesit (10) + halka başına faz oynaması; gerçek
+    diamond-cut'ın (T1 patent ailesi) CAD yaklaşığıdır — pas derinliği yerine
+    kırık düzlem parıltısı `[HESAP — yaklaşım, dürüst işaret]`. Kare kesitle
+    birlikte kullanılmaz (köşe kimliğini bozar).
+  - *simli/stardust (foto #4)* — GEOMETRİ DEĞİL yüzey işlemidir (kumlama);
+    üretim notu olarak kalır, CAD'de temsil edilmez `[PRATİK]`.
+- **S3 — doku deseni:** tümü dokulu / **bir atlamalı** (çift indeks parlak,
+  tek indeks dokulu — foto #4 roz örneği). Montajda varyant baklayla çözülür;
+  gram, varyant hacimleriyle parite bazında hesaplanır.
+- **S4 — iki metal:** bir atlamalı iki metal (foto #5'in bicolor özü);
+  önizleme bakla paritesiyle boyanır, METAL BAŞINA AYRI STL iner — üretimde
+  iki grup ayrı dökülür, baklalar geçirilip lehimlenir (C6). Gram: parite ×
+  yoğunluk. Roz altın kartı: au14r, yoğunluk sarı 14K bandı `[HESAP]`.
+- **S5 — v2 adayı:** foto #5'in tam karşılığı (panter/kare-U + bar "fantezi"
+  tipi) YENİ TİP gerektirir — torus-süpürme ailesi dışı, ayrı bakla üreteci.
+
 ## 10. DERS DEFTERİ (TELKARI.md §7 ritüeli — her turda güncellenir)
 
 - 2026-07-16 (kuruluş turu): **Curb ailesinde TÜM baklalar özdeş ve aynı

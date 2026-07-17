@@ -7,6 +7,7 @@
 export const MADENLER = {
   au8: { ad: "8 Ayar Altın", yogunlukGmm3: 0.0112 },
   au14: { ad: "14 Ayar Altın", yogunlukGmm3: 0.0131 },
+  au14r: { ad: "14 Ayar Roz Altın", yogunlukGmm3: 0.0131 }, // aynı ayar bandı [HESAP]
   au18: { ad: "18 Ayar Altın", yogunlukGmm3: 0.01535 },
   au22: { ad: "22 Ayar Altın", yogunlukGmm3: 0.01775 },
   ag925: { ad: "925 Gümüş", yogunlukGmm3: 0.01036 },

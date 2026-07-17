@@ -15,6 +15,7 @@ export type Yer = {
   ayna: boolean;      // ayna bakla mı (curb ailesi: tek indeksler)
   dxMm: number;       // zincir ekseni konumu (bakla merkezi)
   rotXDeg: number;    // yatış (B6)
+  varyant?: boolean;  // S3: B-varyant bakla (atlamalı doku / ikinci metal)
 };
 
 /** Tip + genişlik (+isteğe bağlı tel çapı) → bakla geometrisi (B1-B4, B8).
@@ -96,10 +97,19 @@ export function aynaBakla(m: BaklaMesh): BaklaMesh {
   return { positions, indices };
 }
 
-type MeshSeti = { kisa: BaklaMesh; kisaAyna: BaklaMesh; uzun?: BaklaMesh; uzunAyna?: BaklaMesh };
+// kisaB/uzunB: S3 atlamalı doku için B-varyant baklalar (yer.varyant seçer)
+type MeshSeti = {
+  kisa: BaklaMesh; kisaAyna: BaklaMesh;
+  uzun?: BaklaMesh; uzunAyna?: BaklaMesh;
+  kisaB?: BaklaMesh; uzunB?: BaklaMesh;
+};
 
 function yerMesh(set: MeshSeti, y: Yer): BaklaMesh {
-  if (y.turu === "uzun") return (y.ayna ? set.uzunAyna : set.uzun) ?? set.kisa;
+  if (y.turu === "uzun") {
+    if (y.varyant && set.uzunB) return set.uzunB;
+    return (y.ayna ? set.uzunAyna : set.uzun) ?? set.kisa;
+  }
+  if (y.varyant && set.kisaB) return set.kisaB;
   return y.ayna ? set.kisaAyna : set.kisa;
 }
 

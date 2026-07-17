@@ -10,11 +10,13 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 export type ViewMesh = {
   positions: Float64Array;
   indices: Uint32Array;
+  /** S4 çift metal: bu mesh'in madenini genel seçimden ayrı boya */
+  maden?: string;
 };
 
 const METAL_RENK: Record<string, number> = {
   au8: 0xe3c76f, au14: 0xe9c47e, au18: 0xedc063, au22: 0xf2c14e,
-  ag925: 0xe8e6e2, pt950: 0xdfe2e6,
+  au14r: 0xdda183, ag925: 0xe8e6e2, pt950: 0xdfe2e6,
 };
 
 export function ZincirViewer({ meshes, maden, fitKey }: { meshes: ViewMesh[]; maden: string; fitKey?: string }) {
@@ -121,8 +123,8 @@ export function ZincirViewer({ meshes, maden, fitKey }: { meshes: ViewMesh[]; ma
     }
     // flatShading: CSG/traş çıktısında düz yüzler net okunsun (Küba traş
     // yüzeyleri smooth-normal ile "buruşuk" görünüyordu — suyolu dersi)
-    const metalMat = () => new THREE.MeshStandardMaterial({
-      color: METAL_RENK[maden] ?? 0xe9c47e, metalness: 0.95, roughness: 0.32,
+    const metalMat = (m: string) => new THREE.MeshStandardMaterial({
+      color: METAL_RENK[m] ?? 0xe9c47e, metalness: 0.95, roughness: 0.32,
       envMapIntensity: 0.9, flatShading: true,
     });
     for (const m of meshes) {
@@ -130,7 +132,7 @@ export function ZincirViewer({ meshes, maden, fitKey }: { meshes: ViewMesh[]; ma
       geom.setAttribute("position", new THREE.BufferAttribute(Float32Array.from(m.positions), 3));
       geom.setIndex(new THREE.BufferAttribute(m.indices, 1));
       geom.computeVertexNormals();
-      group.add(new THREE.Mesh(geom, metalMat()));
+      group.add(new THREE.Mesh(geom, metalMat(m.maden ?? maden)));
     }
     if (!fittedRef.current && meshes.length && camRef.current && controlsRef.current) {
       fittedRef.current = true;

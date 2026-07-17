@@ -11,9 +11,10 @@ import {
   MADENLER, MadenId, TIPLER, ZincirTipId, TRAS, AJUR, OLCU, telSinir,
 } from "@/lib/remaura/zincir/kurallar";
 import {
-  geoTuret, dizilim, montajDuz, montajDaire, rapor, ZincirRapor,
+  geoTuret, dizilim, montajDuz, montajDaire, rapor, ZincirRapor, Yer,
   gramTahmin, pappusHacimMm3,
 } from "@/lib/remaura/zincir/zincir";
+import type { TelKesit, YuzeyDoku } from "@/lib/remaura/zincir/bakla";
 import { baklaUret, autoAjur, dizilimDenetim, KesisimSonuc, BaklaUretim } from "@/lib/remaura/zincir/islem";
 import { toBinarySTL } from "@/lib/remaura/zincir/stl";
 import { PATTERNS } from "@/app/(site)/remaura/ajur/lib/patterns";
@@ -42,6 +43,9 @@ const UZUNLUK_PRESET = [
 type UretimSonuc = {
   kisa: BaklaUretim;
   uzun: BaklaUretim | null;
+  // S3 atlamalı doku: B-varyant baklalar (tek indeksler)
+  kisaB: BaklaUretim | null;
+  uzunB: BaklaUretim | null;
   raporData: ZincirRapor;
 };
 
@@ -54,6 +58,12 @@ export function ZincirClient() {
   const [metalTur, setMetalTur] = useState<"altin" | "gumus" | "platin">("gumus");
   const [ayar, setAyar] = useState<MadenId>("au14");
   const [trasOrani, setTrasOrani] = useState<number>(TIPLER.kuba.trasVarsayilan);
+  // S1-S4 stil katmanı (2026-07-16 foto referansı: faset/çekiç/kare/atlamalı/çift metal)
+  const [kesit, setKesit] = useState<TelKesit>("yuvarlak");
+  const [doku, setDoku] = useState<YuzeyDoku>("parlak");
+  const [dokuDesen, setDokuDesen] = useState<"hepsi" | "atlamali">("hepsi");
+  const [ciftMetal, setCiftMetal] = useState(false);
+  const [maden2, setMaden2] = useState<MadenId>("ag925");
   const [ajurAcik, setAjurAcik] = useState(false);
   const [ajurDesen, setAjurDesen] = useState<string>("petek");
   const [ajurDoz, setAjurDoz] = useState(0.7);
@@ -74,11 +84,17 @@ export function ZincirClient() {
     () => Math.min(Math.max(telSecimMm ?? sinir.varsayilanMm, sinir.minMm), sinir.maxMm),
     [telSecimMm, sinir],
   );
-  const tahmin = useMemo(
-    () => gramTahmin({ tip, genislikMm, uzunlukMm, telCapMm, maden, kFaktor: kFaktorRef.current }),
+  const tahmin = useMemo(() => {
+    const t = gramTahmin({ tip, genislikMm, uzunlukMm, telCapMm, maden, kFaktor: kFaktorRef.current });
+    if (ciftMetal) {
+      // S4: baklaların ~yarısı 2. metal — ortalama yoğunluk düzeltmesi
+      const oran = (MADENLER[maden].yogunlukGmm3 + MADENLER[maden2].yogunlukGmm3) /
+        (2 * MADENLER[maden].yogunlukGmm3);
+      return { ...t, gram: t.gram * oran, gCm: t.gCm * oran };
+    }
+    return t;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- kFaktorRef sonuc ile tazelenir
-    [tip, genislikMm, uzunlukMm, telCapMm, maden, sonuc],
-  );
+  }, [tip, genislikMm, uzunlukMm, telCapMm, maden, maden2, ciftMetal, sonuc]);
 
   const bildir = useCallback((m: string) => {
     setToast(m);
@@ -92,12 +108,22 @@ export function ZincirClient() {
       kisaAyna: s.kisa.mesh, // curb ailesi özdeş baklalar — ayna kullanılmıyor
       uzun: s.uzun?.mesh,
       uzunAyna: s.uzun?.mesh,
+      kisaB: s.kisaB?.mesh,
+      uzunB: s.uzunB?.mesh,
     };
-    const m = g === "kolyede"
-      ? montajDaire(set, diz.yerler, diz.gercekUzunlukMm)
-      : montajDuz(set, diz.yerler);
-    setMeshes([m]);
-  }, [genislikMm, uzunlukMm]);
+    // S3/S4: tek indeksli baklalar B-varyant (atlamalı doku ve/veya 2. metal)
+    const yerler: Yer[] = diz.yerler.map((y, i) => ({ ...y, varyant: i % 2 === 1 }));
+    const montaj = (yl: Yer[]) =>
+      g === "kolyede" ? montajDaire(set, yl, diz.gercekUzunlukMm) : montajDuz(set, yl);
+    if (ciftMetal) {
+      setMeshes([
+        { ...montaj(yerler.filter((_, i) => i % 2 === 0)), maden },
+        { ...montaj(yerler.filter((_, i) => i % 2 === 1)), maden: maden2 },
+      ]);
+    } else {
+      setMeshes([montaj(yerler)]);
+    }
+  }, [genislikMm, uzunlukMm, ciftMetal, maden, maden2]);
 
   const olustur = useCallback(async () => {
     if (busy) return;
@@ -107,13 +133,21 @@ export function ZincirClient() {
       const { kisa, uzun } = geoTuret(tip, genislikMm, telCapMm);
       const k = TIPLER[tip];
       const ajur = ajurAcik && k.ajurUygun ? autoAjur(kisa, ajurDesen, ajurDoz) : null;
-      const bKisa = await baklaUret({ ...kisa, yatisDeg: 0, trasOrani: k.bukumDeg ? trasOrani : 0, ajur });
-      const bUzun = uzun
-        ? await baklaUret({
-            ...uzun, yatisDeg: 0, trasOrani: k.bukumDeg ? trasOrani : 0,
-            ajur: ajurAcik && k.ajurUygun ? autoAjur(uzun, ajurDesen, ajurDoz) : null,
-          })
-        : null;
+      const ajurUzun = ajurAcik && k.ajurUygun && uzun ? autoAjur(uzun, ajurDesen, ajurDoz) : null;
+      const tras = k.bukumDeg ? trasOrani : 0;
+      // S3: atlamalı desende A-bakla parlak, B-bakla dokulu; "hepsi"nde A dokulu
+      const atlamali = dokuDesen === "atlamali" && doku !== "parlak";
+      const dokuA: YuzeyDoku = atlamali ? "parlak" : doku;
+      const uretKisa = (dk: YuzeyDoku) =>
+        baklaUret({ ...kisa, kesit, doku: dk, yatisDeg: 0, trasOrani: tras, ajur });
+      const uretUzun = (dk: YuzeyDoku) =>
+        uzun
+          ? baklaUret({ ...uzun, kesit, doku: dk, yatisDeg: 0, trasOrani: tras, ajur: ajurUzun })
+          : Promise.resolve(null);
+      const bKisa = await uretKisa(dokuA);
+      const bUzun = await uretUzun(dokuA);
+      const bKisaB = atlamali ? await uretKisa(doku) : null;
+      const bUzunB = atlamali ? await uretUzun(doku) : null;
       if (benimSiram !== uretimSayac.current) return; // eski üretim, at
       kFaktorRef.current = bKisa.hacimMm3 / pappusHacimMm3(kisa); // B8 tahmin düzeltmesi
       const r = rapor({
@@ -124,7 +158,22 @@ export function ZincirClient() {
         delikSayisi: bKisa.delikSayisi,
         delikAlanOrani: bKisa.delikAlanOrani,
       });
-      const s: UretimSonuc = { kisa: bKisa, uzun: bUzun, raporData: r };
+      // S4 çift metal + S3 varyant hacmi: gramı parite bazında yeniden hesapla
+      if (ciftMetal || atlamali) {
+        const diz = dizilim(tip, genislikMm, uzunlukMm, telCapMm);
+        const vol = (turu: string, b: boolean) =>
+          turu === "uzun"
+            ? (b ? bUzunB?.hacimMm3 : bUzun?.hacimMm3) ?? bKisa.hacimMm3
+            : (b ? bKisaB?.hacimMm3 : null) ?? bKisa.hacimMm3;
+        let gram = 0;
+        diz.yerler.forEach((y, i) => {
+          const b = i % 2 === 1;
+          gram += vol(y.turu, b) * MADENLER[ciftMetal && b ? maden2 : maden].yogunlukGmm3;
+        });
+        r.gram = gram;
+        r.gCm = gram / (r.gercekUzunlukMm / 10);
+      }
+      const s: UretimSonuc = { kisa: bKisa, uzun: bUzun, kisaB: bKisaB, uzunB: bUzunB, raporData: r };
       setSonuc(s);
       kurMeshler(s, gorunum);
       bildir("Model oluşturuldu");
@@ -144,7 +193,7 @@ export function ZincirClient() {
     } finally {
       setBusy(false);
     }
-  }, [busy, tip, genislikMm, uzunlukMm, telCapMm, maden, trasOrani, ajurAcik, ajurDesen, ajurDoz, gorunum, kurMeshler, bildir]);
+  }, [busy, tip, genislikMm, uzunlukMm, telCapMm, maden, maden2, ciftMetal, trasOrani, kesit, doku, dokuDesen, ajurAcik, ajurDesen, ajurDoz, gorunum, kurMeshler, bildir]);
 
   const gorunumDegistir = (g: "yerde" | "kolyede") => {
     setGorunum(g);
@@ -187,9 +236,21 @@ export function ZincirClient() {
     const set = {
       kisa: sonuc.kisa.mesh, kisaAyna: sonuc.kisa.mesh,
       uzun: sonuc.uzun?.mesh, uzunAyna: sonuc.uzun?.mesh,
+      kisaB: sonuc.kisaB?.mesh, uzunB: sonuc.uzunB?.mesh,
     };
-    indir(toBinarySTL([montajDuz(set, diz.yerler)], "Remaura Zincir — komple"),
-      `zincir-${tip}-${(sonuc.raporData.gercekUzunlukMm / 10).toFixed(0)}cm-${genislikMm}mm.stl`);
+    const yerler: Yer[] = diz.yerler.map((y, i) => ({ ...y, varyant: i % 2 === 1 }));
+    const cmAd = (sonuc.raporData.gercekUzunlukMm / 10).toFixed(0);
+    if (ciftMetal) {
+      // S4: metal başına ayrı STL — dökümde iki metal ayrı dökülüp geçirilir
+      indir(toBinarySTL([montajDuz(set, yerler.filter((_, i) => i % 2 === 0))], "Remaura Zincir — metal A"),
+        `zincir-${tip}-${cmAd}cm-${maden}.stl`);
+      indir(toBinarySTL([montajDuz(set, yerler.filter((_, i) => i % 2 === 1))], "Remaura Zincir — metal B"),
+        `zincir-${tip}-${cmAd}cm-${maden2}.stl`);
+      bildir("İki STL indirildi (metal başına) — montaj: baklalar geçirilip lehimlenir (C6)");
+      return;
+    }
+    indir(toBinarySTL([montajDuz(set, yerler)], "Remaura Zincir — komple"),
+      `zincir-${tip}-${cmAd}cm-${genislikMm}mm.stl`);
     bildir(`Komple STL indirildi: ${sonuc.raporData.n} bakla iç içe (C2 boşluk denetimine bak)`);
   };
 
@@ -399,6 +460,89 @@ export function ZincirClient() {
                       ))}
                     </div>
                   )}
+
+                  {/* S1-S4: stil & doku (foto referanslı çeşitler) */}
+                  <div className="mb-3 rounded-lg border border-[#2A2A35] bg-[#0A0A0C] p-3">
+                    <div className="mb-2 text-xs font-medium text-[#F5F5F7]">Stil & Doku</div>
+                    <div className="mb-2 grid grid-cols-2 gap-1.5">
+                      {([["yuvarlak", "Yuvarlak tel"], ["kare", "Kare tel"]] as const).map(([id, ad]) => (
+                        <button
+                          key={id}
+                          onClick={() => { setKesit(id); if (id === "kare" && doku === "faset") setDoku("parlak"); }}
+                          className={`rounded-md border py-1.5 text-[11px] transition-colors ${
+                            kesit === id ? "border-[#D4AF37] text-[#D4AF37]" : "border-[#2A2A35] text-[#9CA3AF] hover:text-white"
+                          }`}
+                        >
+                          {ad}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mb-2 grid grid-cols-3 gap-1.5">
+                      {([["parlak", "Parlak"], ["cekic", "Çekiç (dövme)"], ["faset", "Faset"]] as const).map(([id, ad]) => {
+                        const kapali = id === "faset" && kesit === "kare";
+                        return (
+                          <button
+                            key={id}
+                            disabled={kapali}
+                            onClick={() => setDoku(id)}
+                            className={`rounded-md border py-1.5 text-[11px] transition-colors ${
+                              kapali ? "cursor-not-allowed border-[#2A2A35] text-white/15"
+                                : doku === id ? "border-[#D4AF37] text-[#D4AF37]" : "border-[#2A2A35] text-[#9CA3AF] hover:text-white"
+                            }`}
+                          >
+                            {ad}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {doku !== "parlak" && (
+                      <div className="mb-2 grid grid-cols-2 gap-1.5">
+                        {([["hepsi", "Tüm baklalar dokulu"], ["atlamali", "Bir atlamalı (parlak/dokulu)"]] as const).map(([id, ad]) => (
+                          <button
+                            key={id}
+                            onClick={() => setDokuDesen(id)}
+                            className={`rounded-md border py-1.5 text-[11px] transition-colors ${
+                              dokuDesen === id ? "border-[#D4AF37] text-[#D4AF37]" : "border-[#2A2A35] text-[#9CA3AF] hover:text-white"
+                            }`}
+                          >
+                            {ad}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-[#9CA3AF]">İki metal (bir atlamalı)</span>
+                      <button
+                        onClick={() => setCiftMetal((v) => !v)}
+                        className={`h-5 w-10 rounded-full border transition-colors ${
+                          ciftMetal ? "border-[#D4AF37] bg-[#D4AF37]/30" : "border-[#2A2A35] bg-[#141418]"
+                        }`}
+                      >
+                        <span className={`block h-3.5 w-3.5 rounded-full bg-[#D4AF37] transition-transform ${ciftMetal ? "translate-x-5" : "translate-x-1"}`} />
+                      </button>
+                    </div>
+                    {ciftMetal && (
+                      <>
+                        <div className="mt-2 grid grid-cols-4 gap-1.5">
+                          {([["au14", "14K Sarı"], ["au14r", "14K Roz"], ["ag925", "Gümüş"], ["pt950", "Platin"]] as const).map(([id, ad]) => (
+                            <button
+                              key={id}
+                              onClick={() => setMaden2(id)}
+                              className={`rounded-md border py-1.5 text-[10px] transition-colors ${
+                                maden2 === id ? "border-[#D4AF37] text-[#D4AF37]" : "border-[#2A2A35] text-[#9CA3AF] hover:text-white"
+                              }`}
+                            >
+                              {ad}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="mt-1.5 text-[10px] leading-relaxed text-white/30">
+                          Metal başına ayrı STL iner — üretimde iki grup ayrı dökülür,
+                          baklalar geçirilip lehimlenir (C6).
+                        </p>
+                      </>
+                    )}
+                  </div>
 
                   {kart.bukumDeg !== 0 && (
                     <>
