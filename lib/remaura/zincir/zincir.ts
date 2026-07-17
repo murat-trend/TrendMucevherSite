@@ -167,6 +167,23 @@ function montaj(
   return { positions, indices };
 }
 
+/** K5 örgü/boru "kolyede" görünümü: düz üretilen gövdeyi çembere BÜKER
+ *  (x → açı; y/z kesit korunur — bend.ts mantığı). Bu tipler masif yorum
+ *  olduğundan bükülmüş STL ayrı üründür (düz ≠ bükük; UI not düşer). */
+export function daireBuk(m: BaklaMesh, uzunlukMm: number): BaklaMesh {
+  const R = uzunlukMm / (2 * Math.PI);
+  const positions = new Float64Array(m.positions.length);
+  for (let i = 0; i < m.positions.length; i += 3) {
+    const x = m.positions[i], y = m.positions[i + 1], z = m.positions[i + 2];
+    const th = x / R;
+    const rad = R + z;
+    positions[i] = rad * Math.sin(th);
+    positions[i + 1] = y;
+    positions[i + 2] = rad * Math.cos(th);
+  }
+  return { positions, indices: Uint32Array.from(m.indices) };
+}
+
 // ---- anlık gram tahmini (B8 hedef gramaj) ---------------------------------
 
 /** Bakla omurga uzunluğu (stadyum çevresi) — Pappus hacmi için. */

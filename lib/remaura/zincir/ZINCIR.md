@@ -23,9 +23,23 @@ D=dizilim/kinematik, T=traş, A=ajur/hafifletme, C=döküm, G=gramaj.
 **K1 — v1 tipleri (torus-süpürme ailesi, CAD+döküm anlamlı):** forse (cable),
 gurmet (curb), Küba (Miami cuban), figaro, doç (rolo — forsenin boy=en hali).
 `[PRATİK]` Çapa (mariner) v2 adayı (forse + orta bar).
-- **K2 — v1 DIŞI (makine örgüsü, tekil bakla CAD'i anlamsız):** halat/rope,
-  venedik/box, franco, spiga/wheat, balıksırtı/herringbone, yılan/snake.
-  Bunlar ancak "görsel taklit" olarak eklenir; döküm çıktısı üretilmez. `[PRATİK]`
+- **K2 — makine örgüsü gerçeği:** halat/rope, venedik/box, franco, spiga/wheat,
+  balıksırtı/herringbone, yılan/snake gerçek üretimde makine örgüsüdür; tekil
+  bakla CAD'i birebir karşılık DEĞİLDİR. `[PRATİK]`
+- **K5 — masif yorumlar (Murat, 2026-07-17: "diğerleri de aktif olsun"):**
+  K2 tipleri araçta MASİF DÖKÜM YORUMU olarak aktiftir (UI rozetli):
+  - *halat* = 3 damar helis, %12 gömme ile tek gövde (TELKARI §1.6; pitch
+    3×çap — burgu bandı 2.5-4× `[PRATİK]`) — burma geleneğinin karşılığı.
+  - *spiga* = 4 damar süper-helis (ana sarım + ikincil kıvrım) `[KALİBRE]`.
+  - *yılan* = açık uçlu boru (et 0.8 C4; uçlar döküm drenajı A5) + helis pul
+    çentiği (displacement — CSG yok, su geçirmez) `[KALİBRE]`.
+  - *balıksırtı* = masif yassı şerit + iki sıra zıt çevron çentiği; esnek
+    DEĞİLDİR `[KALİBRE]`.
+  - *venedik* = bakla motorundan: kare tel + halka (v1 "kare telli doç"
+    yorumu; kare ÇERÇEVE omurga v2 adayı).
+  - Kolyede görünümü örgü/boru tiplerinde gerçek BÜKMEdir (x→çember haritası);
+    STL görünüme göre iner — kolye masif dökülecekse BÜKÜK STL kullanılır.
+  - franco hâlâ dışarıda (curb-çift kilit; v2 değerlendirmesi).
 - **K3 — Türkçe/İngilizce ad eşlemesi** `[PRATİK — midas.com.tr, alexmakina,
   bilezikci, gumush]`: cable=**forse**, rolo=**doç**, curb=**gurmet**,
   cuban=**Küba**, figaro=figaro (üretici dilinde "3+1"), rope=halat,
@@ -283,6 +297,12 @@ Referans foto 6 stil: parlak dolgun gurmet · faset (diamond-cut) gümüş ·
 - 2026-07-16 (lint dersi): alan-koruyan yarıçap düzeltmesi yazıldı ama
   KULLANILMAMIŞTI — eslint no-unused-vars yakaladı; "düzeltme eklendi" demek
   yetmez, hacim testi düzeltme SONRASI yeniden koşulmalı (koşuldu: −%0.2).
+- 2026-07-17 (Murat: "dağınık menü + tüm tipler aktif" → K5 doğdu): sol menü
+  gruplu katalog (Baklalı/Örme/Boru), sağ panel numaralı akış kartları
+  (1·Ölçüler 2·Stil&Doku 3·Maden). Örme/boru tipleri masif yorumla aktive
+  edildi — "yapılamaz" yerine "dürüst yorum + rozet" ilkesi. TEKNİK DERS:
+  süpürme uç kapaklarının sarımı duvar kenarlarıyla ZIT gezinmeli (manifold
+  şartı) — halat ilk kurulumda NotManifold verdi, kapak yönü düzeltildi.
 - 2026-07-16 (Murat ilk eleştirisi → B8 doğdu): "model harika ama KALIN —
   altın maliyeti/satış fiyatı; gramaj kullanıcı tercihine bırakılmalı."
   İLKE: dolu (solid) hal varsayılan ÜST sınırdır, alıcıya sunulan ürünse

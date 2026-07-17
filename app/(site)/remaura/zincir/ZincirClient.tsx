@@ -12,19 +12,22 @@ import {
 } from "@/lib/remaura/zincir/kurallar";
 import {
   geoTuret, dizilim, montajDuz, montajDaire, rapor, ZincirRapor, Yer,
-  gramTahmin, pappusHacimMm3,
+  gramTahmin, pappusHacimMm3, daireBuk,
 } from "@/lib/remaura/zincir/zincir";
-import type { TelKesit, YuzeyDoku } from "@/lib/remaura/zincir/bakla";
-import { baklaUret, autoAjur, dizilimDenetim, KesisimSonuc, BaklaUretim } from "@/lib/remaura/zincir/islem";
+import type { BaklaMesh, TelKesit, YuzeyDoku } from "@/lib/remaura/zincir/bakla";
+import { isaretliHacim } from "@/lib/remaura/zincir/bakla";
+import { baklaUret, autoAjur, dizilimDenetim, KesisimSonuc, BaklaUretim, orguUret } from "@/lib/remaura/zincir/islem";
+import { orguOlc } from "@/lib/remaura/zincir/orgu";
+import { buildYilan, buildBaliksirti, boruKesitAlanMm2 } from "@/lib/remaura/zincir/boru";
 import { toBinarySTL } from "@/lib/remaura/zincir/stl";
 import { PATTERNS } from "@/app/(site)/remaura/ajur/lib/patterns";
 
-const TIP_SIRA: ZincirTipId[] = ["kuba", "gurmet", "figaro", "forse", "doc"];
-
-// K2: makine örgüsü tipler — CAD/döküm anlamsız, menüde kilitli gösterilir
-const KILITLI = [
-  { ad: "Halat (rope)" }, { ad: "Venedik (box)" }, { ad: "Balıksırtı" },
-  { ad: "Yılan" }, { ad: "Spiga" },
+// K5 katalog: sol menü grupları — hepsi aktif; örgü/boru "masif yorum"
+// rozetiyle gelir (gerçek örme makine işidir, K2)
+const KATALOG: { baslik: string; rozet?: string; tipler: ZincirTipId[] }[] = [
+  { baslik: "Baklalı", tipler: ["kuba", "gurmet", "figaro", "forse", "doc", "venedik"] },
+  { baslik: "Örme", rozet: "masif yorum", tipler: ["halat", "spiga"] },
+  { baslik: "Boru", rozet: "dokulu gövde", tipler: ["yilan", "baliksirti"] },
 ];
 
 const AJUR_DESENLERI = PATTERNS.filter((p) => p.tile);
@@ -40,14 +43,25 @@ const UZUNLUK_PRESET = [
   { ad: "Kolye 55", mm: 550 }, { ad: "Kolye 60", mm: 600 },
 ];
 
-type UretimSonuc = {
-  kisa: BaklaUretim;
-  uzun: BaklaUretim | null;
-  // S3 atlamalı doku: B-varyant baklalar (tek indeksler)
-  kisaB: BaklaUretim | null;
-  uzunB: BaklaUretim | null;
-  raporData: ZincirRapor;
-};
+type UretimSonuc =
+  | {
+      yapi: "bakla";
+      kisa: BaklaUretim;
+      uzun: BaklaUretim | null;
+      // S3 atlamalı doku: B-varyant baklalar (tek indeksler)
+      kisaB: BaklaUretim | null;
+      uzunB: BaklaUretim | null;
+      raporData: ZincirRapor;
+    }
+  | {
+      // K5 örgü/boru: tek gövde — bakla/dizilim/denetim kavramları yok
+      yapi: "govde";
+      mesh: BaklaMesh;
+      gram: number;
+      gCm: number;
+      uzunlukMm: number;
+      bilgi: [string, string][]; // rapor satırları (ad, değer)
+    };
 
 export function ZincirClient() {
   const [tip, setTip] = useState<ZincirTipId>("kuba");
@@ -85,6 +99,19 @@ export function ZincirClient() {
     [telSecimMm, sinir],
   );
   const tahmin = useMemo(() => {
+    const rho = MADENLER[maden].yogunlukGmm3;
+    // K5: yapıya göre analitik tahmin (slider oynarken CSG kurulmaz)
+    if (kart.yapi === "orgu") {
+      const o = orguOlc(tip as "halat" | "spiga", genislikMm, uzunlukMm);
+      const r = o.damarCapMm / 2;
+      const gram = o.damarSayisi * Math.PI * r * r * o.damarBoyMm * kFaktorRef.current * rho;
+      return { gram, gCm: gram / (uzunlukMm / 10) };
+    }
+    if (kart.yapi === "boru") {
+      const gram = boruKesitAlanMm2(tip as "yilan" | "baliksirti", genislikMm) *
+        uzunlukMm * kFaktorRef.current * rho;
+      return { gram, gCm: gram / (uzunlukMm / 10) };
+    }
     const t = gramTahmin({ tip, genislikMm, uzunlukMm, telCapMm, maden, kFaktor: kFaktorRef.current });
     if (ciftMetal) {
       // S4: baklaların ~yarısı 2. metal — ortalama yoğunluk düzeltmesi
@@ -94,7 +121,7 @@ export function ZincirClient() {
     }
     return t;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- kFaktorRef sonuc ile tazelenir
-  }, [tip, genislikMm, uzunlukMm, telCapMm, maden, maden2, ciftMetal, sonuc]);
+  }, [tip, kart, genislikMm, uzunlukMm, telCapMm, maden, maden2, ciftMetal, sonuc]);
 
   const bildir = useCallback((m: string) => {
     setToast(m);
@@ -102,6 +129,11 @@ export function ZincirClient() {
   }, []);
 
   const kurMeshler = useCallback((s: UretimSonuc, g: "yerde" | "kolyede") => {
+    if (s.yapi === "govde") {
+      // K5: tek gövde — kolyede görünümü gerçek BÜKME'dir (masif yorum)
+      setMeshes([g === "kolyede" ? daireBuk(s.mesh, s.uzunlukMm) : s.mesh]);
+      return;
+    }
     const diz = dizilim(s.raporData.tip, genislikMm, uzunlukMm, s.raporData.telCapMm);
     const set = {
       kisa: s.kisa.mesh,
@@ -130,8 +162,47 @@ export function ZincirClient() {
     setBusy(true);
     const benimSiram = ++uretimSayac.current;
     try {
-      const { kisa, uzun } = geoTuret(tip, genislikMm, telCapMm);
       const k = TIPLER[tip];
+      // ---- K5: örgü/boru gövde akışı (bakla/dizilim/denetim yok)
+      if (k.yapi !== "bakla") {
+        let mesh: BaklaMesh, hacim: number, bilgi: [string, string][];
+        if (k.yapi === "orgu") {
+          const u = await orguUret(tip as "halat" | "spiga", genislikMm, uzunlukMm);
+          if (benimSiram !== uretimSayac.current) return;
+          mesh = u.mesh; hacim = u.hacimMm3;
+          const rD = u.bilgi.damarCapMm / 2;
+          const analitik = u.bilgi.damarSayisi * Math.PI * rD * rD * u.bilgi.damarBoyMm;
+          kFaktorRef.current = hacim / analitik;
+          bilgi = [
+            ["Damar", `${u.bilgi.damarSayisi} × Ø ${u.bilgi.damarCapMm.toFixed(2)} mm`],
+            ["Sarım adımı", `${u.bilgi.pitchMm.toFixed(1)} mm`],
+            ["Yapı", "tek gövde masif örgü yorumu (K5) — gömme %12"],
+          ];
+        } else {
+          const u = tip === "yilan"
+            ? buildYilan(genislikMm, uzunlukMm)
+            : buildBaliksirti(genislikMm, uzunlukMm);
+          if (benimSiram !== uretimSayac.current) return;
+          mesh = u.mesh; hacim = isaretliHacim(u.mesh);
+          kFaktorRef.current = hacim / (boruKesitAlanMm2(tip as "yilan" | "baliksirti", genislikMm) * uzunlukMm);
+          bilgi = tip === "yilan"
+            ? [["Et kalınlığı", "0.80 mm (C4)"],
+               ["Yapı", "açık uçlu dokulu boru (K5) — uçlar döküm drenajı (A5)"]]
+            : [["Şerit kalınlığı", `${u.bilgi.kalinlikMm.toFixed(2)} mm`],
+               ["Yapı", "masif çevronlu şerit (K5) — esnek değildir"]];
+        }
+        const gram = hacim * MADENLER[maden].yogunlukGmm3;
+        const s: UretimSonuc = {
+          yapi: "govde", mesh, gram, gCm: gram / (uzunlukMm / 10), uzunlukMm, bilgi,
+        };
+        setSonuc(s);
+        kurMeshler(s, gorunum);
+        setDenetim(null);
+        bildir("Model oluşturuldu");
+        return;
+      }
+
+      const { kisa, uzun } = geoTuret(tip, genislikMm, telCapMm);
       const ajur = ajurAcik && k.ajurUygun ? autoAjur(kisa, ajurDesen, ajurDoz) : null;
       const ajurUzun = ajurAcik && k.ajurUygun && uzun ? autoAjur(uzun, ajurDesen, ajurDoz) : null;
       const tras = k.bukumDeg ? trasOrani : 0;
@@ -173,7 +244,7 @@ export function ZincirClient() {
         r.gram = gram;
         r.gCm = gram / (r.gercekUzunlukMm / 10);
       }
-      const s: UretimSonuc = { kisa: bKisa, uzun: bUzun, kisaB: bKisaB, uzunB: bUzunB, raporData: r };
+      const s: UretimSonuc = { yapi: "bakla", kisa: bKisa, uzun: bUzun, kisaB: bKisaB, uzunB: bUzunB, raporData: r };
       setSonuc(s);
       kurMeshler(s, gorunum);
       bildir("Model oluşturuldu");
@@ -204,6 +275,7 @@ export function ZincirClient() {
     setTip(id);
     setTrasOrani(TIPLER[id].trasVarsayilan);
     setTelSecimMm(null); // yeni tip → kural varsayılanı tel (B8)
+    setKesit(TIPLER[id].kesitVarsayilan ?? "yuvarlak"); // venedik = kare (K4)
     if (!TIPLER[id].ajurUygun) setAjurAcik(false);
   };
 
@@ -223,7 +295,7 @@ export function ZincirClient() {
   };
 
   const stlTekBakla = () => {
-    if (!sonuc) return;
+    if (!sonuc || sonuc.yapi !== "bakla") return;
     indir(toBinarySTL([sonuc.kisa.mesh], "Remaura Zincir — tek bakla"),
       `zincir-${tip}-bakla-${genislikMm}mm.stl`);
     bildir("Tek bakla STL indirildi (üretim birimi)");
@@ -232,6 +304,14 @@ export function ZincirClient() {
   // C2/C3 uyarıları rapor panelinde
   const stlKomple = () => {
     if (!sonuc) return;
+    if (sonuc.yapi === "govde") {
+      // K5: görünüme göre iner — kolyede = gerçek bükülmüş gövde (masif yorum)
+      const m = gorunum === "kolyede" ? daireBuk(sonuc.mesh, sonuc.uzunlukMm) : sonuc.mesh;
+      indir(toBinarySTL([m], "Remaura Zincir — gövde"),
+        `zincir-${tip}-${(sonuc.uzunlukMm / 10).toFixed(0)}cm-${gorunum}.stl`);
+      bildir(`Gövde STL indirildi (${gorunum === "kolyede" ? "çembere bükülmüş" : "düz"} — K5 masif yorum)`);
+      return;
+    }
     const diz = dizilim(tip, genislikMm, uzunlukMm, sonuc.raporData.telCapMm);
     const set = {
       kisa: sonuc.kisa.mesh, kisaAyna: sonuc.kisa.mesh,
@@ -265,7 +345,8 @@ export function ZincirClient() {
   };
 
   const panel = "rounded-xl border border-[#2A2A35] bg-[#141418] p-4";
-  const r = sonuc?.raporData ?? null;
+  const r = sonuc?.yapi === "bakla" ? sonuc.raporData : null;
+  const govde = sonuc?.yapi === "govde" ? sonuc : null;
 
   return (
     <div className="min-h-screen bg-[#0A0A0C] text-[#F5F5F7]">
@@ -282,38 +363,42 @@ export function ZincirClient() {
         {/* sol: tip menüsü */}
         <aside className="hidden w-64 shrink-0 flex-col gap-2 border-r border-[#2A2A35] bg-[#141418] p-4 lg:flex">
           <div className="mb-1">
-            <h2 className="font-display text-base font-semibold text-[#D4AF37]">Zincir Tipleri</h2>
+            <h2 className="font-display text-base font-semibold text-[#D4AF37]">Model Kataloğu</h2>
             <div className="mt-1 h-0.5 w-10 bg-[#D4AF37]" />
           </div>
-          {TIP_SIRA.map((id) => {
-            const k = TIPLER[id];
-            const aktif = tip === id;
-            return (
-              <button
-                key={id}
-                onClick={() => tipSec(id)}
-                className={`flex h-14 flex-col justify-center rounded-xl border px-4 text-left transition-all ${
-                  aktif
-                    ? "border-[#D4AF37] bg-[#1C1C22] text-[#D4AF37] shadow-[0_0_20px_rgba(212,175,55,0.15)]"
-                    : "border-transparent text-[#F5F5F7] hover:bg-[#1C1C22]"
-                }`}
-              >
-                <span className="text-sm font-medium">{k.ad}</span>
-                <span className="text-[10px] text-white/30">{k.aciklama}</span>
-              </button>
-            );
-          })}
-          <div className="mt-2 border-t border-[#2A2A35] pt-2">
-            {KILITLI.map((k) => (
-              <div key={k.ad} className="flex h-9 items-center justify-between px-4 text-[12px] text-white/20">
-                <span>{k.ad}</span>
-                <span className="text-[9px]">makine örgüsü</span>
+          {KATALOG.map((grup) => (
+            <div key={grup.baslik} className="mb-1">
+              <div className="mb-1.5 mt-2 flex items-baseline justify-between px-1">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">{grup.baslik}</span>
+                {grup.rozet && (
+                  <span className="rounded border border-[#2A2A35] px-1.5 py-0.5 text-[9px] text-white/30">{grup.rozet}</span>
+                )}
               </div>
-            ))}
-          </div>
+              <div className="flex flex-col gap-1.5">
+                {grup.tipler.map((id) => {
+                  const k = TIPLER[id];
+                  const aktif = tip === id;
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => tipSec(id)}
+                      className={`flex h-12 flex-col justify-center rounded-xl border px-4 text-left transition-all ${
+                        aktif
+                          ? "border-[#D4AF37] bg-[#1C1C22] text-[#D4AF37] shadow-[0_0_20px_rgba(212,175,55,0.15)]"
+                          : "border-transparent text-[#F5F5F7] hover:bg-[#1C1C22]"
+                      }`}
+                    >
+                      <span className="text-sm font-medium">{k.ad}</span>
+                      <span className="truncate text-[10px] text-white/30">{k.aciklama}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
           <p className="mt-auto text-[10px] leading-relaxed text-white/25">
-            Örgü tipleri (halat, yılan…) tekil bakla CAD&apos;iyle üretilemez —
-            zincir makinesi işidir (ZINCIR.md K2).
+            Örme/boru grupları MASİF döküm yorumudur — gerçek örme zincir
+            makine işidir (ZINCIR.md K2/K5); bakla grubu birebir üretim modelidir.
           </p>
         </aside>
 
@@ -353,10 +438,13 @@ export function ZincirClient() {
               <div className="flex flex-col gap-4 lg:col-span-5">
                 {/* ölçüler */}
                 <div className={panel}>
-                  <h3 className="font-display text-lg font-semibold">Ölçüler</h3>
+                  <h3 className="font-display text-lg font-semibold">
+                    <span className="mr-1.5 text-[#D4AF37]">1 ·</span>Ölçüler
+                  </h3>
                   <p className="mb-3 text-xs text-[#9CA3AF]">
-                    Genişlik dış görünümü, tel çapı metali belirler (B8) — teli
-                    incelterek hedef grama in; bakla iç ölçüleri kurallardan türer
+                    {kart.yapi === "bakla"
+                      ? "Genişlik dış görünümü, tel çapı metali belirler (B8) — teli incelterek hedef grama in"
+                      : "Genişlik gövde çapını belirler — gram tahmini anlık güncellenir"}
                   </p>
                   <div className="mb-1.5 flex items-baseline justify-between">
                     <span className="text-xs text-[#9CA3AF]">Zincir genişliği (dış görünüm)</span>
@@ -369,34 +457,45 @@ export function ZincirClient() {
                   />
 
                   {/* B8: bakla kalınlığı (tel çapı) — hedef gramaj kullanıcıda */}
-                  <div className="mb-1.5 mt-4 flex items-baseline justify-between">
-                    <span className="text-xs text-[#9CA3AF]">Bakla kalınlığı (tel çapı)</span>
-                    <span className="font-mono text-[13px]">
-                      Ø {telCapMm.toFixed(2)} mm
-                      {telSecimMm !== null && (
-                        <button
-                          onClick={() => setTelSecimMm(null)}
-                          className="ml-2 rounded border border-[#2A2A35] px-1.5 py-0.5 text-[10px] text-[#9CA3AF] hover:text-white"
-                        >
-                          varsayılana dön
-                        </button>
-                      )}
-                    </span>
-                  </div>
-                  <input
-                    type="range" min={sinir.minMm} max={sinir.maxMm} step={0.02} value={telCapMm}
-                    onChange={(e) => setTelSecimMm(parseFloat(e.target.value))}
-                    className="range-slider w-full"
-                  />
-                  <div className="mt-1 flex items-baseline justify-between">
-                    <span className="text-[10px] text-white/30">
-                      ince ← {sinir.minMm.toFixed(2)} · dolu → {sinir.maxMm.toFixed(2)} mm
-                      {telCapMm < 0.8 && " · △ 0.8 altı döküm riskli (D7)"}
-                    </span>
-                    <span className="font-mono text-[11px] text-[#D4AF37]">
-                      ≈ {tahmin.gram.toFixed(1)} g · {tahmin.gCm.toFixed(2)} g/cm
-                    </span>
-                  </div>
+                  {kart.yapi === "bakla" ? (
+                    <>
+                      <div className="mb-1.5 mt-4 flex items-baseline justify-between">
+                        <span className="text-xs text-[#9CA3AF]">Bakla kalınlığı (tel çapı)</span>
+                        <span className="font-mono text-[13px]">
+                          Ø {telCapMm.toFixed(2)} mm
+                          {telSecimMm !== null && (
+                            <button
+                              onClick={() => setTelSecimMm(null)}
+                              className="ml-2 rounded border border-[#2A2A35] px-1.5 py-0.5 text-[10px] text-[#9CA3AF] hover:text-white"
+                            >
+                              varsayılana dön
+                            </button>
+                          )}
+                        </span>
+                      </div>
+                      <input
+                        type="range" min={sinir.minMm} max={sinir.maxMm} step={0.02} value={telCapMm}
+                        onChange={(e) => setTelSecimMm(parseFloat(e.target.value))}
+                        className="range-slider w-full"
+                      />
+                      <div className="mt-1 flex items-baseline justify-between">
+                        <span className="text-[10px] text-white/30">
+                          ince ← {sinir.minMm.toFixed(2)} · dolu → {sinir.maxMm.toFixed(2)} mm
+                          {telCapMm < 0.8 && " · △ 0.8 altı döküm riskli (D7)"}
+                        </span>
+                        <span className="font-mono text-[11px] text-[#D4AF37]">
+                          ≈ {tahmin.gram.toFixed(1)} g · {tahmin.gCm.toFixed(2)} g/cm
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="mt-2 flex items-baseline justify-between rounded-lg border border-[#2A2A35] bg-[#0A0A0C] px-3 py-2">
+                      <span className="text-[11px] text-[#9CA3AF]">Anlık gram tahmini</span>
+                      <span className="font-mono text-[12px] text-[#D4AF37]">
+                        ≈ {tahmin.gram.toFixed(1)} g · {tahmin.gCm.toFixed(2)} g/cm
+                      </span>
+                    </div>
+                  )}
 
                   <div className="mb-1.5 mt-4 flex items-baseline justify-between">
                     <span className="text-xs text-[#9CA3AF]">Uzunluk (kilit hariç)</span>
@@ -424,46 +523,14 @@ export function ZincirClient() {
                   </div>
                 </div>
 
-                {/* maden + traş + ajur */}
+                {/* 2 · stil & doku + işleme (traş/ajur) — yalnız baklalı tipler */}
+                {kart.yapi === "bakla" && (
                 <div className={panel}>
-                  <h3 className="mb-3 font-display text-lg font-semibold">Üretim Seçenekleri</h3>
-                  <div className="mb-2 text-xs text-[#9CA3AF]">Maden</div>
-                  <div className="mb-3 grid grid-cols-3 gap-2">
-                    {([["altin", "Altın"], ["gumus", "Gümüş 925"], ["platin", "Platin 950"]] as const).map(([id, ad]) => (
-                      <button
-                        key={id}
-                        onClick={() => setMetalTur(id)}
-                        className={`rounded-lg border py-2.5 text-xs font-medium transition-all ${
-                          metalTur === id
-                            ? "border-[#D4AF37] bg-[#1C1C22] text-[#D4AF37]"
-                            : "border-[#2A2A35] bg-[#0A0A0C] text-[#9CA3AF] hover:text-white"
-                        }`}
-                      >
-                        {ad}
-                      </button>
-                    ))}
-                  </div>
-                  {metalTur === "altin" && (
-                    <div className="mb-3 flex gap-2">
-                      {ALTIN_AYAR.map((k) => (
-                        <button
-                          key={k.id}
-                          onClick={() => setAyar(k.id)}
-                          className={`flex-1 rounded-lg border py-2 font-mono text-xs transition-all ${
-                            ayar === k.id
-                              ? "border-[#D4AF37] bg-[#D4AF37] font-semibold text-[#0A0A0C]"
-                              : "border-[#2A2A35] bg-[#1C1C22] text-[#F5F5F7]"
-                          }`}
-                        >
-                          {k.ad}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* S1-S4: stil & doku (foto referanslı çeşitler) */}
+                  <h3 className="mb-3 font-display text-lg font-semibold">
+                    <span className="mr-1.5 text-[#D4AF37]">2 ·</span>Stil & Doku
+                  </h3>
+                  {/* S1-S4: kesit / doku / desen / çift metal */}
                   <div className="mb-3 rounded-lg border border-[#2A2A35] bg-[#0A0A0C] p-3">
-                    <div className="mb-2 text-xs font-medium text-[#F5F5F7]">Stil & Doku</div>
                     <div className="mb-2 grid grid-cols-2 gap-1.5">
                       {([["yuvarlak", "Yuvarlak tel"], ["kare", "Kare tel"]] as const).map(([id, ad]) => (
                         <button
@@ -606,6 +673,46 @@ export function ZincirClient() {
                     </div>
                   )}
                 </div>
+                )}
+
+                {/* 3 · maden */}
+                <div className={panel}>
+                  <h3 className="mb-3 font-display text-lg font-semibold">
+                    <span className="mr-1.5 text-[#D4AF37]">{kart.yapi === "bakla" ? "3" : "2"} ·</span>Maden
+                  </h3>
+                  <div className="mb-3 grid grid-cols-3 gap-2">
+                    {([["altin", "Altın"], ["gumus", "Gümüş 925"], ["platin", "Platin 950"]] as const).map(([id, ad]) => (
+                      <button
+                        key={id}
+                        onClick={() => setMetalTur(id)}
+                        className={`rounded-lg border py-2.5 text-xs font-medium transition-all ${
+                          metalTur === id
+                            ? "border-[#D4AF37] bg-[#1C1C22] text-[#D4AF37]"
+                            : "border-[#2A2A35] bg-[#0A0A0C] text-[#9CA3AF] hover:text-white"
+                        }`}
+                      >
+                        {ad}
+                      </button>
+                    ))}
+                  </div>
+                  {metalTur === "altin" && (
+                    <div className="flex gap-2">
+                      {ALTIN_AYAR.map((k) => (
+                        <button
+                          key={k.id}
+                          onClick={() => setAyar(k.id)}
+                          className={`flex-1 rounded-lg border py-2 font-mono text-xs transition-all ${
+                            ayar === k.id
+                              ? "border-[#D4AF37] bg-[#D4AF37] font-semibold text-[#0A0A0C]"
+                              : "border-[#2A2A35] bg-[#1C1C22] text-[#F5F5F7]"
+                          }`}
+                        >
+                          {k.ad}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 {/* aksiyonlar */}
                 <div className="flex gap-2">
@@ -626,7 +733,7 @@ export function ZincirClient() {
                 <div className="flex gap-2">
                   <button
                     onClick={stlTekBakla}
-                    disabled={!sonuc}
+                    disabled={!sonuc || sonuc.yapi !== "bakla"}
                     className="h-11 flex-1 rounded-lg border border-[#D4AF37]/50 bg-[#D4AF37]/10 text-[13px] font-medium text-[#D4AF37] transition-colors hover:bg-[#D4AF37]/20 disabled:opacity-40"
                   >
                     STL — Tek Bakla
@@ -641,6 +748,33 @@ export function ZincirClient() {
                 </div>
               </div>
             </div>
+
+            {/* üretim raporu — K5 gövde tipleri */}
+            {govde && (
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                <div className={panel}>
+                  <h3 className="mb-3 font-display text-lg font-semibold text-[#D4AF37]">Üretim Raporu</h3>
+                  <dl className="space-y-1.5 font-mono text-[12.5px]">
+                    <Row k="Gövde çapı/eni" v={`${genislikMm.toFixed(1)} mm`} />
+                    <Row k="Uzunluk" v={`${(govde.uzunlukMm / 10).toFixed(1)} cm (kilit hariç)`} />
+                    <Row k="Maden" v={MADENLER[maden].ad} />
+                    <Row k="Metal ağırlığı (model)" v={`${govde.gram.toFixed(1)} g · ${govde.gCm.toFixed(2)} g/cm`} vurgu />
+                    {govde.bilgi.map(([bk, bv]) => <Row key={bk} k={bk} v={bv} />)}
+                  </dl>
+                </div>
+                <div className={panel}>
+                  <h3 className="mb-3 font-display text-lg font-semibold">Üretim Notu (K5)</h3>
+                  <p className="text-[11.5px] leading-relaxed text-white/50">
+                    Bu tip MASİF döküm yorumudur: gerçek {kart.ad.toLowerCase()} zinciri
+                    makine örgüsüdür ve esnektir (K2); buradaki gövde tek parça dökülür,
+                    esnemez. Kolye/bileklik olarak kullanılacaksa <b>Kolyede</b> görünümüne
+                    geçip STL&apos;i o halde indir — gövde çembere bükülmüş dökülür.
+                    Döküm çekmesi ~%{(maden === "ag925" ? 2.0 : 1.5).toFixed(1)} ve polisaj
+                    kaybı ayrıca düşünülmeli (C4-C5).
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* üretim raporu */}
             {r && (

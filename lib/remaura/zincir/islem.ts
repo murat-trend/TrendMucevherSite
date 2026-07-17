@@ -11,6 +11,7 @@
 //     döküm boşluğu (C2) korunsun.
 // WASM disiplini: her ara Manifold'a delete() (GC yok — sızıntı).
 import { buildBaklaTube, BaklaGeoParams, BaklaMesh, baklaOlc } from "./bakla";
+import { buildOrguDamarlar, OrguTip, OrguBilgi } from "./orgu";
 import { AJUR } from "./kurallar";
 import { patternById } from "@/app/(site)/remaura/ajur/lib/patterns";
 
@@ -215,6 +216,32 @@ export async function baklaUret(p: BaklaUretimParams): Promise<BaklaUretim> {
   const mesh = manifoldToMesh(govde);
   govde.delete();
   return { mesh, hacimMm3: hacim, hacimDoluMm3: hacimDolu, kalinlikMm: kalinlik, delikSayisi, delikAlanOrani };
+}
+
+/** K5 örgü üretimi: damarlar üretilir, union'la TEK GÖVDE olur (gömme %12 —
+ *  TELKARI §1.6: lehim boynu kalın, döküm sağlam). Hacim union'dan (kesişen
+ *  bölgeler çift sayılmaz — gram dürüst). */
+export async function orguUret(tip: OrguTip, disCapMm: number, uzunlukMm: number): Promise<{
+  mesh: BaklaMesh;
+  hacimMm3: number;
+  bilgi: OrguBilgi;
+}> {
+  const w = await getWasm();
+  const { damarlar, bilgi } = buildOrguDamarlar(tip, disCapMm, uzunlukMm);
+  let govde: any = null;
+  for (const dm of damarlar) {
+    const m = meshToManifold(w, dm);
+    if (!govde) govde = m;
+    else {
+      const g2 = govde.add(m);
+      govde.delete(); m.delete();
+      govde = g2;
+    }
+  }
+  const hacim = manifoldHacim(govde);
+  const mesh = manifoldToMesh(govde);
+  govde.delete();
+  return { mesh, hacimMm3: hacim, bilgi };
 }
 
 export type KesisimSonuc = {
