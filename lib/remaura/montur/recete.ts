@@ -25,6 +25,11 @@ export const ctToCap = (ct: number): number => Math.cbrt(ct / 0.003721);
 
 export type SankKesit = "yarimYuvarlak" | "dikdortgen";
 export type KafaTip = "tirnak" | "bezel";
+// JEKB (BILGI.md) v2 alanları
+export type BasketStil = "duz" | "tulip";
+export type RailTip = "yok" | "tek" | "gizli" | "cift";
+export type Baglanti = "omuz" | "peg";
+export type TasKesim = "yuvarlak" | "prenses" | "oval";
 
 export type MonturRecete = {
   olcu: { euSize: number };                 // MR1: iç çevre mm (ISO 8653)
@@ -39,20 +44,30 @@ export type MonturRecete = {
     tirnakSayisi: 4 | 6;                    // MK1
     tirnakCapMm: number | null;             // null = kuraldan (MK2/S7)
     bezelDuvarMm: number;                   // MB1
+    basketStil: BasketStil;                 // JEKB: Tulip Basket
+    rail: RailTip;                          // JEKB: Rail / Hidden / Double
+    baglanti: Baglanti;                     // JEKB: Peg Head
   };
-  tas: { capMm: number };                   // MT1 (ct türetilir)
+  tas: {
+    kesim: TasKesim;                        // JEKB taş galerisi
+    capMm: number;                          // yuvarlak/oval: kısa eksen; prenses: kenar
+    ovalOran: number;                       // oval boy/en 1.30-1.50 [PRATİK]
+  };
   maden: MadenId;
 };
 
 export const VARSAYILAN: MonturRecete = {
   olcu: { euSize: 54 },                     // MR2
   sank: { genislikMm: 2.2, kalinlikMm: 1.6, kesit: "yarimYuvarlak", taperOran: 1.25 },
-  kafa: { tip: "tirnak", tirnakSayisi: 4, tirnakCapMm: null, bezelDuvarMm: 0.7 },
-  tas: { capMm: 5.2 },                      // ≈ 0.50 ct (T2 çapası)
+  kafa: {
+    tip: "tirnak", tirnakSayisi: 4, tirnakCapMm: null, bezelDuvarMm: 0.7,
+    basketStil: "duz", rail: "tek", baglanti: "omuz",
+  },
+  tas: { kesim: "yuvarlak", capMm: 5.2, ovalOran: 1.4 }, // ≈ 0.50 ct
   maden: "au14",
 };
 
-// ---- sınır tablosu (MONTUR.md kural kimlikleriyle)
+// ---- sınır tablosu (MONTUR.md/BILGI.md kural kimlikleriyle)
 export const SINIR = {
   euSize: { min: 44, max: 72 },             // MR1
   sankGenislik: { min: 1.5, max: 6.0 },     // MS1
@@ -61,6 +76,7 @@ export const SINIR = {
   tirnakCap: { min: 0.45, oneriMin: 0.6, max: 2.0 }, // MK2/S7
   bezelDuvar: { min: 0.5, oneri: 0.7, max: 1.5 },    // MB1/D6
   tasCap: { min: 2.0, max: 10.0 },          // MT1 pratik solitaire bandı
+  ovalOran: { min: 1.2, max: 1.6 },         // JEKB oval bandı [PRATİK]
 } as const;
 
 const num = (v: unknown, d: number): number =>
@@ -79,7 +95,19 @@ export function clampRecete(ham: unknown): { recete: MonturRecete; notlar: strin
   const v = VARSAYILAN;
   const kesit: SankKesit = h.sank?.kesit === "dikdortgen" ? "dikdortgen" : "yarimYuvarlak";
   const kafaTip: KafaTip = h.kafa?.tip === "bezel" ? "bezel" : "tirnak";
-  const tirnakSayisi: 4 | 6 = h.kafa?.tirnakSayisi === 6 ? 6 : 4;
+  const tasKesim: TasKesim =
+    h.tas?.kesim === "prenses" ? "prenses" : h.tas?.kesim === "oval" ? "oval" : "yuvarlak";
+  // JEKB: prenses tırnakları KÖŞELERE oturur → 4 zorunlu (S6 köşe koruması)
+  let tirnakSayisi: 4 | 6 = h.kafa?.tirnakSayisi === 6 ? 6 : 4;
+  if (tasKesim === "prenses" && tirnakSayisi !== 4) {
+    tirnakSayisi = 4;
+    notlar.push("tırnak sayısı: 6 → 4 (prenses köşe kuralı, JEKB)");
+  }
+  const basketStil: BasketStil = h.kafa?.basketStil === "tulip" ? "tulip" : "duz";
+  const railHam = h.kafa?.rail;
+  const rail: RailTip =
+    railHam === "yok" || railHam === "gizli" || railHam === "cift" ? railHam : "tek";
+  const baglanti: Baglanti = h.kafa?.baglanti === "peg" ? "peg" : "omuz";
   const tirnakCapHam = h.kafa?.tirnakCapMm;
   const recete: MonturRecete = {
     olcu: { euSize: kistir("EU ölçü (MR1)", num(h.olcu?.euSize, v.olcu.euSize), SINIR.euSize.min, SINIR.euSize.max, notlar) },
@@ -97,26 +125,49 @@ export function clampRecete(ham: unknown): { recete: MonturRecete; notlar: strin
           ? null
           : kistir("tırnak çapı (MK2/S7)", num(tirnakCapHam, 0.6), SINIR.tirnakCap.min, SINIR.tirnakCap.max, notlar),
       bezelDuvarMm: kistir("bezel duvarı (MB1)", num(h.kafa?.bezelDuvarMm, v.kafa.bezelDuvarMm), SINIR.bezelDuvar.min, SINIR.bezelDuvar.max, notlar),
+      basketStil,
+      rail,
+      baglanti,
     },
-    tas: { capMm: kistir("taş çapı (MT1)", num(h.tas?.capMm, v.tas.capMm), SINIR.tasCap.min, SINIR.tasCap.max, notlar) },
+    tas: {
+      kesim: tasKesim,
+      capMm: kistir("taş çapı (MT1)", num(h.tas?.capMm, v.tas.capMm), SINIR.tasCap.min, SINIR.tasCap.max, notlar),
+      ovalOran: kistir("oval oranı (JEKB)", num(h.tas?.ovalOran, v.tas.ovalOran), SINIR.ovalOran.min, SINIR.ovalOran.max, notlar),
+    },
     maden: (h.maden in MADENLER ? h.maden : v.maden) as MadenId,
   };
   return { recete, notlar };
 }
 
-/** Türetilmiş değerler (rapor + motor). */
+/** Türetilmiş değerler (rapor + motor). Kesime göre boyutlar (JEKB):
+ *  yuvarlak: cap=çap · oval: cap=kısa eksen, boy=cap×oran · prenses: cap=kenar. */
 export function turet(r: MonturRecete) {
   const icCevre = r.olcu.euSize;                       // MR1: EU = iç çevre mm
   const icCap = icCevre / Math.PI;
   const D = r.tas.capMm;
+  const kesim = r.tas.kesim;
+  // etkin kavrama çapı: tırnak/derinlik ölçekleri bundan türer
+  const boyMm = kesim === "oval" ? D * r.tas.ovalOran : D;
+  const etkinCap = kesim === "prenses" ? D * Math.SQRT2 : (D + boyMm) / 2; // prenses: köşegen
   const tirnakCap = r.kafa.tirnakCapMm ?? Math.max(SINIR.tirnakCap.oneriMin, 0.15 * D); // MK2/S7
+  // ct: yuvarlak/oval T2; prenses ≈ kenar²·derinlik·0.0083 [PRATİK — BILGI.md]
+  const derinlikMm = kesim === "prenses" ? 0.72 * D : TAS_ORAN.derinlik * D;
+  const ct = kesim === "prenses"
+    ? D * D * derinlikMm * 0.0083
+    : kesim === "oval"
+    ? 0.0062 * D * boyMm * (TAS_ORAN.derinlik * D) // elips T2 taşıması [HESAP]
+    : capToCt(D);
   return {
     icCevreMm: icCevre,
     icCapMm: icCap,
-    ct: capToCt(D),
+    ct,
     tirnakCapMm: tirnakCap,
+    boyMm,
+    etkinCapMm: etkinCap,
     tacMm: TAS_ORAN.tac * D,
     girdleMm: TAS_ORAN.girdle * D,
-    pavyonMm: (TAS_ORAN.derinlik - TAS_ORAN.tac - TAS_ORAN.girdle) * D,
+    pavyonMm: kesim === "prenses"
+      ? derinlikMm - TAS_ORAN.tac * D - TAS_ORAN.girdle * D
+      : (TAS_ORAN.derinlik - TAS_ORAN.tac - TAS_ORAN.girdle) * D,
   };
 }

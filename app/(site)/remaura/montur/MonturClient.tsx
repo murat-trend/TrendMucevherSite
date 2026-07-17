@@ -7,10 +7,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MonturViewer, ViewMesh, ViewerMod } from "./MonturViewer";
 import {
-  MonturRecete, VARSAYILAN, clampRecete, turet, SINIR, MADENLER, MadenId, capToCt, ctToCap,
+  MonturRecete, VARSAYILAN, clampRecete, turet, SINIR, MADENLER, MadenId, ctToCap,
 } from "@/lib/remaura/montur/recete";
 import { monturUret, MonturUretim } from "@/lib/remaura/montur/motor";
 import { toBinarySTL } from "@/lib/remaura/montur/stl";
+import { KAFA_KARTLARI, TAS_KARTLARI } from "./Kutuphane";
 
 const ALTIN_AYAR: { id: MadenId; ad: string }[] = [
   { id: "au8", ad: "8K" }, { id: "au14", ad: "14K" }, { id: "au14r", ad: "14K Roz" },
@@ -18,8 +19,8 @@ const ALTIN_AYAR: { id: MadenId; ad: string }[] = [
 ];
 
 const ORNEK_KOMUTLAR = [
-  "taşı 1 karat yap", "6 tırnağa çevir", "bezel'e çevir", "şankı incelt",
-  "omuzları biraz genişlet", "ölçüyü 58 yap", "gümüş olsun",
+  "tulip basket kullan", "gizli rail ekle", "çift rail yap", "peg head'e çevir",
+  "prenses taş", "oval taş yap", "taşı 1 karat yap", "bezel'e çevir", "ölçüyü 58 yap",
 ];
 
 type KomutKaydi = { komut: string; aciklama: string; notlar: string[] };
@@ -54,7 +55,7 @@ export function MonturClient() {
         if (benimSiram !== uretimSayac.current) return;
         setSonuc(u);
         setMeshes([
-          { positions: u.govde.positions, indices: u.govde.indices, kind: "metal" },
+          ...u.parcalar.map((p) => ({ positions: p.mesh.positions, indices: p.mesh.indices, kind: "metal" as const })),
           { positions: u.tas.positions, indices: u.tas.indices, kind: "tas" },
         ]);
       } catch {
@@ -66,11 +67,14 @@ export function MonturClient() {
     return () => clearTimeout(t);
   }, [recete, bildir]);
 
-  /** Reçeteyi değiştir (kaydıraç/komut ortak yolu): snapshot + clamp. */
+  /** Reçeteyi değiştir (kaydıraç/kart/komut ortak yolu): snapshot + clamp.
+   *  Kısılan alanlar SESSİZ geçmez — bildirilir (MONTUR.md §0). */
   const receteDegistir = useCallback((yeni: MonturRecete) => {
     setGecmis((g) => [...g.slice(-24), recete]);
-    setRecete(clampRecete(yeni).recete);
-  }, [recete]);
+    const { recete: temiz, notlar } = clampRecete(yeni);
+    setRecete(temiz);
+    if (notlar.length) bildir(`Kurala kısıldı: ${notlar.join("; ")}`);
+  }, [recete, bildir]);
 
   const geriAl = () => {
     setGecmis((g) => {
@@ -130,7 +134,62 @@ export function MonturClient() {
         <span className="ml-auto font-mono text-[11px] text-white/35">kural motoru: MONTUR.md · reçete + komut · süper-admin</span>
       </div>
 
-      <main className="mx-auto max-w-6xl p-5">
+      <div className="flex">
+        {/* GÖRSEL KÜTÜPHANE (JEKB) — kart seç, sağda ince ayar yap */}
+        <aside className="hidden w-60 shrink-0 flex-col gap-1.5 border-r border-[#2A2A35] bg-[#141418] p-4 lg:flex">
+          <div className="mb-1">
+            <h2 className="font-display text-base font-semibold text-[#D4AF37]">Kafa Kütüphanesi</h2>
+            <div className="mt-1 h-0.5 w-10 bg-[#D4AF37]" />
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {KAFA_KARTLARI.map((k) => {
+              const aktif = k.aktifMi(recete);
+              return (
+                <button
+                  key={k.id}
+                  onClick={() => receteDegistir(k.uygula(recete))}
+                  title={`JEKB: ${k.jekb}`}
+                  className={`flex flex-col items-center gap-1 rounded-xl border p-2 transition-all ${
+                    aktif
+                      ? "border-[#D4AF37] bg-[#1C1C22] shadow-[0_0_14px_rgba(212,175,55,0.15)]"
+                      : "border-[#2A2A35] hover:bg-[#1C1C22]"
+                  }`}
+                >
+                  <span className="h-12 w-full">{k.cizim}</span>
+                  <span className={`text-center text-[10px] leading-tight ${aktif ? "text-[#D4AF37]" : "text-white/60"}`}>{k.ad}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mb-1 mt-4">
+            <h2 className="font-display text-base font-semibold text-[#D4AF37]">Taş Galerisi</h2>
+            <div className="mt-1 h-0.5 w-10 bg-[#D4AF37]" />
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            {TAS_KARTLARI.map((t) => {
+              const aktif = recete.tas.kesim === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => receteDegistir({ ...recete, tas: { ...recete.tas, kesim: t.id } })}
+                  className={`flex flex-col items-center gap-1 rounded-xl border p-1.5 transition-all ${
+                    aktif ? "border-[#D4AF37] bg-[#1C1C22]" : "border-[#2A2A35] hover:bg-[#1C1C22]"
+                  }`}
+                >
+                  <span className="h-10 w-full">{t.cizim}</span>
+                  <span className={`text-[9.5px] ${aktif ? "text-[#D4AF37]" : "text-white/60"}`}>{t.ad}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-auto text-[10px] leading-relaxed text-white/25">
+            Terimler BILGI.md&apos;de (JEKB) tanımlı — komut alanı da aynı dili
+            konuşur: &quot;tulip basket kullan&quot;, &quot;gizli rail ekle&quot;,
+            &quot;prenses taş&quot;…
+          </p>
+        </aside>
+
+        <main className="min-w-0 flex-1 p-5">
         {/* KOMUT ALANI — aracın kalbi */}
         <div className={`${panel} mb-5`}>
           <div className="flex gap-2">
@@ -226,25 +285,44 @@ export function MonturClient() {
                 className="range-slider w-full"
               />
               <div className="mb-1 mt-3 flex items-baseline justify-between">
-                <span className="text-xs text-[#9CA3AF]">Taş</span>
-                <span className="font-mono text-[13px]">Ø {recete.tas.capMm.toFixed(2)} mm ≈ {capToCt(recete.tas.capMm).toFixed(2)} ct</span>
+                <span className="text-xs text-[#9CA3AF]">
+                  Taş · <span className="text-[#D4AF37]">{recete.tas.kesim}</span> (galeriden seç)
+                </span>
+                <span className="font-mono text-[13px]">
+                  {recete.tas.kesim === "prenses" ? "kenar" : "Ø"} {recete.tas.capMm.toFixed(2)} mm ≈ {tr.ct.toFixed(2)} ct
+                </span>
               </div>
               <input
                 type="range" min={SINIR.tasCap.min} max={SINIR.tasCap.max} step={0.05} value={recete.tas.capMm}
-                onChange={(e) => receteDegistir({ ...recete, tas: { capMm: parseFloat(e.target.value) } })}
+                onChange={(e) => receteDegistir({ ...recete, tas: { ...recete.tas, capMm: parseFloat(e.target.value) } })}
                 className="range-slider w-full"
               />
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {[0.25, 0.5, 0.75, 1.0, 1.5].map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => receteDegistir({ ...recete, tas: { capMm: ctToCap(c) } })}
-                    className="rounded-md border border-[#2A2A35] px-2 py-1 font-mono text-[11px] text-[#9CA3AF] hover:text-[#D4AF37]"
-                  >
-                    {c} ct
-                  </button>
-                ))}
-              </div>
+              {recete.tas.kesim === "oval" && (
+                <>
+                  <div className="mb-1 mt-2 flex items-baseline justify-between">
+                    <span className="text-xs text-[#9CA3AF]">Oval boy/en oranı (JEKB)</span>
+                    <span className="font-mono text-[13px]">{recete.tas.ovalOran.toFixed(2)} · {recete.tas.capMm.toFixed(1)}×{(recete.tas.capMm * recete.tas.ovalOran).toFixed(1)} mm</span>
+                  </div>
+                  <input
+                    type="range" min={SINIR.ovalOran.min} max={SINIR.ovalOran.max} step={0.05} value={recete.tas.ovalOran}
+                    onChange={(e) => receteDegistir({ ...recete, tas: { ...recete.tas, ovalOran: parseFloat(e.target.value) } })}
+                    className="range-slider w-full"
+                  />
+                </>
+              )}
+              {recete.tas.kesim === "yuvarlak" && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {[0.25, 0.5, 0.75, 1.0, 1.5].map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => receteDegistir({ ...recete, tas: { ...recete.tas, capMm: ctToCap(c) } })}
+                      className="rounded-md border border-[#2A2A35] px-2 py-1 font-mono text-[11px] text-[#9CA3AF] hover:text-[#D4AF37]"
+                    >
+                      {c} ct
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className={panel}>
@@ -291,31 +369,80 @@ export function MonturClient() {
 
             <div className={panel}>
               <h3 className="mb-2 font-display text-base font-semibold">
-                <span className="mr-1.5 text-[#D4AF37]">3 ·</span>Kafa & Maden
+                <span className="mr-1.5 text-[#D4AF37]">3 ·</span>Kafa İnce Ayar & Maden
               </h3>
-              <div className="mb-2 grid grid-cols-3 gap-1.5">
-                {([["tirnak-4", "4 Tırnak"], ["tirnak-6", "6 Tırnak"], ["bezel", "Bezel"]] as const).map(([id, ad]) => {
-                  const aktif = id === "bezel" ? recete.kafa.tip === "bezel" : recete.kafa.tip === "tirnak" && recete.kafa.tirnakSayisi === (id === "tirnak-6" ? 6 : 4);
-                  return (
-                    <button
-                      key={id}
-                      onClick={() =>
-                        receteDegistir({
-                          ...recete,
-                          kafa: id === "bezel"
-                            ? { ...recete.kafa, tip: "bezel" }
-                            : { ...recete.kafa, tip: "tirnak", tirnakSayisi: id === "tirnak-6" ? 6 : 4 },
-                        })
-                      }
-                      className={`rounded-md border py-1.5 text-[11px] transition-colors ${
-                        aktif ? "border-[#D4AF37] text-[#D4AF37]" : "border-[#2A2A35] text-[#9CA3AF] hover:text-white"
-                      }`}
-                    >
-                      {ad}
-                    </button>
-                  );
-                })}
-              </div>
+              <p className="mb-2 text-[10.5px] text-white/30">
+                Kafa tipini soldaki kütüphaneden seç; burada ilgili alanları düzenle (JEKB).
+              </p>
+              {recete.kafa.tip === "tirnak" ? (
+                <>
+                  <div className="mb-2 grid grid-cols-4 gap-1.5">
+                    {([["yok", "Rail yok"], ["tek", "Tek rail"], ["gizli", "Gizli"], ["cift", "Çift"]] as const).map(([id, ad]) => (
+                      <button
+                        key={id}
+                        onClick={() => receteDegistir({ ...recete, kafa: { ...recete.kafa, rail: id } })}
+                        className={`rounded-md border py-1.5 text-[10.5px] transition-colors ${
+                          recete.kafa.rail === id ? "border-[#D4AF37] text-[#D4AF37]" : "border-[#2A2A35] text-[#9CA3AF] hover:text-white"
+                        }`}
+                      >
+                        {ad}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mb-2 grid grid-cols-4 gap-1.5">
+                    {([["duz", "Düz"], ["tulip", "Tulip"]] as const).map(([id, ad]) => (
+                      <button
+                        key={id}
+                        onClick={() => receteDegistir({ ...recete, kafa: { ...recete.kafa, basketStil: id } })}
+                        className={`rounded-md border py-1.5 text-[10.5px] transition-colors ${
+                          recete.kafa.basketStil === id ? "border-[#D4AF37] text-[#D4AF37]" : "border-[#2A2A35] text-[#9CA3AF] hover:text-white"
+                        }`}
+                      >
+                        {ad}
+                      </button>
+                    ))}
+                    {([["omuz", "Omuz"], ["peg", "Peg"]] as const).map(([id, ad]) => (
+                      <button
+                        key={id}
+                        onClick={() => receteDegistir({ ...recete, kafa: { ...recete.kafa, baglanti: id } })}
+                        className={`rounded-md border py-1.5 text-[10.5px] transition-colors ${
+                          recete.kafa.baglanti === id ? "border-[#D4AF37] text-[#D4AF37]" : "border-[#2A2A35] text-[#9CA3AF] hover:text-white"
+                        }`}
+                      >
+                        {ad}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mb-2 grid grid-cols-2 gap-1.5">
+                    {([4, 6] as const).map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => receteDegistir({ ...recete, kafa: { ...recete.kafa, tirnakSayisi: n } })}
+                        disabled={recete.tas.kesim === "prenses" && n === 6}
+                        className={`rounded-md border py-1.5 text-[10.5px] transition-colors ${
+                          recete.kafa.tirnakSayisi === n ? "border-[#D4AF37] text-[#D4AF37]"
+                            : recete.tas.kesim === "prenses" && n === 6 ? "cursor-not-allowed border-[#2A2A35] text-white/20"
+                            : "border-[#2A2A35] text-[#9CA3AF] hover:text-white"
+                        }`}
+                      >
+                        {n} Tırnak{recete.tas.kesim === "prenses" && n === 6 ? " (prenses=4)" : ""}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="mb-1 flex items-baseline justify-between">
+                    <span className="text-xs text-[#9CA3AF]">Bezel duvarı (MB1)</span>
+                    <span className="font-mono text-[13px]">{recete.kafa.bezelDuvarMm.toFixed(2)} mm</span>
+                  </div>
+                  <input
+                    type="range" min={SINIR.bezelDuvar.min} max={SINIR.bezelDuvar.max} step={0.05} value={recete.kafa.bezelDuvarMm}
+                    onChange={(e) => receteDegistir({ ...recete, kafa: { ...recete.kafa, bezelDuvarMm: parseFloat(e.target.value) } })}
+                    className="range-slider mb-2 w-full"
+                  />
+                </>
+              )}
               <div className="grid grid-cols-4 gap-1.5">
                 {([...ALTIN_AYAR.map((a) => [a.id, a.ad] as const), ["ag925", "Gümüş"] as const, ["pt950", "Platin"] as const]).map(([id, ad]) => (
                   <button
@@ -331,19 +458,21 @@ export function MonturClient() {
               </div>
             </div>
 
-            {/* STL */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  if (!sonuc) return;
-                  indir(toBinarySTL([sonuc.govde], "Remaura Montur — gövde"), `montur-eu${recete.olcu.euSize}-${tr.ct.toFixed(2)}ct.stl`);
-                  bildir("Gövde STL indirildi (taşsız — taş mıhlanır)");
-                }}
-                disabled={!sonuc}
-                className="h-11 flex-1 rounded-lg border border-[#D4AF37]/50 bg-[#D4AF37]/10 text-[13px] font-medium text-[#D4AF37] transition-colors hover:bg-[#D4AF37]/20 disabled:opacity-40"
-              >
-                STL — Gövde (döküm)
-              </button>
+            {/* STL — parça başına (peg head'de kafa + şank ayrı iner) */}
+            <div className="flex flex-wrap gap-2">
+              {(sonuc?.parcalar ?? []).map((p) => (
+                <button
+                  key={p.ad}
+                  onClick={() => {
+                    indir(toBinarySTL([p.mesh], `Remaura Montur — ${p.ad}`),
+                      `montur-${p.ad.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-eu${recete.olcu.euSize}.stl`);
+                    bildir(`${p.ad} STL indirildi (taşsız — taş mıhlanır)`);
+                  }}
+                  className="h-11 flex-1 rounded-lg border border-[#D4AF37]/50 bg-[#D4AF37]/10 px-3 text-[13px] font-medium text-[#D4AF37] transition-colors hover:bg-[#D4AF37]/20"
+                >
+                  STL — {p.ad}
+                </button>
+              ))}
               <button
                 onClick={() => {
                   if (!sonuc) return;
@@ -396,7 +525,8 @@ export function MonturClient() {
             </div>
           </div>
         )}
-      </main>
+        </main>
+      </div>
 
       {toast && (
         <div className="fixed left-1/2 top-16 z-50 -translate-x-1/2 rounded-lg border border-[#2A2A35] bg-[#1C1C22] px-6 py-3 text-sm font-medium text-emerald-400 shadow-2xl">

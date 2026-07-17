@@ -95,6 +95,18 @@ arası ≥0.4 · **S12** azure %60 · **D5/D6** bezel duvar min 0.5, öneri 0.7;
    fantezi kesimler (T1 dışı), çift taş/üç taş, prompt-ile-stil ("vintage
    yap" → milgrain/doku katmanları).
 
+## 8-b. DERS DEFTERİ
+
+- 2026-07-17 (v2 — Murat: "görsel kütüphane + AI terimleri bilsin"):
+  **BILGI.md (JEKB)** kuruldu — Tanım/Amaç/Geometri formatında terim tabanı;
+  özeti AI sistem promptuna gömülü (basket/tulip/rail/gizli/çift/peg/
+  bearing/seat + prenses/oval). Görsel kütüphane: kafa kartları + taş
+  galerisi reçeteye yazar; ince ayar sağ panelde. TEKNİK DERS: "gizli rail"
+  üstten-görünmezliği raporla değil KURULUŞLA garanti edilir oldu
+  (kontur-uyumlu min formülü) — dürüst denetim (△ görünür olabilir) açığı
+  yakaladı, geometri düzeltildi. Prenses köşe kuralı (tırnak=4) clamp
+  notuyla zorlanır.
+
 ## 9. KAYNAKÇA
 
 SUYOLU.md kural mirası (Stuller CAD/CAM Standartları PDF, HRD 2022 —
