@@ -9,7 +9,7 @@ import { applyWatermark } from "@/lib/remaura/apply-rem-watermark";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TAKI_TIPI = ["Yüzük", "Kolye Ucu", "Kolye", "Küpe", "Bilezik", "Broş"] as const;
+const TAKI_TIPI = ["Yüzük", "Kolye Ucu", "Kolye", "Küpe", "Bilezik", "Broş", "Charm"] as const;
 type TakiTipi = (typeof TAKI_TIPI)[number];
 
 // Türkçe takı tipi → İngilizce (Imagen 3 prompt için)
@@ -20,7 +20,14 @@ const TAKI_TIPI_EN: Record<TakiTipi, string> = {
   "Küpe":     "earring",
   "Bilezik":  "bracelet",
   "Broş":     "brooch",
+  "Charm":    "charm (small decorative bracelet/necklace charm with a small attachment loop)",
 };
+
+// Taş / mine tercihi — "Farketmez" prompt'a hiçbir şey eklemez (eski davranış)
+const TAS_SECENEK = ["Farketmez", "Taşlı", "Taşsız"] as const;
+type TasSecenek = (typeof TAS_SECENEK)[number];
+const MINE_SECENEK = ["Farketmez", "Mineli", "Minesiz"] as const;
+type MineSecenek = (typeof MINE_SECENEK)[number];
 
 // Türkçe metal rengi → İngilizce (Imagen 3 prompt için)
 const METAL_RENGI_EN: Record<string, string> = {
@@ -259,6 +266,7 @@ function GridSkeleton() {
 function detectTakiTipi(text: string): TakiTipi | null {
   const t = text.toLocaleLowerCase("tr-TR");
   // "kolye ucu" / "pendant" ÖNCE — "kolye" içerdiği için sıra önemli
+  if (/charm|tılsım|tilsim/.test(t)) return "Charm";
   if (/kolye ucu|pendant/.test(t))   return "Kolye Ucu";
   if (/küpe|kupe|earring/.test(t))   return "Küpe";
   if (/bilezik|bracelet/.test(t))    return "Bilezik";
@@ -309,6 +317,17 @@ export function KoleksiyonEditClient() {
     "Küpe":     ke.earringLabel,
     "Bilezik":  ke.braceletLabel,
     "Broş":     ke.broochLabel,
+    "Charm":    ke.charmLabel,
+  };
+  const tasDisplay: Record<TasSecenek, string> = {
+    "Farketmez": ke.stoneAny,
+    "Taşlı":     ke.stoneWith,
+    "Taşsız":    ke.stoneWithout,
+  };
+  const mineDisplay: Record<MineSecenek, string> = {
+    "Farketmez": ke.enamelAny,
+    "Mineli":    ke.enamelWith,
+    "Minesiz":   ke.enamelWithout,
   };
   const metalDisplay: Record<MetalRengi, string> = {
     "Sarı Altın": ke.metalYellowGold,
@@ -329,6 +348,8 @@ export function KoleksiyonEditClient() {
   // Form
   const [koleksiyonAdi, setKoleksiyonAdi] = useState("");
   const [takiTipi, setTakiTipi] = useState<TakiTipi>("Yüzük");
+  const [tasSecenek, setTasSecenek] = useState<TasSecenek>("Farketmez");
+  const [mineSecenek, setMineSecenek] = useState<MineSecenek>("Farketmez");
   const [tema, setTema] = useState("");
   const [formKarakterleri, setFormKarakterleri] = useState<FormKarakteri[]>([]);
   const [metalRengi, setMetalRengi] = useState<MetalRengi>("Sarı Altın");
@@ -672,6 +693,8 @@ export function KoleksiyonEditClient() {
           letterTemplate,
           referansGorsel: refBase64,
           takiTipi,
+          tasSecenek,
+          mineSecenek,
           tema,
           formKarakterleri,
           metalRengi,
@@ -714,6 +737,10 @@ export function KoleksiyonEditClient() {
     const conceptParts: string[] = [`a ${metalEN} ${takiEN}`];
     if (harfGirdisi.trim()) conceptParts.push(`featuring the letter "${harfGirdisi.trim().toUpperCase()}"`);
     if (tema.trim()) conceptParts.push(`with ${tema.trim()} motif`);
+    if (tasSecenek === "Taşlı") conceptParts.push("set with gemstones");
+    else if (tasSecenek === "Taşsız") conceptParts.push("with NO gemstones at all (plain metal only, no stones, no diamonds, no pavé)");
+    if (mineSecenek === "Mineli") conceptParts.push("decorated with vitreous enamel (colored enamel fills)");
+    else if (mineSecenek === "Minesiz") conceptParts.push("with NO enamel (bare polished metal, no colored fills)");
     const new_design_concept = conceptParts.join(" ");
 
     // ── Paralel üretim — her varyasyon bağımsız istek ─────────────────────────
@@ -726,6 +753,8 @@ export function KoleksiyonEditClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           takiTipi,
+          tasSecenek,
+          mineSecenek,
           tema,
           metalRengi,
           formKarakterleri,
@@ -793,7 +822,7 @@ export function KoleksiyonEditClient() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          takiTipi, tema, formKarakterleri, metalRengi,
+          takiTipi, tasSecenek, mineSecenek, tema, formKarakterleri, metalRengi,
           referansGorsel: refBase64, numImages: varyasyonSayisi, referansGucu,
           // styleLock'tan İngilizce stil özeti türet — Flux endpoint'i için
           stilPrompt: analiz?.styleLock
@@ -1273,6 +1302,26 @@ export function KoleksiyonEditClient() {
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {TAKI_TIPI.map((tip) => (
                   <ChipBtn key={tip} active={takiTipi === tip} onClick={() => setTakiTipi(tip)}>{takiDisplay[tip]}</ChipBtn>
+                ))}
+              </div>
+            </div>
+
+            {/* Taş tercihi */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <Label>{ke.stoneLabel}</Label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {TAS_SECENEK.map((s) => (
+                  <ChipBtn key={s} active={tasSecenek === s} onClick={() => setTasSecenek(s)}>{tasDisplay[s]}</ChipBtn>
+                ))}
+              </div>
+            </div>
+
+            {/* Mine tercihi */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <Label>{ke.enamelLabel}</Label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {MINE_SECENEK.map((s) => (
+                  <ChipBtn key={s} active={mineSecenek === s} onClick={() => setMineSecenek(s)}>{mineDisplay[s]}</ChipBtn>
                 ))}
               </div>
             </div>

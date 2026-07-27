@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { isRemauraSuperAdminUserId } from "@/lib/billing/super-admin";
 import { buildRingThreeQuarterBlock } from "@/lib/remaura/internal-visual-rules";
+import { logWarning } from "@/lib/remaura/warnings/log";
 
 loadEnvConfig(process.cwd());
 
@@ -101,10 +102,12 @@ const TAKI_TIPI_EN: Record<string, string> = {
   "Küpe": "earring",
   "Bilezik": "bracelet",
   "Broş": "brooch",
+  "Charm": "charm (small decorative charm with attachment loop)",
 };
 
 const KAMERA_ACISI: Record<string, string> = {
   // Yüzük: dinamik olarak buildRingThreeQuarterBlock ile hesaplanır (aşağıya bak)
+  "Charm": "front-facing macro view, single small charm centered with its attachment loop visible at top, pure white background",
   "Kolye": "front-facing view, pendant centered, chain visible on both sides, slight downward angle, pure white background",
   "Küpe": "front-facing view, pair of earrings side by side, symmetric composition, slight 3/4 angle, pure white background",
   "Bilezik": "three-quarter elevated 3/4 angle, camera at 45 degrees above, bracelet displayed on a slight diagonal tilt showing depth and curvature, inner hollow and outer surface both visible, entire bracelet in frame with margin, e-commerce jewelry standard angle, pure white background",
@@ -147,11 +150,14 @@ export async function POST(req: NextRequest) {
 
   const falKey = process.env.FAL_KEY;
   if (!falKey) {
+    logWarning({ tool: "koleksiyon-edit", action: "Üret", provider: "fal", status: 500, raw: "FAL_KEY yapılandırılmamış" });
     return NextResponse.json({ error: "Servis yapılandırılmamış, lütfen yöneticiye bildirin." }, { status: 500 });
   }
 
   const body = await req.json() as {
     takiTipi?: string;
+    tasSecenek?: string;
+    mineSecenek?: string;
     tema?: string;
     formKarakterleri?: string[];
     metalRengi?: string;
@@ -161,7 +167,7 @@ export async function POST(req: NextRequest) {
     stilPrompt?: string;
   };
 
-  const { takiTipi, tema, formKarakterleri, metalRengi,
+  const { takiTipi, tasSecenek, mineSecenek, tema, formKarakterleri, metalRengi,
           referansGorsel, numImages = 1, stilKartiId, stilPrompt } = body;
 
   if (!tema?.trim() && !referansGorsel && !stilPrompt && !stilKartiId) {
@@ -205,6 +211,8 @@ export async function POST(req: NextRequest) {
           },
           body: JSON.stringify({
             takiTipi,
+            tasSecenek,
+            mineSecenek,
             tema,
             metalRengi,
             formKarakterleri,
@@ -246,11 +254,22 @@ export async function POST(req: NextRequest) {
 
     {
       // Metin bazlı üretim (Flux Ultra)
+      // Taş / mine tercihi — "Taşsız"/"Minesiz" SERT yazılır (modeller taş eklemeyi
+      // sever, yumuşak ifade dinlenmiyor); "Farketmez"/boş → prompt değişmez.
+      const tasStr =
+        tasSecenek === "Taşlı"  ? "Set with clearly visible gemstones" :
+        tasSecenek === "Taşsız" ? "STRICT: absolutely NO gemstones — no diamonds, no colored stones, no pavé; plain metal surfaces only, decoration through metalwork alone" : "";
+      const mineStr =
+        mineSecenek === "Mineli"  ? "Decorated with vitreous enamel: smooth colored enamel fills with crisp metal borders" :
+        mineSecenek === "Minesiz" ? "STRICT: NO enamel and NO colored fills — bare metal only" : "";
+
       const prompt = [
         `A single ${metalEn} ${takiTipiEn}, luxury jewelry product photography.`,
         kameraAcisi,
         stilDescription || temaEn,
         formStr,
+        tasStr,
+        mineStr,
         `Ultra detailed metal surface, intricate craftsmanship, sharp focus.`,
         `Pure white background, centered, studio lighting, no hands, no model.`,
       ].filter(Boolean).join(". ");
@@ -278,6 +297,7 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     console.error("[uret] error:", err);
     const e = err as { status?: number; message?: string; body?: { detail?: string } };
+    logWarning({ tool: "koleksiyon-edit", action: "Üret", provider: "fal", status: e?.status ?? null, raw: e?.body?.detail ?? e?.message ?? String(err) });
     // Hata koduna göre kullanıcı dostu mesaj — servis adı gösterilmez
     const status = e?.status ?? 500;
     let userMsg = "Görsel üretimi başarısız oldu, lütfen tekrar deneyin.";

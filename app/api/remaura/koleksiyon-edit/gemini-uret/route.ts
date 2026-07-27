@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { isRemauraSuperAdminUserId } from "@/lib/billing/super-admin";
+import { logWarning } from "@/lib/remaura/warnings/log";
 import type { AnalizSonucu } from "../analiz/route";
 
 loadEnvConfig(process.cwd());
@@ -59,6 +60,20 @@ const TAKI_EN: Record<string, string> = {
   "Küpe":      "earring",
   "Bilezik":   "bracelet",
   "Broş":      "brooch",
+  "Charm":     "charm",
+};
+
+// Taş / mine tercihi → prompt cümleleri.
+// "Taşsız"/"Minesiz" bilinçli olarak SERT yazıldı: görsel modeller takıya
+// kendiliğinden taş/renk ekleme eğiliminde; yumuşak ifade dinlenmiyor.
+// "Farketmez" (veya parametre yok) → boş string → prompt değişmez (eski davranış).
+const TAS_PROMPT: Record<string, string> = {
+  "Taşlı":  "The piece MUST include gemstone settings: at least one clearly visible set gemstone (or pavé group) integrated into the design.",
+  "Taşsız": "STRICT: The piece must contain NO gemstones whatsoever — no diamonds, no colored stones, no pavé, no crystal, no cubic zirconia. Surfaces are plain metal only; any decoration comes from metalwork (engraving, filigree, texture), never from stones.",
+};
+const MINE_PROMPT: Record<string, string> = {
+  "Mineli":  "The piece MUST feature vitreous enamel work: smooth colored enamel fills (cloisonné/champlevé style) with crisp metal borders, as a clearly visible part of the design.",
+  "Minesiz": "STRICT: The piece must contain NO enamel and NO colored fills of any kind — bare metal surfaces only (polished, brushed or oxidized), with all decoration achieved purely through metalwork.",
 };
 
 const METAL_EN: Record<string, string> = {
@@ -70,6 +85,7 @@ const METAL_EN: Record<string, string> = {
 };
 
 const KAMERA: Record<string, string> = {
+  "Charm":     "front-facing macro view, single small charm centered with its attachment loop visible at top, pure white background",
   "Yüzük":     "three-quarter elevated angle, ring tilted 45 degrees showing both the band and top face, pure white background",
   "Kolye Ucu": "front-facing view, pendant perfectly centered, upper chain visible, pure white background",
   "Kolye":     "front-facing view, pendant centered, chain visible on both sides, slight downward angle, pure white background",
@@ -130,6 +146,7 @@ export async function POST(req: Request) {
     .trim() || undefined;
 
   if (!googleKey) {
+    logWarning({ tool: "koleksiyon-edit", action: "Koleksiyon Üret", provider: "gemini", status: 500, raw: "GOOGLE_API_KEY yapılandırılmamış" });
     return NextResponse.json({ error: "Servis yapılandırılmamış, lütfen yöneticiye bildirin." }, { status: 500 });
   }
 
@@ -140,6 +157,8 @@ export async function POST(req: Request) {
       new_design_concept?: string;
       // Yeni format
       takiTipi?: string;
+      tasSecenek?: string;
+      mineSecenek?: string;
       tema?: string;
       metalRengi?: string;
       formKarakterleri?: string[];
@@ -150,7 +169,8 @@ export async function POST(req: Request) {
 
     const {
       styleLock, new_design_concept,
-      takiTipi, tema, metalRengi, formKarakterleri, referansGorsel,
+      takiTipi, tasSecenek, mineSecenek,
+      tema, metalRengi, formKarakterleri, referansGorsel,
       numImages = 1, stilPrompt,
     } = body;
 
@@ -193,10 +213,20 @@ export async function POST(req: Request) {
 
       const styleAnalysis = stilPrompt ?? "elegant metalwork style";
 
+      const tasEn  = TAS_PROMPT[tasSecenek ?? ""] ?? "";
+      const mineEn = MINE_PROMPT[mineSecenek ?? ""] ?? "";
+      // "Taşsız" seçiliyken stil kopyası taşları da taşımasın diye
+      // "and stones" ibaresi koşullu — aksi halde iki talimat çelişir.
+      const stilAktarim = tasEn && tasSecenek === "Taşsız"
+        ? `Apply the same metal finish, technique and motifs to the ${takiEn} form.`
+        : `Apply the same metal finish, technique, motifs and stones to the ${takiEn} form.`;
+
       const generatePrompt = [
         `Using the exact style described, create a new ${metalEn} ${takiEn}.`,
         `The jewelry type must be: ${takiEn}. Do not generate any other jewelry type.`,
-        `Apply the same metal finish, technique, motifs and stones to the ${takiEn} form.`,
+        stilAktarim,
+        tasEn,
+        mineEn,
         temaEn ? `Theme: ${temaEn}.` : "",
         formEn ? `Form: ${formEn}.` : "",
         `Camera: ${kamera}.`,
@@ -238,9 +268,12 @@ export async function POST(req: Request) {
 
       const results = await Promise.allSettled(tasks);
 
+      let firstReason = "";
       for (const r of results) {
         if (r.status === "rejected") {
-          console.error("[gemini-uret] task rejected:", r.reason instanceof Error ? r.reason.message : String(r.reason));
+          const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+          if (!firstReason) firstReason = msg;
+          console.error("[gemini-uret] task rejected:", msg);
         }
       }
 
@@ -249,6 +282,9 @@ export async function POST(req: Request) {
         .map(r => r.value);
 
       if (images.length === 0) {
+        const rej = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
+        const st = (rej?.reason as { status?: number })?.status ?? null;
+        logWarning({ tool: "koleksiyon-edit", action: "Koleksiyon Üret", provider: "gemini", status: st, raw: firstReason || "Görsel üretilemedi" });
         return NextResponse.json({ error: "Görsel üretilemedi, lütfen tekrar deneyin." }, { status: 500 });
       }
       return NextResponse.json({ images });
@@ -287,7 +323,9 @@ Create a high-end luxury jewelry studio photograph of: ${new_design_concept}
 
     const response = await Promise.race([
       ai.models.generateImages({
-        model: "imagen-3.0-generate-002",
+        // imagen-3.0-generate-002 kapatıldı (404 "Model is not found", 2026-07 doğrulandı).
+        // Halefi: imagen-4.0-generate-001 — aynı predict yüzeyi, aynı çağrı şekli.
+        model: "imagen-4.0-generate-001",
         prompt: finalPrompt,
         config: {
           numberOfImages: 1,
@@ -314,6 +352,7 @@ Create a high-end luxury jewelry studio photograph of: ${new_design_concept}
     console.error("[gemini-uret] error:", err);
     const e = err as { status?: number; message?: string };
     const status = e?.status ?? 500;
+    logWarning({ tool: "koleksiyon-edit", action: "Koleksiyon Üret", provider: "gemini", status: e?.status ?? null, raw: e?.message ?? String(err) });
     let userMsg = "Görsel üretimi başarısız oldu, lütfen tekrar deneyin.";
     if (status === 401 || status === 403) userMsg = "Yetkilendirme hatası, lütfen yöneticiye bildirin.";
     else if (status === 429) userMsg = "İstek limiti aşıldı, lütfen birkaç dakika sonra tekrar deneyin.";
