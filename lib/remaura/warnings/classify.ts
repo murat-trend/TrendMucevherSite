@@ -22,6 +22,12 @@ const PAYMENT_HINTS = [
   "exceeded your current quota",
   "past_due",
   "not enough balance",
+  // Google/Gemini ön ödemeli hesap tükendiğinde 429 + şu metni döner:
+  // "Your prepayment credits are depleted." — 2026-07-27'de canlı doğrulandı.
+  // Bu satırlar olmadan mesaj 429'a takılıp "kota limiti" diye yanlış
+  // etiketleniyor; kullanıcı beklemesi gerektiğini sanıyor, oysa ödeme şart.
+  "depleted",
+  "prepayment",
 ];
 
 const AUTH_HINTS = [
