@@ -224,6 +224,10 @@ export async function POST(req: Request) {
       const generatePrompt = [
         `Using the exact style described, create a new ${metalEn} ${takiEn}.`,
         `The jewelry type must be: ${takiEn}. Do not generate any other jewelry type.`,
+        // Kopya yasağı: referans tip ile istenen tip aynı olduğunda (örn. charm
+        // referansından charm istemek) model referansı birebir yeniden çiziyordu.
+        // Stil DNA'sı taşınır, tasarım TAŞINMAZ.
+        `IMPORTANT: This must be a BRAND-NEW original design. Do NOT reproduce, copy or closely imitate the reference image's design, silhouette, composition or motif arrangement. Carry over ONLY its style DNA (metal character, surface technique, motif vocabulary, mood) into a clearly different design.`,
         stilAktarim,
         tasEn,
         mineEn,
