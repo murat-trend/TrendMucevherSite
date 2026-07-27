@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
+import { RemauraWarningBar } from "@/components/remaura/RemauraWarningBar";
 
 type Props = {
   categoryId: string;
@@ -117,5 +118,10 @@ export function RemauraAccessGate({ categoryId, children }: Props) {
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <RemauraWarningBar />
+      {children}
+    </>
+  );
 }
