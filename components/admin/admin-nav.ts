@@ -484,8 +484,8 @@ export const ADMIN_NAV_ENTRIES: AdminNavEntry[] = [
       {
         id: "geometri",
         href: "/remaura/geometri",
-        labelTr: "Geometri Çekirdeği",
-        labelEn: "Geometry Kernel",
+        labelTr: "Telkari & Geometri",
+        labelEn: "Filigree & Geometry",
         icon: PenTool,
       },
       {
