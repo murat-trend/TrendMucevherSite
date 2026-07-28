@@ -684,6 +684,8 @@ export const ruMessages = {
     jewelryLabel: "Тип украшения",
     themeLabel: "Тема / Описание",
     themePlaceholder: "напр. цветок лотоса, тонкая шинка, пустая оправа",
+    customPromptLabel: "Свой промпт",
+    customPromptPlaceholder: "Инструкции, которым модель следует точно — напр. отверстие для цепочки сверху, матовая поверхность, оправы оставить пустыми",
     formLabel: "Форм-характер",
     formMultiple: "(несколько)",
     metalLabel: "Цвет металла",

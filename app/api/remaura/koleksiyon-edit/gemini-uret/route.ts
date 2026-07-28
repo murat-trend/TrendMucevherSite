@@ -160,6 +160,8 @@ export async function POST(req: Request) {
       tasSecenek?: string;
       mineSecenek?: string;
       tema?: string;
+      /** Tasarımcının birebir uyulacak serbest talimatı */
+      ozelIstek?: string;
       metalRengi?: string;
       formKarakterleri?: string[];
       referansGorsel?: string;
@@ -170,7 +172,7 @@ export async function POST(req: Request) {
     const {
       styleLock, new_design_concept,
       takiTipi, tasSecenek, mineSecenek,
-      tema, metalRengi, formKarakterleri, referansGorsel,
+      tema, ozelIstek, metalRengi, formKarakterleri, referansGorsel,
       numImages = 1, stilPrompt,
     } = body;
 
@@ -232,6 +234,11 @@ export async function POST(req: Request) {
         tasEn,
         mineEn,
         temaEn ? `Theme: ${temaEn}.` : "",
+        // Tasarımcı talimatı — işçilik sayfasındaki AUTHORITATIVE kalıbın aynısı;
+        // stil/tema önerilerinin aksine bu blok emirdir, model birebir uyar.
+        ozelIstek?.trim()
+          ? `DESIGNER'S NOTE — AUTHORITATIVE (obey exactly, overrides style suggestions where they conflict): ${ozelIstek.trim()}.`
+          : "",
         formEn ? `Form: ${formEn}.` : "",
         `Camera: ${kamera}.`,
         `White studio background. No hands, no model. Single centered piece. Professional jewelry photography.`,

@@ -684,6 +684,8 @@ export const deMessages = {
     jewelryLabel: "Schmucktyp",
     themeLabel: "Thema / Beschreibung",
     themePlaceholder: "z.B. Lotusblüte, schmales Band, leere Fassung",
+    customPromptLabel: "Eigener Prompt",
+    customPromptPlaceholder: "Anweisungen, die exakt befolgt werden — z.B. Kettenloch oben, matte Oberfläche, Fassungen leer lassen",
     formLabel: "Formcharakter",
     formMultiple: "(mehrfach)",
     metalLabel: "Metallfarbe",

@@ -351,6 +351,8 @@ export function KoleksiyonEditClient() {
   const [tasSecenek, setTasSecenek] = useState<TasSecenek>("Farketmez");
   const [mineSecenek, setMineSecenek] = useState<MineSecenek>("Farketmez");
   const [tema, setTema] = useState("");
+  // Özel istek — modele BİREBİR uyulacak talimat (tema "ne", bu "nasıl")
+  const [ozelIstek, setOzelIstek] = useState("");
   const [formKarakterleri, setFormKarakterleri] = useState<FormKarakteri[]>([]);
   const [metalRengi, setMetalRengi] = useState<MetalRengi>("Sarı Altın");
   const [refBase64, setRefBase64] = useState<string | null>(null);
@@ -756,6 +758,7 @@ export function KoleksiyonEditClient() {
           tasSecenek,
           mineSecenek,
           tema,
+          ozelIstek: ozelIstek.trim() || undefined,
           metalRengi,
           formKarakterleri,
           referansGorsel: refBase64,
@@ -1330,6 +1333,12 @@ export function KoleksiyonEditClient() {
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <Label>{ke.themeLabel}</Label>
               <FieldTextarea rows={4} value={tema} onChange={(e) => setTema(e.target.value)} placeholder={ke.themePlaceholder} />
+            </div>
+
+            {/* Özel istek (prompt) — birebir uyulur */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <Label>{ke.customPromptLabel}</Label>
+              <FieldTextarea rows={3} value={ozelIstek} onChange={(e) => setOzelIstek(e.target.value)} placeholder={ke.customPromptPlaceholder} />
             </div>
 
             {/* Form karakteri */}
