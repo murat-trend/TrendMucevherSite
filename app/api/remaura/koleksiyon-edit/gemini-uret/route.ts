@@ -238,57 +238,89 @@ export async function POST(req: Request) {
         ? `Apply the same metal finish, technique and motifs to the ${takiEn} form.`
         : `Apply the same metal finish, technique, motifs and stones to the ${takiEn} form.`;
 
-      const generatePrompt = [
-        // Tasarımcı talimatı EN BAŞTA — KONUYU bu tanımlar. Ortaya gömülünce
-        // model onu tema önerisi sanıp es geçiyordu (2026-07-28: "kedi" istendi,
-        // pusula geldi). Referans yalnız STİL kaynağıdır, konu kaynağı değil.
-        ozelIstek?.trim()
-          ? `DESIGNER'S BRIEF — ABSOLUTE PRIORITY, obey exactly (may be written in Turkish): ${ozelIstek.trim()}. This brief defines the SUBJECT and requirements of the new piece. The reference image supplies ONLY the style, never the subject.`
-          : "",
-        `Using the exact style described, create a new ${metalEn} ${takiEn}.`,
-        `The jewelry type must be: ${takiEn}. Do not generate any other jewelry type.`,
-        // Kopya yasağı: referans tip ile istenen tip aynı olduğunda (örn. charm
-        // referansından charm istemek) model referansı birebir yeniden çiziyordu.
-        // Stil DNA'sı taşınır, tasarım TAŞINMAZ.
-        `IMPORTANT: This must be a BRAND-NEW original design. Do NOT reproduce, copy or closely imitate the reference image's design, silhouette, composition or motif arrangement. Carry over ONLY its style DNA (metal character, surface technique, motif vocabulary, mood) into a clearly different design.`,
-        stilAktarim,
-        // Soluk çıktı şikâyeti (2026-07-28): renk sadakati emri yoktu, model
-        // stil tarifini soldurarak yorumluyordu.
+      // Ortak kuyruk: renk + kadraj + fon emirleri.
+      // - Renk: soluk çıktı şikâyeti (2026-07-28) — sadakat emri yoksa model
+      //   stil tarifini soldurarak yorumluyor.
+      // - Kadraj: parça çerçeve dibine yaslanınca kesik görünüyordu; %10 pay.
+      const ortakKuyruk = [
         `Color fidelity: match the reference's color richness EXACTLY — the same deep saturated metal tone and the same enamel color intensity. Do NOT wash out, lighten, mute or desaturate the colors.`,
         tasEn,
         mineEn,
         temaEn ? `Theme: ${temaEn}.` : "",
         formEn ? `Form: ${formEn}.` : "",
         `Camera: ${kamera}.`,
-        // Kadraj payı: parça kenara/alt banda taşarsa filigran yaması ve olası
-        // kırpmalar parçayı yer — model baştan pay bıraksın.
-        `Composition: the ENTIRE piece fully visible inside the frame with a clear white margin on all sides (at least 8% of image size). Nothing may touch or extend beyond the image edges — especially the bottom edge.`,
+        `Composition: the ENTIRE piece fully visible inside the frame with a clear white margin on all sides (at least 10% of image size). Nothing may touch or extend beyond the image edges — especially the bottom edge.`,
         `White studio background. No hands, no model. Single centered piece. Professional jewelry photography.`,
+      ];
+
+      // İki kurgu (2026-07-28 A/B testiyle kanıtlandı, kanıt: subj_B_duzenleme):
+      //
+      // ÖZEL İSTEK VARSA → DÜZENLEME çerçevesi, TEK tur. Görsel bağlamdayken
+      // model zaten "düzenleme moduna" giriyor ve talimat duvarını eziyordu
+      // (kedi istendi → yine baykuş). Kopyayla savaşma; modu bizim için çalıştır:
+      // "konuyu değiştir, stili koru". Kediyi stiliyle birlikte verdi.
+      //
+      // ÖZEL İSTEK YOKSA → eski 3-turlu stil-analizi kurgusu + kopya yasağı
+      // (klasik "aynı stilde yeni parça" akışı, davranış değişmedi).
+      const editPrompt = [
+        `Edit this jewelry piece: REPLACE its subject entirely with the following (the brief may be written in Turkish — follow it exactly): ${(ozelIstek ?? "").trim()}.`,
+        `The result must be a ${metalEn} ${takiEn}. Do not generate any other jewelry type.`,
+        `Keep the reference's craftsmanship DNA — the same metal finish, enamel palette and technique, stone treatment, detail density and mood — applied to the NEW subject with a completely new silhouette and anatomy fitting that subject.`,
+        ...ortakKuyruk,
       ].filter(Boolean).join(" ");
 
-      // TURN 3 — Görsel üretim (IMAGE) — numImages kadar paralel
+      const generatePrompt = [
+        `Using the exact style described, create a new ${metalEn} ${takiEn}.`,
+        `The jewelry type must be: ${takiEn}. Do not generate any other jewelry type.`,
+        // Kopya yasağı: referans tip ile istenen tip aynı olduğunda (charm→charm)
+        // model referansı birebir yeniden çiziyordu. Stil DNA'sı taşınır, tasarım TAŞINMAZ.
+        `IMPORTANT: This must be a BRAND-NEW original design. Do NOT reproduce, copy or closely imitate the reference image's design, silhouette, composition or motif arrangement. Carry over ONLY its style DNA (metal character, surface technique, motif vocabulary, mood) into a clearly different design.`,
+        stilAktarim,
+        ...ortakKuyruk,
+      ].filter(Boolean).join(" ");
+
+      const briefVar = Boolean(ozelIstek?.trim());
+      const contents = briefVar
+        ? [
+            {
+              role: "user" as const,
+              parts: [
+                { inlineData: { mimeType, data: processedBase64 } },
+                { text: editPrompt },
+              ],
+            },
+          ]
+        : [
+            {
+              role: "user" as const,
+              parts: [
+                { inlineData: { mimeType, data: processedBase64 } },
+                { text: "Analyze ONLY the decorative style. Describe metal, technique, motifs, stones, mood. Do NOT mention jewelry type." },
+              ],
+            },
+            {
+              role: "model" as const,
+              parts: [{ text: styleAnalysis }],
+            },
+            {
+              role: "user" as const,
+              parts: [{ text: generatePrompt }],
+            },
+          ];
+
+      // aspectRatio 1:1: model kolyeye 4:3 yatay tuval verip parçayı alt kenara
+      // yaslıyordu ("alttan kesik" şikâyetinin kök nedeni). İşçilik sayfası aynı
+      // modelle zaten 1:1 kullanıyor; A/B testinde de kesiği çözdüğü doğrulandı.
+      const genConfig = briefVar
+        ? ({ responseModalities: ["IMAGE", "TEXT"], imageConfig: { aspectRatio: "1:1" } } as never)
+        : ({ responseModalities: ["IMAGE", "TEXT"], thinkingConfig: { thinkingBudget: 0 }, imageConfig: { aspectRatio: "1:1" } } as never);
+
       const tasks = Array.from({ length: Math.min(numImages, 4) }, () =>
         Promise.race([
           ai.models.generateContent({
             model: MODEL,
-            contents: [
-              {
-                role: "user",
-                parts: [
-                  { inlineData: { mimeType, data: processedBase64 } },
-                  { text: "Analyze ONLY the decorative style. Describe metal, technique, motifs, stones, mood. Do NOT mention jewelry type." },
-                ],
-              },
-              {
-                role: "model",
-                parts: [{ text: styleAnalysis }],
-              },
-              {
-                role: "user",
-                parts: [{ text: generatePrompt }],
-              },
-            ],
-            config: { responseModalities: ["IMAGE", "TEXT"], thinkingConfig: { thinkingBudget: 0 } } as never,
+            contents,
+            config: genConfig,
           }),
           timeoutPromise,
         ]).then(async (result) => {
