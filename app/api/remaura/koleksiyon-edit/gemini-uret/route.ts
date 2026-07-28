@@ -15,15 +15,25 @@ export const maxDuration = 300;
 // ─── Watermark ────────────────────────────────────────────────────────────────
 
 async function cropGeminiWatermark(base64: string): Promise<string> {
+  // NOT: eskiden alttan %6 tam bant KESİLİYORDU — parça kadrajı doldurunca
+  // ayak/alt kenar da gidiyordu (2026-07-28 Murat: "görseller alttan kesik").
+  // Kesmek yerine filigranın oturduğu ALT KÖŞELERE beyaz yama basıyoruz:
+  // fon stüdyo beyazı olduğundan yama görünmez, parçanın orta-alt bölgesi
+  // (ayaklar, kilit, damla ucu) dokunulmadan kalır.
   try {
     const sharp = (await import("sharp")).default;
     const buf = Buffer.from(base64, "base64");
     const meta = await sharp(buf).metadata();
     const w = meta.width ?? 1024;
     const h = meta.height ?? 1024;
-    const cropH = Math.floor(h * 0.94); // son %6 kırp
+    const patchW = Math.floor(w * 0.3);
+    const patchH = Math.floor(h * 0.07);
+    const patch = { create: { width: patchW, height: patchH, channels: 3 as const, background: "#ffffff" } };
     const result = await sharp(buf)
-      .extract({ left: 0, top: 0, width: w, height: cropH })
+      .composite([
+        { input: await sharp(patch).jpeg().toBuffer(), left: 0, top: h - patchH },          // sol alt
+        { input: await sharp(patch).jpeg().toBuffer(), left: w - patchW, top: h - patchH }, // sağ alt
+      ])
       .jpeg({ quality: 92 })
       .toBuffer();
     return result.toString("base64");
@@ -224,6 +234,12 @@ export async function POST(req: Request) {
         : `Apply the same metal finish, technique, motifs and stones to the ${takiEn} form.`;
 
       const generatePrompt = [
+        // Tasarımcı talimatı EN BAŞTA — KONUYU bu tanımlar. Ortaya gömülünce
+        // model onu tema önerisi sanıp es geçiyordu (2026-07-28: "kedi" istendi,
+        // pusula geldi). Referans yalnız STİL kaynağıdır, konu kaynağı değil.
+        ozelIstek?.trim()
+          ? `DESIGNER'S BRIEF — ABSOLUTE PRIORITY, obey exactly (may be written in Turkish): ${ozelIstek.trim()}. This brief defines the SUBJECT and requirements of the new piece. The reference image supplies ONLY the style, never the subject.`
+          : "",
         `Using the exact style described, create a new ${metalEn} ${takiEn}.`,
         `The jewelry type must be: ${takiEn}. Do not generate any other jewelry type.`,
         // Kopya yasağı: referans tip ile istenen tip aynı olduğunda (örn. charm
@@ -231,16 +247,17 @@ export async function POST(req: Request) {
         // Stil DNA'sı taşınır, tasarım TAŞINMAZ.
         `IMPORTANT: This must be a BRAND-NEW original design. Do NOT reproduce, copy or closely imitate the reference image's design, silhouette, composition or motif arrangement. Carry over ONLY its style DNA (metal character, surface technique, motif vocabulary, mood) into a clearly different design.`,
         stilAktarim,
+        // Soluk çıktı şikâyeti (2026-07-28): renk sadakati emri yoktu, model
+        // stil tarifini soldurarak yorumluyordu.
+        `Color fidelity: match the reference's color richness EXACTLY — the same deep saturated metal tone and the same enamel color intensity. Do NOT wash out, lighten, mute or desaturate the colors.`,
         tasEn,
         mineEn,
         temaEn ? `Theme: ${temaEn}.` : "",
-        // Tasarımcı talimatı — işçilik sayfasındaki AUTHORITATIVE kalıbın aynısı;
-        // stil/tema önerilerinin aksine bu blok emirdir, model birebir uyar.
-        ozelIstek?.trim()
-          ? `DESIGNER'S NOTE — AUTHORITATIVE (obey exactly, overrides style suggestions where they conflict): ${ozelIstek.trim()}.`
-          : "",
         formEn ? `Form: ${formEn}.` : "",
         `Camera: ${kamera}.`,
+        // Kadraj payı: parça kenara/alt banda taşarsa filigran yaması ve olası
+        // kırpmalar parçayı yer — model baştan pay bıraksın.
+        `Composition: the ENTIRE piece fully visible inside the frame with a clear white margin on all sides (at least 8% of image size). Nothing may touch or extend beyond the image edges — especially the bottom edge.`,
         `White studio background. No hands, no model. Single centered piece. Professional jewelry photography.`,
       ].filter(Boolean).join(" ");
 
