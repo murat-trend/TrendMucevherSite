@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { loadEnvConfig } from "@next/env";
 import { GoogleGenAI } from "@google/genai";
 import { cookies } from "next/headers";
@@ -14,31 +16,34 @@ export const maxDuration = 300;
 
 // ─── Watermark ────────────────────────────────────────────────────────────────
 
+const CADIKIZ_LOGO = path.join(process.cwd(), "public", "rem-icon-256.png");
+
 async function cropGeminiWatermark(base64: string): Promise<string> {
-  // NOT: eskiden alttan %6 tam bant KESİLİYORDU — parça kadrajı doldurunca
+  // Tarihçe: eskiden alttan %6 tam bant KESİLİYORDU — parça kadrajı doldurunca
   // ayak/alt kenar da gidiyordu (2026-07-28 Murat: "görseller alttan kesik").
-  // Kesmek yerine filigranın oturduğu ALT KÖŞELERE beyaz yama basıyoruz:
-  // fon stüdyo beyazı olduğundan yama görünmez, parçanın orta-alt bölgesi
-  // (ayaklar, kilit, damla ucu) dokunulmadan kalır.
+  // Ücretli katmanın görünür filigran BASMADIĞI köşe köşe doğrulandı; beyaz
+  // sigorta yaması da denendi ve hafif gri stüdyo fonunda keskin dikdörtgen
+  // olarak GÖRÜNDÜĞÜ için atıldı. Şimdi tek iş: sol alta cadıkız marka logosu
+  // (Murat istedi; gerçek alfa kanallı, gri fonda kutusuz oturuyor — doğrulandı).
   try {
     const sharp = (await import("sharp")).default;
     const buf = Buffer.from(base64, "base64");
     const meta = await sharp(buf).metadata();
     const w = meta.width ?? 1024;
     const h = meta.height ?? 1024;
-    const patchW = Math.floor(w * 0.3);
-    const patchH = Math.floor(h * 0.07);
-    const patch = { create: { width: patchW, height: patchH, channels: 3 as const, background: "#ffffff" } };
+
+    const pad = Math.round(w * 0.015);
+    const logoW = Math.round(w * 0.1);
+    const logo = await sharp(await readFile(CADIKIZ_LOGO)).resize(logoW, logoW, { fit: "inside" }).png().toBuffer();
+    const logoMeta = await sharp(logo).metadata();
+
     const result = await sharp(buf)
-      .composite([
-        { input: await sharp(patch).jpeg().toBuffer(), left: 0, top: h - patchH },          // sol alt
-        { input: await sharp(patch).jpeg().toBuffer(), left: w - patchW, top: h - patchH }, // sağ alt
-      ])
+      .composite([{ input: logo, left: pad, top: h - (logoMeta.height ?? logoW) - pad }])
       .jpeg({ quality: 92 })
       .toBuffer();
     return result.toString("base64");
   } catch {
-    return base64;
+    return base64; // logo okunamazsa görsele dokunma
   }
 }
 
