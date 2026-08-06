@@ -57,7 +57,26 @@ const SERI_KIMLIGI = [
   "- the same enamel craft: smooth glossy vitreous enamel with soft tonal shading, colour fields separated by raised polished gold cloisonné outlines of the same line weight",
   "- the same faceted gemstone eyes in the same bezel setting style",
   "- the same metal tone and polish as the master",
-  "- the same head-to-body proportion and the same overall size of the piece in frame",
+  "- the same overall size of the piece within the frame",
+  "⚠ Identity means the CRAFT and the SHOT, never the animal's body. Head shape, ears, muzzle, limbs, tail and proportions all belong to the new species.",
+].join("\n");
+
+/**
+ * Murat'ın istediği iki iyileştirme (2026-08-06): kontur duvarları daha kabarık,
+ * renkler daha canlı. Seri kimliğini BOZMAZ — aynı işçilik dilinin daha iyi
+ * yapılmış hâli. ⚠ Yalnız üretimde uygulanır; taş kaldırmada (`hazirla`) DEĞİL,
+ * orada müşterinin kendi ürünü olduğu gibi kalmalı.
+ */
+const YUZEY_VE_RENK = [
+  "RAISED GOLD WALLS — push this further than the master:",
+  "The gold cloisonné outlines must stand clearly PROUD of the enamel: real raised metal walls with a rounded, polished top edge that catches a bright specular highlight running along its length.",
+  "The enamel sits recessed below the top of the wall, so every colour field reads as a filled cell with a visible depth step at its border, and the wall casts a soft shadow into the enamel beside it.",
+  "Make the walls slightly thicker and noticeably taller than in the master. Never draw them as flat printed lines.",
+  "Every colour field must be fully enclosed by a wall. Do NOT soften, blur or drop the cell borders in order to make the colours blend — the colour is bright AND the cells stay crisply separated.",
+  "",
+  "LIVELY COLOUR:",
+  "Render the enamel rich, saturated and luminous — deep jewel-like colour with a glossy wet-look surface, bright clean highlights and vivid tonal transitions, as if lit in a jewellery showcase.",
+  "No dull, washed-out, greyish or muddy tones anywhere.",
 ].join("\n");
 
 const CIKTI_KURALI = [
@@ -79,14 +98,22 @@ function turPrompt(turEn: string, tarif?: string): string {
     "",
     `CHANGE ONLY THE ANIMAL: the new charm depicts a ${turEn} instead of the animal in the master. Everything that defines the collection stays the same.`,
     "",
-    "POSTURE: reproduce the master's posture and body attitude — the same curl of the body, the same turn and tilt of the head toward the viewer, the same limb placement and the same silhouette rhythm.",
-    `Adapt it ONLY where the anatomy of a ${turEn} makes the master's pose impossible: if the animal has no front paws, use its closest natural equivalent (fin, wing, flipper, coiled tail) in the same position and reading the same way. Do not invent a different pose — the two pieces must look like a matched pair when placed side by side.`,
+    `THE ANIMAL MUST BE A REAL ${turEn.toUpperCase()} — this comes first:`,
+    `Build the creature from the true anatomy of a ${turEn}: its own head shape, its own ears / beak / horns / wings, its own muzzle, its own limbs, its own tail and its own body proportions.`,
+    "NEVER carry over the master animal's body parts. Do not keep its ear shape, its muzzle, its paws or its tail on a creature that should not have them. The silhouette belongs to the new animal, not to the master.",
+    "A viewer must name the species instantly, without being told.",
     "",
-    `COLOURS: use the enamel colours that belong to a ${turEn}, but rendered with exactly the same enamel technique and the same gold outline treatment as the master. The palette changes; the craft does not.`,
+    "POSTURE — carry over the ATTITUDE, not the outline:",
+    "Keep the same reclining, curled, relaxed body attitude, the same turn and tilt of the head toward the viewer, the same playful character and the same placement within the frame — the piece lies the same way and looks at you the same way.",
+    `But express that attitude through a ${turEn}'s own body: a bird folds its wings and tucks its talons, a fish or dolphin curves its body and lays its fins, a bear rests on its haunches. The two pieces should feel like a matched pair because of their spirit and framing, not because they share an outline.`,
+    "",
+    `COLOURS: choose a rich, harmonious enamel palette that unmistakably reads as a ${turEn} — but pick JEWELLERY colours, not wildlife-photograph colours: deeper, cleaner and more luminous than nature, the way a fine enamelling house would interpret the animal. Never grey, dusty, washed-out or muddy. The palette changes with the species; the craft never does.`,
     "",
     TEK_PARCA,
     "",
     SERI_KIMLIGI,
+    "",
+    YUZEY_VE_RENK,
   ];
 
   if (tarif?.trim()) {
@@ -114,6 +141,8 @@ function tasarimPrompt(modu: TasarimModu, turEn: string | null, tarif?: string):
       "",
       "Craft it as a real manufacturable piece: glossy vitreous enamel colour fields separated by raised polished gold outlines, faceted gemstone accents where they belong.",
       TEK_PARCA,
+      "",
+      YUZEY_VE_RENK,
       "",
       CIKTI_KURALI,
     ].join("\n");
@@ -144,7 +173,7 @@ function tasarimPrompt(modu: TasarimModu, turEn: string | null, tarif?: string):
   parcalar.push("", TEK_PARCA, "", SERI_KIMLIGI.replace(
     "- the same camera angle, framing and centring, with the same even margin around the piece",
     "- the same camera angle, framing and centring, with the same even margin around the piece (the pose changes, the shot does not)"
-  ), "", CIKTI_KURALI);
+  ), "", YUZEY_VE_RENK, "", CIKTI_KURALI);
 
   return parcalar.join("\n");
 }
