@@ -62,6 +62,23 @@ const SERI_KIMLIGI = [
 ].join("\n");
 
 /**
+ * Hedef kitle: genç kızlar (Murat, 2026-08-06). Parça sevimli olacak — ama tür
+ * okunurluğunu bozmadan. Çözüm: hayvanın YAVRUSU. Yavru hem tür-sadık kalıyor
+ * hem doğal olarak sevimli (büyük kafa, büyük göz, yuvarlak hat). Kartal/leopar
+ * gibi yırtıcılar da böylece sert değil şirin çıkıyor.
+ */
+const SEVIMLILIK = [
+  "MAKE IT SWEET — this charm is worn by young girls, so charm comes before realism:",
+  "Depict the BABY of the species — a cub, kitten, pup, chick, calf or fry — never an adult. Baby proportions are what make it cute, and they keep the species readable.",
+  "- an oversized, rounded head on a small plump body",
+  "- large, wide-set gemstone eyes placed low on the face, with a soft innocent gaze",
+  "- a small rounded muzzle or beak, chubby cheeks, no long snout",
+  "- short, soft, rounded limbs; plump rounded silhouette with no thin, spiky or angular forms",
+  "- a gentle, friendly expression with the hint of a smile",
+  "Predators must read as adorable, never fierce: no bared teeth, no talons or claws presented as weapons, no aggressive stare, no menacing brow. An eagle or a leopard here is a fluffy baby, not a hunter.",
+].join("\n");
+
+/**
  * Murat'ın istediği iki iyileştirme (2026-08-06): kontur duvarları daha kabarık,
  * renkler daha canlı. Seri kimliğini BOZMAZ — aynı işçilik dilinin daha iyi
  * yapılmış hâli. ⚠ Yalnız üretimde uygulanır; taş kaldırmada (`hazirla`) DEĞİL,
@@ -113,6 +130,8 @@ function turPrompt(turEn: string, tarif?: string): string {
     "",
     SERI_KIMLIGI,
     "",
+    SEVIMLILIK,
+    "",
     YUZEY_VE_RENK,
   ];
 
@@ -141,6 +160,8 @@ function tasarimPrompt(modu: TasarimModu, turEn: string | null, tarif?: string):
       "",
       "Craft it as a real manufacturable piece: glossy vitreous enamel colour fields separated by raised polished gold outlines, faceted gemstone accents where they belong.",
       TEK_PARCA,
+      "",
+      SEVIMLILIK,
       "",
       YUZEY_VE_RENK,
       "",
@@ -173,7 +194,7 @@ function tasarimPrompt(modu: TasarimModu, turEn: string | null, tarif?: string):
   parcalar.push("", TEK_PARCA, "", SERI_KIMLIGI.replace(
     "- the same camera angle, framing and centring, with the same even margin around the piece",
     "- the same camera angle, framing and centring, with the same even margin around the piece (the pose changes, the shot does not)"
-  ), "", YUZEY_VE_RENK, "", CIKTI_KURALI);
+  ), "", SEVIMLILIK, "", YUZEY_VE_RENK, "", CIKTI_KURALI);
 
   return parcalar.join("\n");
 }
