@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { shrinkForUpload } from "@/lib/remaura/upload";
+import { TURLER } from "@/lib/remaura/musteri-atolye/turler";
 
 /* ─── Palet (Remaura araç sayfası: gül/pembe + derin siyah) ─────────────────── */
 
@@ -35,6 +36,17 @@ type TasKapsami = "buyuk" | "hepsi" | "tarif";
 type HedefBoy = 1024 | 2048 | 4096;
 
 type Sonuc = { url: string; width: number; height: number };
+
+/** Seri üretimi sonucu — hangi türden geldiği etiketiyle taşınır. */
+type SeriParca = Sonuc & { etiket: string; kaydedildi?: boolean };
+
+type TasarimModu = "yeni-poz" | "poz-varyanti" | "serbest";
+
+const TASARIM_MODU_ETIKET: Record<TasarimModu, string> = {
+  "yeni-poz": "Aynı stil, yeni poz",
+  "poz-varyanti": "Aynı tür, poz varyantı",
+  serbest: "Tamamen serbest",
+};
 
 const BOY_ETIKET: Record<HedefBoy, string> = {
   1024: "1K — hızlı deneme",
@@ -201,6 +213,16 @@ export function MusteriAtolyeClient() {
   const [bailKaldir, setBailKaldir] = useState(true);
   const [hedefBoy, setHedefBoy] = useState<HedefBoy>(2048);
   const [baslik, setBaslik] = useState("");
+
+  // ── Seri üretimi (tür değiştir / yeni tasarım) ──
+  const [bazGorsel, setBazGorsel] = useState<string | null>(null);
+  const [secilenTurler, setSecilenTurler] = useState<string[]>([]);
+  const [serbestTur, setSerbestTur] = useState("");
+  const [seriTarif, setSeriTarif] = useState("");
+  const [seri, setSeri] = useState<SeriParca[]>([]);
+  const [tasarimModu, setTasarimModu] = useState<TasarimModu>("yeni-poz");
+  const [tasarimTur, setTasarimTur] = useState("");
+  const [tasarimTarif, setTasarimTarif] = useState("");
 
   const [mesgul, setMesgul] = useState<string | null>(null);
   const [hata, setHata] = useState<string | null>(null);
@@ -431,6 +453,105 @@ export function MusteriAtolyeClient() {
       p.map((m) =>
         m.id === seciliId ? { ...m, tasarimSayisi: Math.max(0, (m.tasarimSayisi ?? 1) - 1) } : m
       )
+    );
+  }
+
+  /* ── Seri üretimi ── */
+
+  function bazYap(url: string) {
+    setBazGorsel(url);
+    setBilgi("Baz model seçildi — artık bu duruştan tür türetebilirsin.");
+  }
+
+  function turSec(id: string) {
+    setSecilenTurler((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  }
+
+  /** Tek bir üretim isteği — hem tür değiştirmede hem yeni tasarımda kullanılır. */
+  async function tekUret(govde: Record<string, unknown>): Promise<SeriParca | null> {
+    const r = await fetch("/api/remaura/musteri-atolye/uret", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...govde, hedefBoy }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      setHata(j.error ?? "Üretim başarısız.");
+      return null;
+    }
+    return j as SeriParca;
+  }
+
+  async function turleriUret() {
+    const hedefler = [
+      ...secilenTurler,
+      ...serbestTur
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ];
+    if (!bazGorsel) {
+      setHata("Önce bir baz model seç.");
+      return;
+    }
+    if (hedefler.length === 0) {
+      setHata("En az bir tür seç ya da yaz.");
+      return;
+    }
+
+    setHata(null);
+    setBilgi(null);
+
+    // Sırayla — tek istekte hepsi 300 sn sınırını aşar ve ilk hatada hepsi gider.
+    for (let i = 0; i < hedefler.length; i++) {
+      const ad = TURLER.find((t) => t.id === hedefler[i])?.tr ?? hedefler[i];
+      setMesgul(`${ad} üretiliyor… (${i + 1}/${hedefler.length})`);
+      const parca = await tekUret({ mod: "tur", bazGorsel, tur: hedefler[i], tarif: seriTarif });
+      if (!parca) break; // hata mesajı zaten yazıldı — kalanlara para harcama
+      setSeri((p) => [parca, ...p]);
+    }
+    setMesgul(null);
+  }
+
+  async function tasarimUret() {
+    if (tasarimModu === "serbest" && !tasarimTarif.trim()) {
+      setHata("Ne istediğini yaz.");
+      return;
+    }
+    if (tasarimModu !== "serbest" && !bazGorsel) {
+      setHata("Önce bir baz model seç.");
+      return;
+    }
+    setHata(null);
+    setBilgi(null);
+    setMesgul("Yeni tasarım üretiliyor…");
+    const parca = await tekUret({
+      mod: "tasarim",
+      bazGorsel: tasarimModu === "serbest" ? undefined : bazGorsel,
+      tasarimModu,
+      tur: tasarimTur,
+      tarif: tasarimTarif,
+    });
+    if (parca) setSeri((p) => [parca, ...p]);
+    setMesgul(null);
+  }
+
+  async function seriKaydet(parca: SeriParca, index: number) {
+    if (!seciliId) return;
+    const r = await fetch("/api/remaura/musteri-atolye/tasarimlar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ musteriId: seciliId, gorselUrl: parca.url, baslik: parca.etiket }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      setHata(j.error ?? "Kaydedilemedi.");
+      return;
+    }
+    setTasarimlar((p) => [j.tasarim, ...p]);
+    setSeri((p) => p.map((x, i) => (i === index ? { ...x, kaydedildi: true } : x)));
+    setMusteriler((p) =>
+      p.map((m) => (m.id === seciliId ? { ...m, tasarimSayisi: (m.tasarimSayisi ?? 0) + 1 } : m))
     );
   }
 
@@ -756,6 +877,9 @@ export function MusteriAtolyeClient() {
                         <Buton onClick={galeriyeKaydet} disabled={!!mesgul} birincil>
                           Galeriye Kaydet
                         </Buton>
+                        <Buton onClick={() => bazYap(sonuc.url)} disabled={!!mesgul}>
+                          {bazGorsel === sonuc.url ? "✓ Baz Model" : "Baz Model Yap"}
+                        </Buton>
                         {sonuc.width < 4096 && sonuc.height < 4096 && (
                           <Buton onClick={dorteKCikar} disabled={!!mesgul}>
                             4K&apos;ya Çıkar
@@ -773,6 +897,215 @@ export function MusteriAtolyeClient() {
                           Adresi Kopyala
                         </Buton>
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tür değiştir — seri üretimi */}
+                <div
+                  style={{
+                    background: PANEL,
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 14,
+                    padding: 18,
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                    <Etiket>Tür Değiştir — Seri</Etiket>
+                    {bazGorsel ? (
+                      <div style={{ ...SATRANC, borderRadius: 8, padding: 4 }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={bazGorsel} alt="Baz model" style={{ height: 54 }} />
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>baz model seçilmedi</span>
+                    )}
+                  </div>
+
+                  <p style={{ margin: "10px 0 0", fontSize: 11.5, color: "rgba(255,255,255,0.35)", lineHeight: 1.6 }}>
+                    Baz modelin duruşu, çerçevesi, mine + altın kontur işçiliği ve taşlı göz dili birebir
+                    korunur; yalnızca hayvan değişir. Pati/bacağı olmayan türlerde (yunus, deniz atı, japon
+                    balığı) aynı kompozisyon korunup anatomi türe uyarlanır.
+                  </p>
+
+                  {!bazGorsel && (
+                    <p style={{ margin: "10px 0 0", fontSize: 11.5, color: TERRA }}>
+                      Baz model seç: üstteki sonuçta <b>Baz Model Yap</b>, ya da galeride bir tasarımda{" "}
+                      <b>Baz Yap</b>.
+                    </p>
+                  )}
+
+                  <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {TURLER.map((t) => (
+                      <Chip
+                        key={t.id}
+                        aktif={secilenTurler.includes(t.id)}
+                        onClick={() => turSec(t.id)}
+                        disabled={!!mesgul}
+                      >
+                        {t.tr}
+                      </Chip>
+                    ))}
+                  </div>
+
+                  <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+                    <Girdi
+                      value={serbestTur}
+                      onChange={setSerbestTur}
+                      placeholder="Listede olmayan tür — virgülle ayır (ör. tilki, kaplumbağa)"
+                    />
+                    <Girdi
+                      value={seriTarif}
+                      onChange={setSeriTarif}
+                      placeholder="Tüm seriye uygulanacak ek not (opsiyonel)"
+                    />
+                  </div>
+
+                  <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <Buton onClick={turleriUret} disabled={!bazGorsel || !!mesgul} birincil>
+                      {mesgul ?? "Seçilenleri Üret"}
+                    </Buton>
+                    {secilenTurler.length > 0 && (
+                      <>
+                        <span style={{ fontSize: 11, color: TERRA }}>{secilenTurler.length} tür seçili</span>
+                        <Buton onClick={() => setSecilenTurler([])} disabled={!!mesgul}>
+                          Temizle
+                        </Buton>
+                      </>
+                    )}
+                    <Buton onClick={() => setSecilenTurler(TURLER.map((t) => t.id))} disabled={!!mesgul}>
+                      Hepsini Seç
+                    </Buton>
+                  </div>
+                </div>
+
+                {/* Yeni tasarım */}
+                <div
+                  style={{
+                    background: PANEL,
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 14,
+                    padding: 18,
+                  }}
+                >
+                  <Etiket>Yeni Tasarım</Etiket>
+
+                  <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {(Object.keys(TASARIM_MODU_ETIKET) as TasarimModu[]).map((m) => (
+                      <Chip
+                        key={m}
+                        aktif={tasarimModu === m}
+                        onClick={() => setTasarimModu(m)}
+                        disabled={!!mesgul}
+                      >
+                        {TASARIM_MODU_ETIKET[m]}
+                      </Chip>
+                    ))}
+                  </div>
+
+                  <p style={{ margin: "10px 0 0", fontSize: 11.5, color: "rgba(255,255,255,0.35)", lineHeight: 1.6 }}>
+                    {tasarimModu === "yeni-poz" &&
+                      "Baz modelin işçilik dili korunur (mine, altın kontur, taşlı göz), poz ve kompozisyon yeniden kurulur."}
+                    {tasarimModu === "poz-varyanti" &&
+                      "Baz modeldeki hayvanın aynısı, farklı duruşlarda — tek türden koleksiyon çıkarmak için."}
+                    {tasarimModu === "serbest" &&
+                      "Baz model kullanılmaz; ne yazarsan o üretilir. Seri bütünlüğünü garanti etmez."}
+                  </p>
+
+                  <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+                    {tasarimModu === "yeni-poz" && (
+                      <Girdi
+                        value={tasarimTur}
+                        onChange={setTasarimTur}
+                        placeholder="Tür (boş bırakırsan baz modeldeki hayvan)"
+                      />
+                    )}
+                    <Girdi
+                      value={tasarimTarif}
+                      onChange={setTasarimTarif}
+                      placeholder={
+                        tasarimModu === "serbest"
+                          ? "Ne istediğini yaz (zorunlu)"
+                          : "Serbest talimat (ör. oturmuş, kuyruk yukarı kıvrık)"
+                      }
+                    />
+                  </div>
+
+                  <div style={{ marginTop: 14 }}>
+                    <Buton
+                      onClick={tasarimUret}
+                      disabled={!!mesgul || (tasarimModu !== "serbest" && !bazGorsel)}
+                      birincil
+                    >
+                      {mesgul ?? "Tasarımı Üret"}
+                    </Buton>
+                  </div>
+                </div>
+
+                {/* Seri sonuçları */}
+                {seri.length > 0 && (
+                  <div
+                    style={{
+                      background: PANEL,
+                      border: `1px solid ${ACCENT}`,
+                      borderRadius: 14,
+                      padding: 18,
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <Etiket>Üretilenler</Etiket>
+                      <Buton onClick={() => setSeri([])} disabled={!!mesgul}>
+                        Listeyi Temizle
+                      </Buton>
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: 14,
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+                        gap: 12,
+                      }}
+                    >
+                      {seri.map((p, i) => (
+                        <div
+                          key={`${p.url}-${i}`}
+                          style={{
+                            border: `1px solid ${BORDER}`,
+                            borderRadius: 10,
+                            overflow: "hidden",
+                            background: "rgba(255,255,255,0.02)",
+                          }}
+                        >
+                          <div style={{ ...SATRANC, padding: 8, display: "flex", justifyContent: "center" }}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={p.url}
+                              alt={p.etiket}
+                              style={{ height: 150, objectFit: "contain", maxWidth: "100%" }}
+                            />
+                          </div>
+                          <div style={{ padding: "8px 10px", display: "grid", gap: 8 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
+                              <span style={{ fontSize: 11.5, color: "#fff" }}>{p.etiket}</span>
+                              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "monospace" }}>
+                                {p.width}×{p.height}
+                              </span>
+                            </div>
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              <Buton onClick={() => seriKaydet(p, i)} disabled={!!mesgul || p.kaydedildi}>
+                                {p.kaydedildi ? "✓ Kayıtlı" : "Kaydet"}
+                              </Buton>
+                              <Buton onClick={() => bazYap(p.url)}>
+                                {bazGorsel === p.url ? "✓ Baz" : "Baz Yap"}
+                              </Buton>
+                              <a href={p.url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+                                <Buton onClick={() => {}}>Aç</Buton>
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -853,6 +1186,9 @@ export function MusteriAtolyeClient() {
                               >
                                 <Buton onClick={() => {}}>Aç</Buton>
                               </a>
+                              <Buton onClick={() => bazYap(t.gorsel_url)}>
+                                {bazGorsel === t.gorsel_url ? "✓ Baz" : "Baz Yap"}
+                              </Buton>
                               <Buton onClick={() => tasarimSil(t)} tehlike>
                                 Sil
                               </Buton>
