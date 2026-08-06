@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { isRemauraSuperAdminUserId } from "@/lib/billing/super-admin";
+import { logWarning } from "@/lib/remaura/warnings/log";
 
 loadEnvConfig(process.cwd());
 
@@ -203,6 +204,7 @@ async function stabilityPost(
   if (!res.ok) {
     const txt = await res.text();
     console.error(`[stability] ${endpoint} error ${res.status}:`, txt);
+    logWarning({ tool: "koleksiyon-edit", action: "Stability işlemi", provider: "stability", status: res.status, raw: `${endpoint} | ${txt.slice(0, 300)}` });
     return NextResponse.json(
       { error: `Stability AI hatası (${res.status}): ${txt.slice(0, 200)}` },
       { status: res.status }
@@ -239,6 +241,7 @@ async function upscale(imgBuf: Buffer, apiKey: string): Promise<NextResponse> {
   if (!initRes.ok) {
     const txt = await initRes.text();
     console.error("[stability] upscale init error:", initRes.status, txt);
+    logWarning({ tool: "koleksiyon-edit", action: "Upscale", provider: "stability", status: initRes.status, raw: txt.slice(0, 300) });
     return NextResponse.json(
       { error: `Stability AI upscale başlatılamadı (${initRes.status}): ${txt.slice(0, 200)}` },
       { status: initRes.status }
@@ -384,6 +387,7 @@ export async function POST(req: Request) {
 
   const apiKey = process.env.STABILITY_API_KEY;
   if (!apiKey) {
+    logWarning({ tool: "koleksiyon-edit", action: "Stability işlemi", provider: "stability", status: 500, raw: "STABILITY_API_KEY yapılandırılmamış" });
     return NextResponse.json({ error: "STABILITY_API_KEY yapılandırılmamış." }, { status: 500 });
   }
 
@@ -462,7 +466,8 @@ export async function POST(req: Request) {
     }
   } catch (err: unknown) {
     console.error("[stability] unhandled error:", err);
-    const e = err as { message?: string };
+    const e = err as { status?: number; message?: string };
+    logWarning({ tool: "koleksiyon-edit", action: "Stability işlemi", provider: "stability", status: e?.status ?? null, raw: e?.message ?? String(err) });
     return NextResponse.json({ error: e?.message ?? "İşlem başarısız." }, { status: 500 });
   }
 }

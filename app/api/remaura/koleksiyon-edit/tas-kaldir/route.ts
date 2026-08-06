@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { isRemauraSuperAdminUserId } from "@/lib/billing/super-admin";
+import { logWarning } from "@/lib/remaura/warnings/log";
 
 loadEnvConfig(process.cwd());
 
@@ -45,6 +46,7 @@ export async function POST(req: Request) {
     .trim() || undefined;
 
   if (!googleKey) {
+    logWarning({ tool: "koleksiyon-edit", action: "Taş Kaldır", provider: "gemini", status: 500, raw: "GOOGLE_API_KEY yapılandırılmamış" });
     return NextResponse.json({ error: "Servis yapılandırılmamış." }, { status: 500 });
   }
 
@@ -129,6 +131,8 @@ export async function POST(req: Request) {
     });
   } catch (err: unknown) {
     console.error("[tas-kaldir] error:", err);
+    const e = err as { status?: number; message?: string };
+    logWarning({ tool: "koleksiyon-edit", action: "Taş Kaldır", provider: "gemini", status: e?.status ?? null, raw: e?.message ?? String(err) });
     return NextResponse.json(
       { error: "İşlem başarısız oldu, lütfen tekrar deneyin." },
       { status: 500 }

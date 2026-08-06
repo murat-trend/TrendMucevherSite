@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { isRemauraSuperAdminUserId } from "@/lib/billing/super-admin";
+import { logWarning } from "@/lib/remaura/warnings/log";
 
 loadEnvConfig(process.cwd());
 
@@ -131,6 +132,7 @@ export async function POST(req: Request) {
 
   const falKey = process.env.FAL_KEY;
   if (!falKey) {
+    logWarning({ tool: "koleksiyon-edit", action: "Harf / ControlNet", provider: "fal", status: 500, raw: "FAL_KEY yapılandırılmamış" });
     return NextResponse.json({ error: "FAL_KEY yapılandırılmamış." }, { status: 500 });
   }
 
@@ -244,7 +246,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ images, seed, styleDescription });
   } catch (err: unknown) {
     console.error("[controlnet] fal error:", err);
-    const e = err as { message?: string };
+    const e = err as { status?: number; message?: string };
+    logWarning({ tool: "koleksiyon-edit", action: "Harf / ControlNet", provider: "fal", status: e?.status ?? null, raw: e?.message ?? String(err) });
     return NextResponse.json({ error: e?.message ?? "ControlNet üretimi başarısız." }, { status: 500 });
   }
 }

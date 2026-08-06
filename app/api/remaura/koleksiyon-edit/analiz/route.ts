@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { isRemauraSuperAdminUserId } from "@/lib/billing/super-admin";
 import { getOpenAIApiKey } from "@/lib/api/openai";
+import { logWarning } from "@/lib/remaura/warnings/log";
 
 loadEnvConfig(process.cwd());
 
@@ -51,6 +52,7 @@ export async function POST(req: Request) {
 
   const apiKey = getOpenAIApiKey();
   if (!apiKey) {
+    logWarning({ tool: "koleksiyon-edit", action: "Analiz", provider: "openai", status: 500, raw: "OPENAI_API_KEY yapılandırılmamış" });
     return NextResponse.json({ error: "Servis yapılandırılmamış, lütfen yöneticiye bildirin." }, { status: 500 });
   }
 
@@ -198,6 +200,8 @@ Return exactly this JSON structure:
     return NextResponse.json(sonuc);
   } catch (err: unknown) {
     console.error("[analiz] error:", err);
+    const e = err as { status?: number; message?: string };
+    logWarning({ tool: "koleksiyon-edit", action: "Analiz", provider: "openai", status: e?.status ?? null, raw: e?.message ?? String(err) });
     return NextResponse.json({ error: "Stil analizi başarısız oldu." }, { status: 500 });
   }
 }
