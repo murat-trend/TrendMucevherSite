@@ -293,8 +293,18 @@ export async function buyutSeffaf(
       .raw()
       .toBuffer({ resolveWithObject: true });
 
-    birlesik = await sharp(buyukRgb)
+    // ⚠ ÖLÇÜLDÜ: kodlanmış (PNG/JPEG) bir tabana ham maske eklenince sharp
+    // 4. kanalı sessizce düşürüyor — çıktı 3 kanal, şeffaflık kayboluyor.
+    // Tabanı ÖNCE ham sRGB 3 kanala çevirmek gerekiyor; o zaman 4 kanal kalıyor.
+    const { data: rgbHam, info: rgbBilgi } = await sharp(buyukRgb)
       .removeAlpha()
+      .toColourspace("srgb")
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    birlesik = await sharp(rgbHam, {
+      raw: { width: rgbBilgi.width, height: rgbBilgi.height, channels: 3 },
+    })
       .joinChannel(maske, { raw: { width: info.width, height: info.height, channels: 1 } })
       .png()
       .toBuffer();
