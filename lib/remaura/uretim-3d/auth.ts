@@ -11,7 +11,9 @@ import { createClient } from "@/utils/supabase/server";
 import { isRemauraSuperAdminUserId } from "@/lib/billing/super-admin";
 
 export type SuperAdminGate =
-  | { ok: true }
+  // `userId` sonradan EKLENDİ (kayıt sahipliği gereken araçlar için). Mevcut
+  // çağrılar yalnız `ok` okuyor, davranış birebir aynı.
+  | { ok: true; userId: string }
   | { ok: false; response: NextResponse };
 
 export async function requireSuperAdmin(): Promise<SuperAdminGate> {
@@ -37,5 +39,5 @@ export async function requireSuperAdmin(): Promise<SuperAdminGate> {
       response: NextResponse.json({ error: "Yetkisiz" }, { status: 403 }),
     };
   }
-  return { ok: true };
+  return { ok: true, userId: user.id };
 }

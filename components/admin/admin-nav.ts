@@ -405,6 +405,13 @@ export const ADMIN_NAV_ENTRIES: AdminNavEntry[] = [
         icon: Hand,
       },
       {
+        id: "musteri-atolye",
+        href: "/remaura/musteri-atolye",
+        labelTr: "Müşteri Atölyesi",
+        labelEn: "Client Studio",
+        icon: Users,
+      },
+      {
         id: "koleksiyon-edit",
         href: "/remaura/koleksiyon-edit",
         labelTr: "Koleksiyon Edit",
